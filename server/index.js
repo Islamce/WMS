@@ -30,6 +30,19 @@ app.use('/api/locations', require('./routes/locations'));
 app.use('/api/stock', require('./routes/stock'));
 app.use('/api/dashboard', require('./routes/dashboard'));
 
+// --- Material Request → Goods Issue workflow ------------------------------
+app.use('/api/meta', require('./routes/meta'));
+app.use('/api/requests', require('./routes/requests'));
+app.use('/api/approvals', require('./routes/approvals'));
+app.use('/api/erp-operator', require('./routes/erpOperator'));
+app.use('/api/warehouse', require('./routes/warehouse'));
+app.use('/api/picking', require('./routes/picking'));
+app.use('/api/gi', require('./routes/gi'));
+app.use('/api/receiving', require('./routes/receiving'));
+app.use('/api/master', require('./routes/masterdata'));
+app.use('/api/notifications', require('./routes/notifications'));
+app.use('/api/kpi', require('./routes/kpi'));
+
 // --- Static frontend ------------------------------------------------------
 app.use(express.static(path.join(__dirname, '..', 'public')));
 // Chart.js is served from node_modules so the app has no CDN dependency.
@@ -49,6 +62,14 @@ app.use((err, req, res, next) => {
   if (res.headersSent) return next(err);
   res.status(500).json({ error: 'Internal server error.' });
 });
+
+// Background scheduler: reminder/escalation sweep for unaccepted picking tasks.
+// Runs every 60s; the same logic is exposed via POST /api/picking/sweep for
+// on-demand runs and deterministic testing.
+const { sweepReminders } = require('./routes/picking');
+setInterval(() => {
+  try { sweepReminders(); } catch (err) { console.error('Reminder sweep error:', err); }
+}, 60 * 1000).unref();
 
 app.listen(config.port, () => {
   console.log(`WMS server running on http://localhost:${config.port}`);

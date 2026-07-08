@@ -1,0 +1,94 @@
+/** Goods Issue Posting — review picked lines, QR history, post GI (or simulate error). */
+window.Pages = window.Pages || {};
+
+Pages.giPosting = {
+  async render(el) {
+    this.el = el;
+    el.innerHTML = `<div class="card"><h3>Goods Issue Posting Queue</h3>
+      <div class="table-wrap" id="gi-table"><div class="loading">Loading…</div></div></div>
+      <div id="gi-detail"></div>`;
+    await this.loadQueue();
+  },
+
+  async loadQueue() {
+    const t = this.el.querySelector('#gi-table');
+    const { requests } = await Api.get('/api/gi');
+    t.innerHTML = `<table><thead><tr><th>Request #</th><th>Warehouse</th><th>Movement</th><th>Reservation</th><th>Status</th><th></th></tr></thead>
+      <tbody>${requests.map((r) => `
+        <tr data-id="${r.id}">
+          <td><strong>${UI.esc(r.request_number)}</strong></td><td>${UI.esc(r.issue_warehouse_code || '')}</td>
+          <td>${UI.esc(r.movement_type || '')}</td><td>${UI.esc(r.erp_reservation_number || r.erp_reference_number || '')}</td>
+          <td><span class="badge ${statusClass(r.request_status)}">${UI.esc(r.request_status)}</span></td>
+          <td><button class="btn sm" data-open="${r.id}">Review</button></td>
+        </tr>`).join('') || '<tr><td colspan="6" class="muted">Queue is empty</td></tr>'}
+      </tbody></table>`;
+    t.querySelectorAll('[data-open]').forEach((b) => b.addEventListener('click', () => this.openDetail(b.dataset.open)));
+  },
+
+  async openDetail(id) {
+    const { request: r, lines, qr_scans } = await Api.get(`/api/gi/${id}`);
+    const box = this.el.querySelector('#gi-detail');
+    box.innerHTML = `
+      <div class="card">
+        <h3>${UI.esc(r.request_number)} — Goods Issue</h3>
+        ${r.erp_error_message ? `<div class="inline-alert error">Previous ERP error: ${UI.esc(r.erp_error_message)}</div>` : ''}
+        <div class="table-wrap"><table>
+          <thead><tr><th>#</th><th>Item</th><th class="text-right">Approved</th><th class="text-right">Picked</th>
+            <th class="text-right">Shortage</th><th>Batch</th><th>Bin</th><th>Status</th></tr></thead>
+          <tbody>${lines.map((l) => `
+            <tr><td>${l.line_number}</td><td><strong>${UI.esc(l.material_code)}</strong></td>
+              <td class="text-right">${UI.fmtQty(l.approved_quantity != null ? l.approved_quantity : l.requested_quantity)}</td>
+              <td class="text-right">${UI.fmtQty(l.picked_quantity)}</td>
+              <td class="text-right">${UI.fmtQty(l.shortage_quantity)}</td>
+              <td>${UI.esc(l.batch_number || '—')}</td><td>${UI.esc(l.bin_location || '—')}</td>
+              <td><span class="badge ${statusClass(l.line_status)}">${UI.esc(l.line_status)}</span></td></tr>`).join('')}</tbody>
+        </table></div>
+        <p class="muted" style="margin-top:8px">QR scans: ${qr_scans.filter((s) => s.action === 'QR_SCAN_PASS').length} passed, ${qr_scans.filter((s) => s.action === 'QR_SCAN_FAIL').length} failed.</p>
+
+        <div class="form-row" style="margin-top:10px">
+          <div class="form-group"><label>GI Document Number *</label><input type="text" id="gi-doc" placeholder="e.g. 4900001234"></div>
+          <div class="form-group"><label>Fiscal Year</label><input type="text" id="gi-fy" value="${new Date().getFullYear()}"></div>
+        </div>
+        <label class="perm-item" style="max-width:320px"><input type="checkbox" id="gi-sim"> <span>Simulate ERP posting error (test)</span></label>
+        <div class="actions" style="justify-content:flex-start;margin-top:12px">
+          <button class="btn success" id="gi-post">Post Goods Issue</button>
+          <button class="btn secondary" id="gi-return">Return to Picker</button>
+        </div>
+      </div>`;
+
+    box.querySelector('#gi-post').addEventListener('click', async () => {
+      try {
+        const r2 = await Api.post(`/api/gi/${id}/post`, {
+          gi_document_number: box.querySelector('#gi-doc').value,
+          fiscal_year: box.querySelector('#gi-fy').value,
+          simulate_error: box.querySelector('#gi-sim').checked });
+        UI.toast(r2.message); box.innerHTML = ''; this.loadQueue();
+      } catch (err) { UI.toast(err.message, 'error'); this.loadQueue(); }
+    });
+    box.querySelector('#gi-return').addEventListener('click', async () => {
+      try { await Api.post(`/api/gi/${id}/return-to-picker`, { reason: 'Recount required' }); UI.toast('Returned to picker.'); box.innerHTML = ''; this.loadQueue(); }
+      catch (err) { UI.toast(err.message, 'error'); }
+    });
+  },
+};
+
+/** Warehouse dashboard = the combined warehouse execution queue. */
+Pages.warehouse = {
+  async render(el) {
+    el.innerHTML = `<div class="card"><h3>Warehouse Dashboard</h3>
+      <p class="muted">Requests currently in warehouse execution stages.</p>
+      <div class="table-wrap" id="wd-table"><div class="loading">Loading…</div></div></div>`;
+    const { requests } = await Api.get('/api/warehouse/queue');
+    el.querySelector('#wd-table').innerHTML = `
+      <table><thead><tr><th>Request #</th><th>Warehouse</th><th>Priority</th><th>Movement</th><th>Status</th><th>Lines</th></tr></thead>
+      <tbody>${requests.map((r) => `
+        <tr style="cursor:pointer" data-id="${r.id}">
+          <td><strong>${UI.esc(r.request_number)}</strong></td><td>${UI.esc(r.issue_warehouse_code || '')}</td>
+          <td><span class="badge ${r.priority === 'URGENT' || r.priority === 'HIGH' ? 'pending' : 'role'}">${r.priority}</span></td>
+          <td>${UI.esc(r.movement_type || '')}</td>
+          <td><span class="badge ${statusClass(r.request_status)}">${UI.esc(r.request_status)}</span></td>
+          <td>${r.total_lines}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">No active warehouse requests</td></tr>'}
+      </tbody></table>`;
+    el.querySelectorAll('tr[data-id]').forEach((tr) => tr.addEventListener('click', () => { location.hash = `#/request-detail/${tr.dataset.id}`; }));
+  },
+};

@@ -1,4 +1,53 @@
-# WMS — Warehouse Management System
+# WMS — Warehouse Management System & Material Request / Goods Issue Platform
+
+A clean, modular, ERP-agnostic warehouse execution platform. Phase 1 covers the
+complete **Material Request → Approval → ERP Reservation → Warehouse Picking →
+Goods Issue** workflow, on top of a base inventory module (materials, locations,
+stock in/out, users, permissions).
+
+## Material Request → Goods Issue workflow
+
+Requester creates a request → Manager approves / modifies / partially approves /
+rejects / returns (every change audited) → ERP Operator enters reservation/
+reference, movement type, plant, storage location and issue warehouse (all
+mandatory before routing) → Warehouse runs FIFO/FEFO batch+bin allocation →
+Supervisor assigns a picker (with reminders + escalation until accepted) → Picker
+accepts, scans QR per batch/bin (validated against material, batch, bin,
+warehouse, expiry, quality), confirms each line (shortage reason mandatory on
+partial) → Warehouse Operator posts Goods Issue in ERP → request closes as
+Completed / Partially Completed / Closed with Shortage, or moves to ERP Error and
+stays open until resolved.
+
+Key building blocks:
+- **Entities** — material_request_headers/lines, warehouses, bin_locations,
+  batches, qr_codes, picking_tasks, picking_allocations, movement_types,
+  audit_trail, notification_log, erp_integration_log (see `server/db/migrate2.js`).
+- **Workflow engine** — 33 header statuses + guarded transitions (`server/workflow/states.js`).
+- **Services** — FIFO/FEFO allocation, QR generation/validation, expiry
+  calculation & alerts, notifications with reminder/escalation SLA, append-only
+  audit, and a pluggable ERP connector (`server/services/*`).
+- **ERP-agnostic integration** — the default `MANUAL` connector records payloads
+  and accepts operator-keyed ERP numbers; swap in a SAP/Oracle/Dynamics connector
+  implementing the same interface without touching the workflow.
+
+### Demo role accounts (password `Passw0rd!`)
+
+| Role | Email |
+|------|-------|
+| Requester | requester@example.com |
+| Manager | manager@example.com |
+| ERP Operator | erp@example.com |
+| Warehouse Supervisor | supervisor@example.com |
+| Warehouse Operator | whoperator@example.com |
+| Picker | picker@example.com |
+| Quality | quality@example.com |
+| Auditor | auditor@example.com |
+
+The default admin (`admin@example.com` / `Admin@123456`) has every permission.
+
+---
+
+## Base inventory module
 
 A clean, simple web application to control warehouse operations: materials,
 locations, stock in/out with full transaction history, user management with

@@ -274,6 +274,29 @@ input[readonly] { background: #f8fafc; color: var(--text-muted); }
 
 .loading { text-align: center; color: var(--text-muted); padding: 30px; }
 
+/* Notification badge on the sidebar link */
+.notif-badge {
+  margin-left: auto;
+  background: var(--danger); color: #fff;
+  border-radius: 999px; font-size: 11px; font-weight: 700;
+  min-width: 18px; height: 18px; padding: 0 5px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+
+/* QR visual stand-in (checkerboard) for the printing/receiving screens */
+.qr-visual {
+  width: 96px; height: 96px; flex: 0 0 96px;
+  background-image:
+    linear-gradient(45deg, #0f172a 25%, transparent 25%),
+    linear-gradient(-45deg, #0f172a 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #0f172a 75%),
+    linear-gradient(-45deg, transparent 75%, #0f172a 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+  border: 4px solid #0f172a; border-radius: 6px;
+}
+code { background: #f1f5f9; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+
 /* --- Responsive (tablet) ---------------------------------------------------- */
 @media (max-width: 900px) {
   .sidebar { transform: translateX(-100%); }

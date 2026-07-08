@@ -22,7 +22,7 @@ function validateMaterialBody(body) {
  * GET /api/materials/search?q=... — autocomplete for stock in/out screens.
  * Available to anyone who can see materials, stock in or stock out.
  */
-router.get('/search', requirePermission(['materials', 'stock_in', 'stock_out']), (req, res) => {
+router.get('/search', requirePermission(['materials', 'stock_in', 'stock_out', 'create_request', 'material_requests', 'goods_receipt']), (req, res) => {
   const q = (req.query.q || '').trim();
   if (!q) return res.json({ materials: [] });
   const like = `%${q}%`;

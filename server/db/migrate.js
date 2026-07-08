@@ -128,7 +128,9 @@ CREATE INDEX IF NOT EXISTS idx_mls_location               ON material_location_s
 
 function migrate() {
   db.exec(schema);
-  console.log('Database schema is up to date.');
+  console.log('Base schema is up to date.');
+  // Apply the MRP / warehouse-execution schema on top of the base tables.
+  require('./migrate2').migrate2();
 }
 
 migrate();
