@@ -13,6 +13,11 @@ const app = express();
 
 app.use(express.json());
 
+// Unauthenticated health check — handy for verifying the server is reachable
+// through a proxy/port-forward (e.g. GitHub Codespaces). A 200 here means the
+// app is up; a 401 on the site root then points at the proxy, not the app.
+app.get('/healthz', (req, res) => res.json({ status: 'ok', service: 'wms' }));
+
 // Malformed JSON in a request body is a client error, not a server error.
 app.use((err, req, res, next) => {
   if (err && err.type === 'entity.parse.failed') {
@@ -71,6 +76,8 @@ setInterval(() => {
   try { sweepReminders(); } catch (err) { console.error('Reminder sweep error:', err); }
 }, 60 * 1000).unref();
 
-app.listen(config.port, () => {
-  console.log(`WMS server running on http://localhost:${config.port}`);
+// Bind to 0.0.0.0 so containerized/port-forwarded environments (Docker,
+// GitHub Codespaces) can reach and auto-detect the port.
+app.listen(config.port, '0.0.0.0', () => {
+  console.log(`WMS server running on http://0.0.0.0:${config.port} (health: /healthz)`);
 });
