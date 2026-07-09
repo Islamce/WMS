@@ -1,0 +1,25 @@
+{
+  "name": "wms",
+  "version": "1.0.0",
+  "description": "Warehouse Management System - control warehouse operations",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "migrate": "node server/db/migrate.js",
+    "seed": "node server/db/seed.js",
+    "setup": "npm run migrate && npm run seed"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^11.3.0",
+    "chart.js": "^4.4.4",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2"
+  }
+}
