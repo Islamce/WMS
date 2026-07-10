@@ -14,9 +14,11 @@ Pages.allocation = {
   async loadQueue() {
     const t = this.el.querySelector('#al-table');
     const { requests } = await Api.get('/api/warehouse/queue');
-    const pending = requests.filter((r) => ['Pending Bin Location Assignment', 'Warehouse Assigned', 'Location Assigned', 'Batch Assigned'].includes(r.request_status));
+    // Show only requests still awaiting allocation; once allocated they move on
+    // to picker assignment and disappear from this queue.
+    const pending = requests.filter((r) => ['Pending Bin Location Assignment', 'Warehouse Assigned'].includes(r.request_status));
     t.innerHTML = `<table><thead><tr><th>Request #</th><th>Warehouse</th><th>Movement</th><th>Status</th><th>Lines</th><th></th></tr></thead>
-      <tbody>${(pending.length ? pending : requests).map((r) => `
+      <tbody>${pending.map((r) => `
         <tr data-id="${r.id}">
           <td><strong>${UI.esc(r.request_number)}</strong></td><td>${UI.esc(r.issue_warehouse_code || '')}</td>
           <td>${UI.esc(r.movement_type || '')}</td><td><span class="badge ${statusClass(r.request_status)}">${UI.esc(r.request_status)}</span></td>

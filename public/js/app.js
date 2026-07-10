@@ -30,9 +30,9 @@ const MENU = [
   { route: 'batches', label: 'Batch Tracking', icon: '🧫', permission: 'batch_tracking' },
   { route: 'expiry', label: 'Expiry Alerts', icon: '⏰', permission: 'expiry_alerts' },
   { route: 'quality', label: 'Quality', icon: '🔬', permission: 'quality' },
-  { section: 'Inventory (Basic)' },
-  { route: 'stock-in', label: 'Stock In', icon: '➕', permission: 'stock_in' },
-  { route: 'stock-out', label: 'Stock Out', icon: '➖', permission: 'stock_out' },
+  { section: 'Inventory' },
+  // Stock In = Goods Receipt, Stock Out = Goods Issuance (handled by the
+  // warehouse workflow above), so the basic stock screens are retired.
   { route: 'all-locations', label: 'All Locations', icon: '🗺️', permission: 'all_locations' },
   { route: 'empty-locations', label: 'Empty Locations', icon: '🕳️', permission: 'empty_locations' },
   { section: 'Master Data' },

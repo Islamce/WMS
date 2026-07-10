@@ -393,6 +393,19 @@ CREATE TABLE IF NOT EXISTS erp_integration_log (
   last_retry_at      TEXT
 );
 
+-- ---------------------------------------------------------------------------
+-- Reference data for dropdowns (departments, plants, cost centers). Admin can
+-- extend rows without code changes.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS reference_data (
+  id        INTEGER PRIMARY KEY AUTOINCREMENT,
+  category  TEXT NOT NULL,           -- DEPARTMENT | PLANT | COST_CENTER
+  code      TEXT NOT NULL,
+  label     TEXT NOT NULL,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  UNIQUE (category, code)
+);
+
 -- ===========================================================================
 -- Indexes
 -- ===========================================================================

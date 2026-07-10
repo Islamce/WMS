@@ -70,7 +70,7 @@ router.get('/:id', requirePermission('material_requests'), (req, res) => {
 /** POST /api/requests — create a draft with header + lines. */
 router.post('/', requirePermission('create_request'), (req, res) => {
   const b = req.body || {};
-  if (!isNonEmptyString(b.purpose)) return res.status(400).json({ error: 'Purpose / justification is required.' });
+  // Purpose / justification is optional.
   if (!Array.isArray(b.lines) || b.lines.length === 0) {
     return res.status(400).json({ error: 'At least one material line is required.' });
   }
@@ -101,7 +101,7 @@ router.post('/', requirePermission('create_request'), (req, res) => {
       cost_center: b.cost_center || null, wbs_element: b.wbs_element || null,
       internal_order: b.internal_order || null, production_order: b.production_order || null,
       required_date: b.required_date || null, priority: b.priority || 'NORMAL',
-      purpose: b.purpose.trim(), delivery_location: b.delivery_location || null,
+      purpose: (b.purpose || '').trim() || null, delivery_location: b.delivery_location || null,
       status: HEADER_STATUS.DRAFT, total: b.lines.length,
     });
     const requestId = info.lastInsertRowid;

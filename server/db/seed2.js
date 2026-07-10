@@ -81,8 +81,26 @@ function expandedBin(b) {
   return `${b.warehouse_code}-${b.zone}-${b.rack}-L${b.level}-C${b.column_number}`;
 }
 
+// Reference dropdown values (departments, plants, cost centers).
+const REFERENCE_DATA = [
+  ['DEPARTMENT', 'PROD', 'Production'],
+  ['DEPARTMENT', 'MAINT', 'Maintenance'],
+  ['DEPARTMENT', 'QA', 'Quality Assurance'],
+  ['DEPARTMENT', 'LOG', 'Logistics'],
+  ['DEPARTMENT', 'ENG', 'Engineering'],
+  ['DEPARTMENT', 'ADMIN', 'Administration'],
+  ['PLANT', 'P100', 'Plant 100 — Main'],
+  ['PLANT', 'P200', 'Plant 200 — North'],
+  ['COST_CENTER', 'CC-1000', 'CC-1000 Production'],
+  ['COST_CENTER', 'CC-2000', 'CC-2000 Maintenance'],
+  ['COST_CENTER', 'CC-3000', 'CC-3000 Quality'],
+  ['COST_CENTER', 'CC-4000', 'CC-4000 Logistics'],
+];
+
 function seed2() {
   const run = db.transaction(() => {
+    const insRef = db.prepare('INSERT OR IGNORE INTO reference_data (category, code, label) VALUES (?, ?, ?)');
+    REFERENCE_DATA.forEach((r) => insRef.run(r[0], r[1], r[2]));
     // --- permissions ---
     const insPerm = db.prepare('INSERT OR IGNORE INTO permissions (key, label) VALUES (?, ?)');
     PERMISSIONS.forEach((p) => insPerm.run(p.key, p.label));
