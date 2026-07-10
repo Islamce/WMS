@@ -109,8 +109,10 @@ const UI = {
   },
 
   /**
-   * Material autocomplete. Attaches to a text input; calls onSelect(material)
-   * when the user picks an entry. Returns { clear } to reset the field.
+   * Material picker: a searchable dropdown. Attaches to a text input; opens on
+   * focus (showing the first materials) and filters as you type. Calls
+   * onSelect(material) — where material includes total_available — when an
+   * entry is chosen. Returns { clear } to reset the field.
    */
   materialAutocomplete(input, onSelect) {
     const wrap = input.closest('.autocomplete');
@@ -118,24 +120,27 @@ const UI = {
 
     const closeList = () => { if (list) { list.remove(); list = null; } };
 
-    const search = UI.debounce(async () => {
-      const q = input.value.trim();
-      closeList();
-      if (q.length < 1) return;
+    const run = async () => {
+      // Strip a previously-chosen "code — desc" label so focus re-opens cleanly.
+      const raw = input.value.trim();
+      const q = raw.includes(' — ') ? '' : raw;
       let materials = [];
       try {
         ({ materials } = await Api.get(`/api/materials/search?q=${encodeURIComponent(q)}`));
       } catch { return; }
+      closeList();
       list = document.createElement('div');
       list.className = 'autocomplete-list';
       if (!materials.length) {
         list.innerHTML = '<div class="empty">No materials found</div>';
       } else {
         materials.forEach((m) => {
+          const avail = Number(m.total_available || 0);
           const item = document.createElement('div');
           item.className = 'item';
-          item.innerHTML = `<div class="code">${UI.esc(m.item_code)}</div>
-                            <div class="desc">${UI.esc(m.description)} — ${UI.esc(m.plant)} — ${UI.esc(m.unit)}</div>`;
+          item.innerHTML = `<div class="code">${UI.esc(m.item_code)}
+                              <span class="muted" style="font-weight:400">· available ${UI.fmtQty(avail)} ${UI.esc(m.unit)}</span></div>
+                            <div class="desc">${UI.esc(m.description)} — ${UI.esc(m.plant || '')}</div>`;
           item.addEventListener('mousedown', (e) => {
             e.preventDefault();
             input.value = `${m.item_code} — ${m.description}`;
@@ -146,10 +151,12 @@ const UI = {
         });
       }
       wrap.appendChild(list);
-    }, 250);
+    };
 
+    const search = UI.debounce(run, 200);
     input.addEventListener('input', () => { search(); });
-    input.addEventListener('blur', () => setTimeout(closeList, 150));
+    input.addEventListener('focus', () => { run(); });   // open as a dropdown
+    input.addEventListener('blur', () => setTimeout(closeList, 180));
 
     return {
       clear() { input.value = ''; closeList(); },

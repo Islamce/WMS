@@ -71,7 +71,7 @@ Pages.picking = {
 
     if (inProgress) {
       el.querySelectorAll('[data-scan]').forEach((b) => b.addEventListener('click', () => this.scan(b.dataset.scan, b.dataset.qr)));
-      el.querySelectorAll('[data-confirm]').forEach((b) => b.addEventListener('click', () => this.confirmLine(b.dataset.confirm)));
+      el.querySelectorAll('[data-confirm]').forEach((b) => b.addEventListener('click', () => this.confirmLine(b.dataset.confirm, Number(b.dataset.approved))));
     }
   },
 
@@ -106,7 +106,7 @@ Pages.picking = {
             <div class="form-group mb-0"><label>Shortage reason (if partial)</label>
               <input type="text" class="pk-short" data-line="${l.id}"></div>
             <div class="form-group mb-0" style="max-width:150px">
-              <button class="btn success" data-confirm="${l.id}">Confirm Line</button></div>
+              <button class="btn success" data-confirm="${l.id}" data-approved="${approved}">Confirm Line</button></div>
           </div>` : ''}
       </div>`;
   },
@@ -139,9 +139,14 @@ Pages.picking = {
       } });
   },
 
-  async confirmLine(lineId) {
-    const qty = this.el.querySelector(`.pk-qty[data-line="${lineId}"]`).value;
-    const shortage = this.el.querySelector(`.pk-short[data-line="${lineId}"]`).value;
+  async confirmLine(lineId, approved) {
+    const qty = Number(this.el.querySelector(`.pk-qty[data-line="${lineId}"]`).value);
+    const shortage = this.el.querySelector(`.pk-short[data-line="${lineId}"]`).value.trim();
+    if (!(qty >= 0)) return UI.toast('Enter a valid picked quantity.', 'error');
+    // Mandatory shortage reason when picking less than the approved quantity.
+    if (qty < approved && !shortage) {
+      return UI.toast(`Picked ${qty} of ${approved} — a shortage reason is required.`, 'error');
+    }
     try {
       const { message } = await Api.post(`/api/picking/lines/${lineId}/confirm`, {
         picked_quantity: Number(qty), shortage_reason: shortage });

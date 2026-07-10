@@ -24,14 +24,21 @@ function validateMaterialBody(body) {
  */
 router.get('/search', requirePermission(['materials', 'stock_in', 'stock_out', 'create_request', 'material_requests', 'goods_receipt']), (req, res) => {
   const q = (req.query.q || '').trim();
-  if (!q) return res.json({ materials: [] });
   const like = `%${q}%`;
+  // Empty query returns the first materials so the picker can open as a
+  // dropdown on focus. total_available = live batch stock (fallback to the
+  // basic location stock), so the request screen can warn on shortages.
   const materials = db.prepare(`
-    SELECT id, plant, item_code, description, unit
-    FROM materials
-    WHERE item_code LIKE ? OR description LIKE ?
-    ORDER BY item_code LIMIT 15
-  `).all(like, like);
+    SELECT m.id, m.plant, m.item_code, m.description, m.unit,
+      COALESCE(
+        (SELECT SUM(remaining_quantity - reserved_quantity) FROM batches WHERE material_id = m.id),
+        (SELECT SUM(quantity) FROM material_location_stock WHERE material_id = m.id),
+        0
+      ) AS total_available
+    FROM materials m
+    WHERE (? = '' OR m.item_code LIKE ? OR m.description LIKE ?)
+    ORDER BY m.item_code LIMIT 20
+  `).all(q, like, like);
   res.json({ materials });
 });
 

@@ -1,0 +1,23 @@
+{
+  "name": "WMS",
+  // Node 20 image includes build tools (python/make/g++) needed to compile
+  // the better-sqlite3 native module.
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:20",
+
+  // Install dependencies and create + seed the SQLite database on first build.
+  "postCreateCommand": "cp -n .env.example .env || true; npm install && npm run setup",
+
+  // Auto-forward the app port. onAutoForward 'openPreview' opens the app inside
+  // the Codespace (authenticated), avoiding the private-port 401 you get when
+  // opening a forwarded URL externally.
+  "forwardPorts": [3000],
+  "portsAttributes": {
+    "3000": {
+      "label": "WMS App",
+      "onAutoForward": "openPreview"
+    }
+  },
+
+  // Friendly reminder in the terminal after the container is ready.
+  "postAttachCommand": "echo 'WMS ready. Start it with:  npm start   then open the forwarded port 3000 (Ports tab). Login: admin@example.com / Admin@123456'"
+}

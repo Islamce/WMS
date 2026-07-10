@@ -24,7 +24,9 @@ Pages.pickerAssign = {
   async load() {
     const t = this.el.querySelector('#pa-table');
     const { requests } = await Api.get('/api/warehouse/queue');
-    const assignable = requests.filter((r) => ['Pending Picker Assignment', 'Assigned to Picker', 'Pending Picker Acceptance', 'Reminder Sent', 'Escalated to Supervisor'].includes(r.request_status));
+    // Show only requests awaiting a picker (plus escalated ones needing
+    // reassignment). Once assigned they move to acceptance and disappear here.
+    const assignable = requests.filter((r) => ['Pending Picker Assignment', 'Escalated to Supervisor'].includes(r.request_status));
     t.innerHTML = `<table><thead><tr><th>Request #</th><th>Warehouse</th><th>Priority</th><th>Status</th><th>Picker</th><th></th></tr></thead>
       <tbody>${assignable.map((r) => `
         <tr data-id="${r.id}">

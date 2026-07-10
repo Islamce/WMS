@@ -6,24 +6,44 @@ Pages.receiving = {
     this.el = el;
     this.meta = await Api.get('/api/meta');
     el.innerHTML = `
+      <div class="card">
+        <div class="toolbar mb-0">
+          <button class="btn sm" data-tab="receive">1 · Receive</button>
+          <button class="btn secondary sm" data-tab="gr">2 · Assign GR #</button>
+          <button class="btn secondary sm" data-tab="bin">3 · Assign Bin</button>
+        </div>
+      </div>
+      <div id="gr-tab"></div>`;
+    el.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => {
+      el.querySelectorAll('[data-tab]').forEach((x) => x.className = 'btn secondary sm');
+      b.className = 'btn sm';
+      this.tab(b.dataset.tab);
+    }));
+    this.tab('receive');
+  },
+
+  tab(name) {
+    if (name === 'receive') return this.renderReceive();
+    if (name === 'gr') return this.renderPendingGr();
+    if (name === 'bin') return this.renderPendingBin();
+  },
+
+  // --- Step 1: receive ------------------------------------------------------
+  renderReceive() {
+    const box = this.el.querySelector('#gr-tab');
+    box.innerHTML = `
       <div class="card" style="max-width:820px">
         <h3>Goods Receipt from Supplier</h3>
+        <p class="muted">Batch number is generated automatically. GR number and bin location are assigned in the next steps.</p>
         <form id="gr-form" novalidate>
           <div class="form-group autocomplete"><label>Material *</label>
-            <input type="text" id="gr-material" placeholder="Search item code / description…" autocomplete="off"></div>
+            <input type="text" id="gr-material" placeholder="Click to browse or type to search…" autocomplete="off"></div>
           <div class="form-row">
-            <div class="form-group"><label>Batch Number * (mandatory)</label><input type="text" id="gr-batch"></div>
+            <div class="form-group"><label>PO Number * (mandatory)</label><input type="text" id="gr-po"></div>
             <div class="form-group"><label>Received Quantity *</label><input type="number" id="gr-qty" min="0" step="any"></div>
           </div>
-          <div class="form-row">
-            <div class="form-group"><label>Warehouse *</label>
-              <select id="gr-wh">${this.meta.warehouses.map((w) => `<option value="${w.warehouse_code}">${w.warehouse_code} — ${UI.esc(w.warehouse_name)}</option>`).join('')}</select></div>
-            <div class="form-group"><label>Bin Location</label><input type="text" id="gr-bin" placeholder="e.g. R-03-02-23"></div>
-          </div>
-          <div class="form-row">
-            <div class="form-group"><label>PO Number</label><input type="text" id="gr-po"></div>
-            <div class="form-group"><label>GR Number</label><input type="text" id="gr-gr"></div>
-          </div>
+          <div class="form-group"><label>Warehouse *</label>
+            <select id="gr-wh">${this.meta.warehouses.map((w) => `<option value="${w.warehouse_code}">${w.warehouse_code} — ${UI.esc(w.warehouse_name)}</option>`).join('')}</select></div>
           <div class="form-row">
             <div class="form-group"><label>Supplier Code</label><input type="text" id="gr-supcode"></div>
             <div class="form-group"><label>Supplier Name</label><input type="text" id="gr-supname"></div>
@@ -40,35 +60,97 @@ Pages.receiving = {
           </div>
           <div class="form-group"><label>Quality Status</label>
             <select id="gr-quality"><option>RELEASED</option><option>QUALITY_HOLD</option><option>BLOCKED</option></select></div>
-          <button type="submit" class="btn success block">Receive & Generate QR</button>
+          <button type="submit" class="btn success block">Receive &amp; Generate QR</button>
         </form>
       </div>
       <div id="gr-result"></div>`;
 
     this.selected = null;
-    UI.materialAutocomplete(el.querySelector('#gr-material'), (m) => { this.selected = m; });
-    el.querySelector('#gr-form').addEventListener('submit', (e) => { e.preventDefault(); this.receive(); });
+    UI.materialAutocomplete(box.querySelector('#gr-material'), (m) => { this.selected = m; });
+    box.querySelector('#gr-form').addEventListener('submit', (e) => { e.preventDefault(); this.receive(); });
   },
 
   async receive() {
-    if (!this.selected) return UI.toast('Select a material.', 'error');
-    const el = this.el;
+    if (!this.selected) return UI.toast('Select a material from the list.', 'error');
+    const box = this.el.querySelector('#gr-tab');
     const payload = {
-      material_id: this.selected.id, batch_number: el.querySelector('#gr-batch').value,
-      received_quantity: Number(el.querySelector('#gr-qty').value), warehouse_code: el.querySelector('#gr-wh').value,
-      bin_location: el.querySelector('#gr-bin').value, po_number: el.querySelector('#gr-po').value,
-      gr_number: el.querySelector('#gr-gr').value, supplier_code: el.querySelector('#gr-supcode').value,
-      supplier_name: el.querySelector('#gr-supname').value, manufacturing_date: el.querySelector('#gr-mfg').value || null,
-      expiry_date: el.querySelector('#gr-exp').value || null, shelf_life_period: el.querySelector('#gr-slp').value || null,
-      shelf_life_unit: el.querySelector('#gr-slu').value, quality_status: el.querySelector('#gr-quality').value,
+      material_id: this.selected.id,
+      received_quantity: Number(box.querySelector('#gr-qty').value), warehouse_code: box.querySelector('#gr-wh').value,
+      po_number: box.querySelector('#gr-po').value, supplier_code: box.querySelector('#gr-supcode').value,
+      supplier_name: box.querySelector('#gr-supname').value, manufacturing_date: box.querySelector('#gr-mfg').value || null,
+      expiry_date: box.querySelector('#gr-exp').value || null, shelf_life_period: box.querySelector('#gr-slp').value || null,
+      shelf_life_unit: box.querySelector('#gr-slu').value, quality_status: box.querySelector('#gr-quality').value,
     };
     try {
-      const { qr } = await Api.post('/api/receiving', payload);
-      UI.toast('Goods received; QR generated.');
-      el.querySelector('#gr-result').innerHTML = Pages.qrPrinting.qrCard(qr);
-      const btn = el.querySelector('#gr-result [data-print]');
+      const { qr, batch_number } = await Api.post('/api/receiving', payload);
+      UI.toast(`Received. Batch ${batch_number} + QR generated.`);
+      box.querySelector('#gr-result').innerHTML = `<div class="card"><h3>Batch ${UI.esc(batch_number)}</h3>${Pages.qrPrinting.qrCard(qr)}</div>`;
+      const btn = box.querySelector('#gr-result [data-print]');
       if (btn) btn.addEventListener('click', () => Pages.qrPrinting.print(btn.dataset.print));
+      box.querySelector('#gr-form').reset();
+      this.selected = null;
     } catch (err) { UI.toast(err.message, 'error'); }
+  },
+
+  // --- Step 2: assign GR number (store ERP operator) ------------------------
+  async renderPendingGr() {
+    const box = this.el.querySelector('#gr-tab');
+    box.innerHTML = '<div class="card"><h3>Assign GR Number</h3><div id="gr-pending"><div class="loading">Loading…</div></div></div>';
+    const { batches } = await Api.get('/api/receiving/pending-gr');
+    box.querySelector('#gr-pending').innerHTML = `
+      <p class="muted">Received batches awaiting the ERP GR document number.</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Batch</th><th>Material</th><th>PO</th><th>WH</th><th class="text-right">Qty</th><th style="width:220px">GR Number</th></tr></thead>
+        <tbody>${batches.map((b) => `
+          <tr><td><strong>${UI.esc(b.batch_number)}</strong></td><td>${UI.esc(b.material_code)}</td>
+            <td>${UI.esc(b.po_number || '')}</td><td>${UI.esc(b.warehouse_code || '')}</td>
+            <td class="text-right">${UI.fmtQty(b.received_quantity)}</td>
+            <td><div style="display:flex;gap:6px"><input type="text" class="gr-num" data-id="${b.id}" placeholder="GR document #">
+              <button class="btn sm" data-savegr="${b.id}">Save</button></div></td></tr>`).join('')
+          || '<tr><td colspan="6" class="muted">Nothing awaiting a GR number 🎉</td></tr>'}
+        </tbody></table></div>`;
+    box.querySelectorAll('[data-savegr]').forEach((btn) => btn.addEventListener('click', async () => {
+      const inp = box.querySelector(`.gr-num[data-id="${btn.dataset.savegr}"]`);
+      try { const { message } = await Api.patch(`/api/receiving/batches/${btn.dataset.savegr}/gr`, { gr_number: inp.value });
+        UI.toast(message); this.renderPendingGr(); }
+      catch (err) { UI.toast(err.message, 'error'); }
+    }));
+  },
+
+  // --- Step 3: assign bin (picker / dispatcher) -----------------------------
+  async renderPendingBin() {
+    const box = this.el.querySelector('#gr-tab');
+    box.innerHTML = '<div class="card"><h3>Assign Bin Location</h3><div id="gr-pbin"><div class="loading">Loading…</div></div></div>';
+    const { batches } = await Api.get('/api/receiving/pending-bin');
+    // Preload bins per warehouse for the dropdowns.
+    const whCodes = [...new Set(batches.map((b) => b.warehouse_code))];
+    const binsByWh = {};
+    for (const wh of whCodes) {
+      try { const { bins } = await Api.get(`/api/meta/warehouses/${wh}/bins`); binsByWh[wh] = bins; }
+      catch { binsByWh[wh] = []; }
+    }
+    box.querySelector('#gr-pbin').innerHTML = `
+      <p class="muted">Batches with stock but no bin yet — assigned by the picker / dispatcher.</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Batch</th><th>Material</th><th>WH</th><th class="text-right">Qty</th><th style="width:280px">Bin Location</th></tr></thead>
+        <tbody>${batches.map((b) => `
+          <tr><td><strong>${UI.esc(b.batch_number)}</strong></td><td>${UI.esc(b.material_code)}</td>
+            <td>${UI.esc(b.warehouse_code || '')}</td><td class="text-right">${UI.fmtQty(b.remaining_quantity)}</td>
+            <td><div style="display:flex;gap:6px">
+              <select class="bin-sel" data-id="${b.id}">
+                <option value="">Select bin…</option>
+                ${(binsByWh[b.warehouse_code] || []).map((x) => `<option value="${UI.esc(x.full_bin_location)}">${UI.esc(x.bin_code)} (${UI.esc(x.full_bin_location)})</option>`).join('')}
+              </select>
+              <button class="btn sm" data-savebin="${b.id}">Save</button></div></td></tr>`).join('')
+          || '<tr><td colspan="5" class="muted">Nothing awaiting a bin 🎉</td></tr>'}
+        </tbody></table></div>`;
+    box.querySelectorAll('[data-savebin]').forEach((btn) => btn.addEventListener('click', async () => {
+      const sel = box.querySelector(`.bin-sel[data-id="${btn.dataset.savebin}"]`);
+      if (!sel.value) return UI.toast('Select a bin.', 'error');
+      try { const { message } = await Api.patch(`/api/receiving/batches/${btn.dataset.savebin}/bin`, { bin_location: sel.value });
+        UI.toast(message); this.renderPendingBin(); }
+      catch (err) { UI.toast(err.message, 'error'); }
+    }));
   },
 };
 
