@@ -84,6 +84,28 @@ No build tools, no external services — `npm install` and run.
   month, pending users), top-10 lists, recent transactions, and charts
   (IN vs OUT over time, stock by group, by location, transactions by user).
 
+## Test on GitHub Codespaces
+
+This repo ships a devcontainer, so testing on GitHub needs no manual setup:
+
+1. On the repo page: **Code ▸ Codespaces ▸ Create codespace**. The container
+   installs dependencies and creates + seeds the database automatically.
+2. In the Codespace terminal, run:
+   ```bash
+   npm start
+   ```
+3. Open the app: the **Ports** tab auto-forwards port **3000** — click the
+   globe/preview icon to open it. (Opening the forwarded URL *inside* the
+   Codespace is authenticated, so it won't 401.)
+4. To share the URL with someone else, set port 3000's visibility to **Public**
+   (Ports tab ▸ right-click the port ▸ *Port Visibility ▸ Public*). A private
+   port returns **HTTP 401** to anyone not signed in to your Codespace.
+5. Log in with `admin@example.com` / `Admin@123456`.
+
+Health check: `https://<your-codespace>-3000.app.github.dev/healthz` returns
+`{"status":"ok"}` when the app is up — a 200 here with a 401 on `/` means the
+port is still Private, not an app problem.
+
 ## Installation & setup
 
 Requirements: Node.js 18+.
