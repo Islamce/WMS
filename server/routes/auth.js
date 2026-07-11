@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const db = require('../db/connection');
 const config = require('../config');
 const { authenticate, getUserPermissions } = require('../middleware/auth');
+const { loginRateLimit, recordLoginFailure, clearLoginFailures } = require('../middleware/rateLimit');
 const { isNonEmptyString, isEmail } = require('../utils/validate');
 
 const router = express.Router();
@@ -40,7 +41,7 @@ router.post('/signup', (req, res) => {
  * POST /api/auth/login
  * Only users with status 'active' may login.
  */
-router.post('/login', (req, res) => {
+router.post('/login', loginRateLimit, (req, res) => {
   const { email, password } = req.body || {};
   if (!isEmail(email) || !isNonEmptyString(password)) {
     return res.status(400).json({ error: 'Email and password are required.' });
@@ -53,8 +54,10 @@ router.post('/login', (req, res) => {
   `).get(email.trim());
 
   if (!user || !bcrypt.compareSync(password, user.password_hash)) {
+    recordLoginFailure(req); // consume one attempt from the brute-force budget
     return res.status(401).json({ error: 'Invalid email or password.' });
   }
+  clearLoginFailures(req);
 
   if (user.status === 'pending') {
     return res.status(403).json({ error: 'Your account is waiting for admin approval.' });
