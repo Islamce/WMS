@@ -63,6 +63,42 @@ router.get('/', requirePermission('materials'), (req, res) => {
   res.json({ materials, total, page, limit });
 });
 
+/**
+ * POST /api/materials/bulk — mass upload. Body: { rows: [{plant, item_code,
+ * description, unit, price, currency, material_type, material_group}, ...] }.
+ * Returns a per-row result (created / skipped duplicate / error) so the UI can
+ * show exactly what happened.
+ */
+router.post('/bulk', requirePermission('materials'), (req, res) => {
+  const rows = Array.isArray(req.body.rows) ? req.body.rows : [];
+  if (!rows.length) return res.status(400).json({ error: 'No rows to upload.' });
+  if (rows.length > 2000) return res.status(400).json({ error: 'Maximum 2000 rows per upload.' });
+
+  const insert = db.prepare(`
+    INSERT INTO materials (plant, item_code, description, unit, price, currency, material_type, material_group)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
+  const results = [];
+  let created = 0, skipped = 0, errors = 0;
+
+  const run = db.transaction(() => {
+    rows.forEach((r, i) => {
+      const rowNo = i + 1;
+      if (!isNonEmptyString(r.item_code) || !isNonEmptyString(r.description)) {
+        errors++; results.push({ row: rowNo, status: 'error', message: 'item_code and description are required' }); return;
+      }
+      if (db.prepare('SELECT 1 FROM materials WHERE item_code=?').get(r.item_code.trim())) {
+        skipped++; results.push({ row: rowNo, status: 'skipped', message: `duplicate item_code ${r.item_code.trim()}` }); return;
+      }
+      insert.run((r.plant || '').trim(), r.item_code.trim(), r.description.trim(),
+        (r.unit || 'EA').trim(), Number(r.price) || 0, (r.currency || 'USD').trim(),
+        (r.material_type || '').trim(), (r.material_group || '').trim());
+      created++; results.push({ row: rowNo, status: 'created', message: r.item_code.trim() });
+    });
+  });
+  run();
+  res.status(201).json({ message: `Mass upload: ${created} created, ${skipped} skipped, ${errors} errors.`, created, skipped, errors, results });
+});
+
 /** POST /api/materials — create. */
 router.post('/', requirePermission('materials'), (req, res) => {
   const body = req.body || {};

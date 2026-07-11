@@ -1,17 +1,12 @@
 /** Admin dashboard: KPI tiles, charts, top lists, recent transactions. */
 window.Pages = window.Pages || {};
 
-// Validated chart colors (see docs) — blue/red for IN vs OUT polarity,
-// single sequential hues for magnitude bars.
-const VIZ = {
-  in: '#2a78d6',
-  out: '#e34948',
-  bar1: '#2a78d6',
-  bar2: '#1baf7a',
-  grid: '#e1e0d9',
-  ink: '#52514e',
-  muted: '#898781',
-};
+// Theme-aware chart colors (validated palette, resolved at render time so a
+// theme switch re-colors charts on the next render).
+function VIZCOLORS() {
+  const v = UI.viz();
+  return { in: v.c1, out: v.red, bar1: v.c1, bar2: v.c2, grid: v.grid, ink: v.ink, muted: v.muted };
+}
 
 Pages.dashboard = {
   charts: [],
@@ -100,6 +95,7 @@ Pages.dashboard = {
   },
 
   baseOptions() {
+    const VIZ = VIZCOLORS();
     return {
       responsive: true,
       maintainAspectRatio: false,
@@ -114,6 +110,7 @@ Pages.dashboard = {
   renderCharts(charts) {
     this.destroyCharts();
     if (typeof Chart === 'undefined') return;
+    const VIZ = VIZCOLORS();
 
     // Line chart: two series -> legend shown.
     const days = charts.in_out_over_time;

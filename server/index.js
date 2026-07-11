@@ -47,6 +47,7 @@ app.use('/api/receiving', require('./routes/receiving'));
 app.use('/api/master', require('./routes/masterdata'));
 app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/kpi', require('./routes/kpi'));
+app.use('/api/analytics', require('./routes/analytics'));
 
 // --- Static frontend ------------------------------------------------------
 app.use(express.static(path.join(__dirname, '..', 'public')));

@@ -87,6 +87,8 @@ function seed() {
   console.log('Base seed data applied.');
   // Apply MRP/WMS roles, permissions, movement types, warehouse master, batches.
   require('./seed2').seed2();
+  // AI analytics permission grants + sample movement dataset.
+  require('./seed3').seed3();
 }
 
 seed();

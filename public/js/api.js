@@ -38,6 +38,17 @@ const Api = {
     return data;
   },
 
+  /** Fetch a binary resource (e.g. a PDF) with auth; returns a Blob. */
+  async blob(url) {
+    const res = await fetch(url, { headers: this.token ? { Authorization: `Bearer ${this.token}` } : {} });
+    if (!res.ok) {
+      let msg = `Request failed (${res.status})`;
+      try { msg = (await res.json()).error || msg; } catch {}
+      throw new Error(msg);
+    }
+    return res.blob();
+  },
+
   get(url) { return this.request('GET', url); },
   post(url, body) { return this.request('POST', url, body); },
   put(url, body) { return this.request('PUT', url, body); },

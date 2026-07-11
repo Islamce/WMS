@@ -63,6 +63,48 @@ router.post('/bins', requirePermission('bins_master'), (req, res) => {
   res.status(201).json({ message: 'Bin location created.', bin_code, full_bin_location: full });
 });
 
+/**
+ * POST /api/master/bins/bulk — mass upload bin locations. Body: { rows:
+ * [{warehouse_code, zone, rack, line_or_aisle, level, column_number, capacity}] }.
+ */
+router.post('/bins/bulk', requirePermission('bins_master'), (req, res) => {
+  const rows = Array.isArray(req.body.rows) ? req.body.rows : [];
+  if (!rows.length) return res.status(400).json({ error: 'No rows to upload.' });
+  if (rows.length > 2000) return res.status(400).json({ error: 'Maximum 2000 rows per upload.' });
+
+  const insert = db.prepare(`
+    INSERT INTO bin_locations
+      (warehouse_code, zone, rack, line_or_aisle, level, column_number, bin_code, full_bin_location, capacity)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+  const results = [];
+  let created = 0, skipped = 0, errors = 0;
+
+  const run = db.transaction(() => {
+    rows.forEach((r, i) => {
+      const rowNo = i + 1;
+      if (!isNonEmptyString(r.warehouse_code)) {
+        errors++; results.push({ row: rowNo, status: 'error', message: 'warehouse_code is required' }); return;
+      }
+      if (!db.prepare('SELECT 1 FROM warehouses WHERE warehouse_code=?').get(r.warehouse_code.trim())) {
+        errors++; results.push({ row: rowNo, status: 'error', message: `unknown warehouse ${r.warehouse_code}` }); return;
+      }
+      const bin = { warehouse_code: r.warehouse_code.trim(), zone: (r.zone || 'ZA').trim(),
+        rack: (r.rack || 'R01').trim(), line_or_aisle: String(r.line_or_aisle || '01').trim(),
+        level: String(r.level || '01').trim(), column_number: String(r.column_number || '01').trim() };
+      const binCode = compactBin(bin);
+      const full = expandedBin(bin);
+      if (db.prepare('SELECT 1 FROM bin_locations WHERE warehouse_code=? AND full_bin_location=?').get(bin.warehouse_code, full)) {
+        skipped++; results.push({ row: rowNo, status: 'skipped', message: `duplicate bin ${full}` }); return;
+      }
+      insert.run(bin.warehouse_code, bin.zone, bin.rack, bin.line_or_aisle, bin.level, bin.column_number,
+        binCode, full, Number(r.capacity) || 1000);
+      created++; results.push({ row: rowNo, status: 'created', message: full });
+    });
+  });
+  run();
+  res.status(201).json({ message: `Mass upload: ${created} created, ${skipped} skipped, ${errors} errors.`, created, skipped, errors, results });
+});
+
 // --- Movement types ---------------------------------------------------------
 router.get('/movement-types', requirePermission(['movement_types_master', 'erp_operator']), (req, res) => {
   res.json({ movement_types: db.prepare('SELECT * FROM movement_types ORDER BY code').all() });
@@ -87,8 +129,11 @@ router.post('/movement-types', requirePermission('movement_types_master'), (req,
 router.get('/batches', requirePermission(['batch_tracking', 'bin_batch_assignment', 'quality']), (req, res) => {
   const q = (req.query.search || '').trim();
   const like = `%${q}%`;
-  const where = q ? 'WHERE batch_number LIKE ? OR material_code LIKE ? OR warehouse_code LIKE ?' : '';
-  const params = q ? [like, like, like] : [];
+  const filters = [];
+  const params = [];
+  if (q) { filters.push('(batch_number LIKE ? OR material_code LIKE ? OR warehouse_code LIKE ?)'); params.push(like, like, like); }
+  if (req.query.quality) { filters.push('quality_status = ?'); params.push(req.query.quality); }
+  const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
   const rows = db.prepare(`
     SELECT *, (remaining_quantity - reserved_quantity) AS available_quantity
     FROM batches ${where} ORDER BY material_code, fefo_date, fifo_date LIMIT 200

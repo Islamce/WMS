@@ -2,6 +2,20 @@
  * Shared UI helpers: toasts, modals, tables with pagination, autocomplete.
  */
 const UI = {
+  /**
+   * Theme-aware chart palette (validated categorical slots + chrome inks for
+   * each mode). Charts call this at render time so a theme switch re-colors
+   * them on the next render.
+   */
+  viz() {
+    const dark = document.documentElement.dataset.theme === 'dark';
+    return dark
+      ? { c1: '#3987e5', c2: '#199e70', c3: '#c98500', red: '#e66767', violet: '#9085e9',
+          grid: '#26314d', muted: '#8ea0bd', ink: '#c3c2b7' }
+      : { c1: '#2a78d6', c2: '#1baf7a', c3: '#eda100', red: '#e34948', violet: '#4a3aa7',
+          grid: '#e1e0d9', muted: '#898781', ink: '#52514e' };
+  },
+
   /** Escape a value for safe insertion into HTML. */
   esc(value) {
     return String(value ?? '')
@@ -99,6 +113,64 @@ const UI = {
     container.innerHTML = html;
     container.querySelectorAll('button[data-page]').forEach((b) => {
       b.addEventListener('click', () => onPage(Number(b.dataset.page)));
+    });
+  },
+
+  /**
+   * CSV mass-upload modal. Parses a pasted/uploaded CSV (first line = headers)
+   * into row objects and hands them to onUpload(rows); shows per-row results.
+   */
+  csvUploadModal({ title, headersHint, example, onUpload }) {
+    UI.modal({
+      title, wide: true, submitLabel: 'Upload',
+      bodyHtml: `
+        <p class="muted" style="margin-bottom:8px">CSV with a header row. Columns: <code>${UI.esc(headersHint)}</code></p>
+        <div class="form-group"><label>Choose a .csv file</label><input type="file" id="csv-file" accept=".csv,text/csv"></div>
+        <div class="form-group"><label>…or paste CSV content</label>
+          <textarea id="csv-text" rows="7" placeholder="${UI.esc(example)}"></textarea></div>
+        <div id="csv-result"></div>`,
+      onSubmit: async (overlay, close) => {
+        let text = overlay.querySelector('#csv-text').value.trim();
+        const file = overlay.querySelector('#csv-file').files[0];
+        if (!text && file) text = await file.text();
+        if (!text) return UI.toast('Provide CSV content or choose a file.', 'error');
+
+        // Minimal CSV parse: handles quoted fields with commas.
+        const parseLine = (line) => {
+          const out = []; let cur = ''; let inQ = false;
+          for (let i = 0; i < line.length; i++) {
+            const ch = line[i];
+            if (ch === '"') { if (inQ && line[i + 1] === '"') { cur += '"'; i++; } else inQ = !inQ; }
+            else if (ch === ',' && !inQ) { out.push(cur); cur = ''; }
+            else cur += ch;
+          }
+          out.push(cur);
+          return out.map((v) => v.trim());
+        };
+        const lines = text.split(/\r?\n/).filter((l) => l.trim());
+        if (lines.length < 2) return UI.toast('CSV needs a header row plus at least one data row.', 'error');
+        const headers = parseLine(lines[0]).map((h) => h.toLowerCase().replace(/\s+/g, '_'));
+        const rows = lines.slice(1).map((l) => {
+          const vals = parseLine(l);
+          const row = {};
+          headers.forEach((h, i) => { row[h] = vals[i] ?? ''; });
+          return row;
+        });
+
+        try {
+          const r = await onUpload(rows);
+          UI.toast(r.message);
+          const bad = (r.results || []).filter((x) => x.status !== 'created');
+          overlay.querySelector('#csv-result').innerHTML = `
+            <div class="inline-alert ${r.errors ? 'error' : 'success'}">
+              Created ${r.created}, skipped ${r.skipped}, errors ${r.errors}.</div>
+            ${bad.length ? `<div class="table-wrap" style="max-height:180px;overflow-y:auto"><table>
+              <thead><tr><th>Row</th><th>Status</th><th>Message</th></tr></thead>
+              <tbody>${bad.slice(0, 50).map((x) => `<tr><td>${x.row}</td><td>${x.status}</td><td>${UI.esc(x.message)}</td></tr>`).join('')}</tbody>
+            </table></div>` : ''}`;
+          if (!bad.length) setTimeout(close, 1200);
+        } catch (err) { UI.toast(err.message, 'error'); }
+      },
     });
   },
 
