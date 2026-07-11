@@ -98,15 +98,16 @@ Pages.kpi = {
   renderCharts(data) {
     this.destroy();
     if (typeof Chart === 'undefined') return;
-    const grid = '#e1e0d9', muted = '#898781';
+    const v = UI.viz();
+    const grid = v.grid, muted = v.muted;
     const opts = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
       scales: { x: { grid: { display: false }, ticks: { color: muted } }, y: { beginAtZero: true, grid: { color: grid }, ticks: { color: muted } } } };
     const s = data.by_status || [];
     this.charts.push(new Chart(document.getElementById('kpi-status'), { type: 'bar',
-      data: { labels: s.map((x) => x.status), datasets: [{ data: s.map((x) => x.count), backgroundColor: '#2a78d6', borderRadius: 4, maxBarThickness: 26 }] },
+      data: { labels: s.map((x) => x.status), datasets: [{ data: s.map((x) => x.count), backgroundColor: v.c1, borderRadius: 4, maxBarThickness: 26 }] },
       options: { ...opts, indexAxis: 'y', scales: { x: { beginAtZero: true, grid: { color: grid }, ticks: { color: muted } }, y: { grid: { display: false }, ticks: { color: muted } } } } }));
     const w = data.by_warehouse || [];
     this.charts.push(new Chart(document.getElementById('kpi-wh'), { type: 'bar',
-      data: { labels: w.map((x) => x.warehouse), datasets: [{ data: w.map((x) => x.count), backgroundColor: '#1baf7a', borderRadius: 4, maxBarThickness: 40 }] }, options: opts }));
+      data: { labels: w.map((x) => x.warehouse), datasets: [{ data: w.map((x) => x.count), backgroundColor: v.c2, borderRadius: 4, maxBarThickness: 40 }] }, options: opts }));
   },
 };

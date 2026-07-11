@@ -12,6 +12,7 @@ Pages.materials = {
           <input type="text" class="search-input" id="mat-search" placeholder="Search code, description, group…"
                  value="${UI.esc(this.state.search)}" />
           <div class="spacer"></div>
+          <button class="btn secondary" id="mat-upload">⬆ Mass Upload</button>
           <button class="btn" id="mat-add">+ Add Material</button>
         </div>
         <div class="table-wrap" id="mat-table"><div class="loading">Loading…</div></div>
@@ -24,6 +25,16 @@ Pages.materials = {
       this.load();
     }, 300));
     el.querySelector('#mat-add').addEventListener('click', () => this.openForm());
+    el.querySelector('#mat-upload').addEventListener('click', () => UI.csvUploadModal({
+      title: 'Mass upload materials (CSV)',
+      headersHint: 'plant,item_code,description,unit,price,currency,material_type,material_group',
+      example: 'plant,item_code,description,unit,price,currency,material_type,material_group\nP100,MAT-0500,Hex Bolt M10,EA,0.5,USD,RAW,FASTENERS',
+      onUpload: async (rows) => {
+        const r = await Api.post('/api/materials/bulk', { rows });
+        this.load();
+        return r;
+      },
+    }));
 
     await this.load();
   },

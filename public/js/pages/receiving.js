@@ -5,12 +5,18 @@ Pages.receiving = {
   async render(el) {
     this.el = el;
     this.meta = await Api.get('/api/meta');
+    // Steps are role-gated: receive (warehouse), GR # (store ERP operator),
+    // bin (picker/dispatcher). Users only see the tabs they may perform.
+    const tabs = [];
+    if (App.can('goods_receipt')) tabs.push(['receive', '1 · Receive']);
+    if (App.can(['erp_operator', 'goods_receipt'])) tabs.push(['gr', '2 · Assign GR #']);
+    if (App.can(['picking', 'goods_receipt'])) tabs.push(['bin', '3 · Assign Bin']);
+    if (!tabs.length) { el.innerHTML = '<div class="inline-alert error">No receiving steps available for your role.</div>'; return; }
+
     el.innerHTML = `
       <div class="card">
         <div class="toolbar mb-0">
-          <button class="btn sm" data-tab="receive">1 · Receive</button>
-          <button class="btn secondary sm" data-tab="gr">2 · Assign GR #</button>
-          <button class="btn secondary sm" data-tab="bin">3 · Assign Bin</button>
+          ${tabs.map(([k, label], i) => `<button class="btn ${i ? 'secondary ' : ''}sm" data-tab="${k}">${label}</button>`).join('')}
         </div>
       </div>
       <div id="gr-tab"></div>`;
@@ -19,7 +25,7 @@ Pages.receiving = {
       b.className = 'btn sm';
       this.tab(b.dataset.tab);
     }));
-    this.tab('receive');
+    this.tab(tabs[0][0]);
   },
 
   tab(name) {
@@ -58,8 +64,9 @@ Pages.receiving = {
             <div class="form-group"><label>Shelf Life Unit</label>
               <select id="gr-slu"><option>MONTHS</option><option>DAYS</option><option>YEARS</option></select></div>
           </div>
-          <div class="form-group"><label>Quality Status</label>
-            <select id="gr-quality"><option>RELEASED</option><option>QUALITY_HOLD</option><option>BLOCKED</option></select></div>
+          <div class="inline-alert" style="background:var(--warning-bg);color:var(--warning)">
+            🔬 Received batches go on <strong>Quality Hold</strong> automatically. Only the Quality team can
+            release them for issue (Quality screen → Pending Inspection).</div>
           <button type="submit" class="btn success block">Receive &amp; Generate QR</button>
         </form>
       </div>
@@ -79,7 +86,7 @@ Pages.receiving = {
       po_number: box.querySelector('#gr-po').value, supplier_code: box.querySelector('#gr-supcode').value,
       supplier_name: box.querySelector('#gr-supname').value, manufacturing_date: box.querySelector('#gr-mfg').value || null,
       expiry_date: box.querySelector('#gr-exp').value || null, shelf_life_period: box.querySelector('#gr-slp').value || null,
-      shelf_life_unit: box.querySelector('#gr-slu').value, quality_status: box.querySelector('#gr-quality').value,
+      shelf_life_unit: box.querySelector('#gr-slu').value,
     };
     try {
       const { qr, batch_number } = await Api.post('/api/receiving', payload);
@@ -159,17 +166,39 @@ Pages.qrPrinting = {
     this.el = el;
     el.innerHTML = `<div class="card">
         <div class="toolbar"><h3 class="mb-0">QR Label Printing</h3><div class="spacer"></div>
-          <input type="text" class="search-input" id="qr-search" placeholder="Search material / batch / QR…"></div>
+          <input type="text" class="search-input" id="qr-search" placeholder="Search material / batch / QR…">
+          <button class="btn sm" id="qr-pdf-all">📄 PDF — all shown</button></div>
         <div id="qr-list"><div class="loading">Loading…</div></div></div>`;
     el.querySelector('#qr-search').addEventListener('input', UI.debounce((e) => this.load(e.target.value), 300));
+    el.querySelector('#qr-pdf-all').addEventListener('click', () => {
+      if (!this.shownIds || !this.shownIds.length) return UI.toast('No labels to print.', 'error');
+      this.pdf(this.shownIds);
+    });
     await this.load('');
   },
 
   async load(q) {
     const { qr_codes } = await Api.get(`/api/receiving/qr?search=${encodeURIComponent(q || '')}`);
+    this.shownIds = qr_codes.map((x) => x.id);
     this.el.querySelector('#qr-list').innerHTML =
       qr_codes.map((qr) => this.qrCard(qr)).join('') || '<p class="muted">No QR codes.</p>';
     this.el.querySelectorAll('[data-print]').forEach((b) => b.addEventListener('click', () => this.print(b.dataset.print)));
+    this.el.querySelectorAll('[data-pdf]').forEach((b) => b.addEventListener('click', () => this.pdf([Number(b.dataset.pdf)])));
+  },
+
+  /** Download/open a printable PDF for one or more labels (auth-safe blob). */
+  async pdf(ids) {
+    try {
+      const blob = await Api.blob(`/api/receiving/qr/pdf?ids=${ids.join(',')}`);
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank') || (() => {   // popup blocked -> download
+        const a = document.createElement('a');
+        a.href = url; a.download = 'qr-labels.pdf'; a.click();
+      })();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      UI.toast(`PDF generated for ${ids.length} label(s).`);
+      if (this.el.querySelector('#qr-list')) this.load(this.el.querySelector('#qr-search').value);
+    } catch (err) { UI.toast(err.message, 'error'); }
   },
 
   qrCard(qr) {
@@ -189,7 +218,11 @@ Pages.qrPrinting = {
             <div class="item"><div class="k">Quality</div><div class="v">${UI.esc(qr.quality_status || '')}</div></div>
             <div class="item"><div class="k">Prints</div><div class="v">${qr.print_count}</div></div>
           </div>
-          ${App.can('qr_printing') ? `<button class="btn secondary sm" data-print="${qr.id}" style="margin-top:8px">🖨️ Print / Reprint</button>` : ''}
+          ${App.can('qr_printing') ? `
+            <div style="margin-top:8px;display:flex;gap:6px">
+              <button class="btn sm" data-pdf="${qr.id}">📄 PDF label</button>
+              <button class="btn secondary sm" data-print="${qr.id}">🖨️ Mark printed</button>
+            </div>` : ''}
         </div>
       </div>`;
   },

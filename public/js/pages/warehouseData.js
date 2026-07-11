@@ -58,20 +58,64 @@ Pages.expiry = {
 Pages.quality = {
   async render(el) {
     this.el = el;
-    el.innerHTML = `<div class="card"><h3>Quality Management</h3>
-      <p class="muted">Set batch quality status. Held / blocked batches are excluded from FIFO/FEFO allocation and QR validation.</p>
-      <div class="table-wrap" id="ql-table"><div class="loading">Loading…</div></div></div>`;
+    el.innerHTML = `
+      <div class="card"><h3>🔬 Pending Inspection <span class="badge pending" id="ql-count"></span></h3>
+        <p class="muted">Every received batch lands here on Quality Hold. Only this step may change quality status;
+        held/blocked batches are excluded from FIFO/FEFO allocation and QR validation.</p>
+        <div class="table-wrap" id="ql-pending"><div class="loading">Loading…</div></div></div>
+      <div class="card"><h3>All batches</h3>
+        <div class="table-wrap" id="ql-table"><div class="loading">Loading…</div></div></div>`;
     await this.load();
   },
+
+  decide(batchId, status) {
+    UI.modal({
+      title: `Set quality status: ${status}`, submitLabel: 'Confirm',
+      bodyHtml: `<div class="form-group"><label>Reason ${status === 'RELEASED' ? '(optional)' : '(required)'}</label>
+        <input type="text" id="ql-reason" placeholder="Inspection result / justification"></div>`,
+      onSubmit: async (ov, close) => {
+        const reason = ov.querySelector('#ql-reason').value.trim();
+        if (status !== 'RELEASED' && !reason) return UI.toast('A reason is required for hold/block/reject.', 'error');
+        try {
+          await Api.post(`/api/master/batches/${batchId}/quality`, { quality_status: status, reason: reason || 'Inspection passed' });
+          UI.toast(`Batch ${status === 'RELEASED' ? 'released' : 'set to ' + status}.`);
+          close(); this.load();
+        } catch (err) { UI.toast(err.message, 'error'); }
+      },
+    });
+  },
+
   async load() {
+    // Pending inspection queue (the quality step after goods receiving).
+    const { batches: pending } = await Api.get('/api/master/batches?quality=QUALITY_HOLD');
+    this.el.querySelector('#ql-count').textContent = pending.length;
+    this.el.querySelector('#ql-pending').innerHTML = `
+      <table><thead><tr><th>Batch</th><th>Material</th><th>PO / GR</th><th>WH</th><th class="text-right">Qty</th><th>Expiry</th><th>Decision</th></tr></thead>
+      <tbody>${pending.map((b) => `
+        <tr><td><strong>${UI.esc(b.batch_number)}</strong></td>
+          <td>${UI.esc(b.material_code)} <span class="muted">${UI.esc(b.material_description || '')}</span></td>
+          <td>${UI.esc(b.po_number || '—')} / ${UI.esc(b.gr_number || '—')}</td>
+          <td>${UI.esc(b.warehouse_code || '')}</td>
+          <td class="text-right">${UI.fmtQty(b.remaining_quantity)}</td>
+          <td>${b.expiry_date || '—'}</td>
+          <td>
+            <button class="btn success sm" data-q="RELEASED" data-id="${b.id}">Release</button>
+            <button class="btn secondary sm" data-q="BLOCKED" data-id="${b.id}">Block</button>
+            <button class="btn danger sm" data-q="REJECTED" data-id="${b.id}">Reject</button>
+          </td></tr>`).join('') || '<tr><td colspan="7" class="muted">Nothing awaiting inspection 🎉</td></tr>'}
+      </tbody></table>`;
+    this.el.querySelectorAll('#ql-pending [data-q]').forEach((btn) =>
+      btn.addEventListener('click', () => this.decide(btn.dataset.id, btn.dataset.q)));
+
+    // Full batch list (read + re-decide, e.g. re-hold a released batch).
     const { batches } = await Api.get('/api/master/batches');
     this.el.querySelector('#ql-table').innerHTML = `
       <table><thead><tr><th>Batch</th><th>Material</th><th>WH</th><th class="text-right">On hand</th><th>Quality</th><th>Set status</th></tr></thead>
       <tbody>${batches.map((b) => `
         <tr><td><strong>${UI.esc(b.batch_number)}</strong></td><td>${UI.esc(b.material_code)}</td><td>${UI.esc(b.warehouse_code || '')}</td>
           <td class="text-right">${UI.fmtQty(b.remaining_quantity)}</td>
-          <td><span class="badge ${b.quality_status === 'RELEASED' ? 'active' : 'OUT'}">${UI.esc(b.quality_status)}</span></td>
-          <td><select class="ql-set" data-id="${b.id}" style="max-width:150px">
+          <td><span class="badge ${b.quality_status === 'RELEASED' ? 'active' : b.quality_status === 'QUALITY_HOLD' ? 'pending' : 'OUT'}">${UI.esc(b.quality_status)}</span></td>
+          <td><select class="ql-set" data-id="${b.id}" style="max-width:160px">
             ${['RELEASED', 'QUALITY_HOLD', 'BLOCKED', 'REJECTED'].map((s) => `<option ${s === b.quality_status ? 'selected' : ''}>${s}</option>`).join('')}
           </select></td></tr>`).join('')}
       </tbody></table>`;
@@ -123,10 +167,21 @@ Pages.binsMaster = {
     this.el = el;
     this.meta = await Api.get('/api/meta');
     el.innerHTML = `<div class="card"><div class="toolbar"><h3 class="mb-0">Bin Location Master</h3><div class="spacer"></div>
+      <button class="btn secondary" id="bm-upload">⬆ Mass Upload</button>
       <button class="btn" id="bm-add">+ Add Bin</button></div>
       <p class="muted">Compact format e.g. <code>R-03-02-23</code>; expanded e.g. <code>WH01-ZA-R03-L02-C23</code>.</p>
       <div class="table-wrap" id="bm-table"><div class="loading">Loading…</div></div></div>`;
     el.querySelector('#bm-add').addEventListener('click', () => this.form());
+    el.querySelector('#bm-upload').addEventListener('click', () => UI.csvUploadModal({
+      title: 'Mass upload bin locations (CSV)',
+      headersHint: 'warehouse_code,zone,rack,line_or_aisle,level,column_number,capacity',
+      example: 'warehouse_code,zone,rack,line_or_aisle,level,column_number,capacity\nWH01,ZB,R05,03,01,07,1000',
+      onUpload: async (rows) => {
+        const r = await Api.post('/api/master/bins/bulk', { rows });
+        this.load();
+        return r;
+      },
+    }));
     await this.load();
   },
   async load() {

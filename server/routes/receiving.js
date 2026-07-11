@@ -18,8 +18,11 @@ const db = require('./../db/connection');
 const { authenticate, requirePermission } = require('./../middleware/auth');
 const { isId, isPositiveNumber, isNonEmptyString } = require('./../utils/validate');
 const audit = require('./../services/audit');
+const notify = require('./../services/notify');
 const qrService = require('./../services/qr');
 const { calcExpiry } = require('./../services/expiry');
+const { streamLabelsPdf } = require('./../services/labels');
+const { recordMovement } = require('./../services/ledger');
 
 const router = express.Router();
 router.use(authenticate);
@@ -88,21 +91,35 @@ router.post('/', requirePermission('goods_receipt'), (req, res) => {
     `).run(batchNumber, material.id, material.item_code, material.description,
       b.supplier_code || null, b.supplier_name || null, b.po_number.trim(), null,
       receivingDate, mfg, expiry, b.shelf_life_period || null, b.shelf_life_unit || null,
-      qty, qty, b.warehouse_code, null, b.quality_status || 'RELEASED', receivingDate, expiry);
+      // Every received batch starts on QUALITY_HOLD: only the quality step
+      // (after receiving) may release it for issue.
+      qty, qty, b.warehouse_code, null, 'QUALITY_HOLD', receivingDate, expiry);
 
     const batch = db.prepare('SELECT * FROM batches WHERE id=?').get(info.lastInsertRowid);
     const qrId = qrService.generateForBatch(batch, { uom: material.unit });
     db.prepare('UPDATE batches SET qr_code_id=? WHERE id=?').run(qrId, batch.id);
 
+    // Movement ledger: goods receipt = stock IN.
+    recordMovement({ type: 'IN', materialId: material.id, warehouseCode: b.warehouse_code,
+      quantity: qty, userId: req.user.id, notes: `GR batch ${batchNumber} (PO ${b.po_number.trim()})` });
+
     audit.record({ entityType: 'Batch', entityId: batch.id, action: 'GOODS_RECEIPT',
-      newValue: { batch: batchNumber, qty, po: b.po_number, expiry, warehouse: b.warehouse_code },
+      newValue: { batch: batchNumber, qty, po: b.po_number, expiry, warehouse: b.warehouse_code, quality: 'QUALITY_HOLD' },
       user: req.user, sourceScreen: 'Goods Receipt' });
     return { batchId: batch.id, qrId };
   });
 
   const { batchId, qrId } = create();
   const qr = db.prepare('SELECT * FROM qr_codes WHERE id=?').get(qrId);
-  res.status(201).json({ message: `Goods received. Batch ${batchNumber} created and QR generated.`, batch_id: batchId, batch_number: batchNumber, qr });
+  notify.notifyRole('quality', {
+    notificationType: 'QUALITY_INSPECTION_NEEDED',
+    title: `Batch ${batchNumber} awaiting quality inspection`,
+    message: `${material.item_code} — ${qty} ${material.unit} received into ${b.warehouse_code} (PO ${b.po_number.trim()}).`,
+  });
+  res.status(201).json({
+    message: `Goods received. Batch ${batchNumber} created (quality hold) and QR generated.`,
+    batch_id: batchId, batch_number: batchNumber, qr,
+  });
 });
 
 // --- Step 2: assign GR number (store ERP operator) --------------------------
@@ -159,6 +176,29 @@ router.patch('/batches/:id/bin', requirePermission(['goods_receipt', 'picking'])
 });
 
 // --- QR printing ------------------------------------------------------------
+/**
+ * GET /api/receiving/qr/pdf?ids=1,2,3 — printable PDF label sheet (one 4x6in
+ * page per QR, with a real scannable QR image). Each label counts as a print.
+ */
+router.get('/qr/pdf', requirePermission('qr_printing'), async (req, res) => {
+  const ids = String(req.query.ids || '').split(',').map((s) => Number(s)).filter((n) => Number.isInteger(n) && n > 0);
+  if (!ids.length) return res.status(400).json({ error: 'Provide ids=1,2,3 of the QR labels to print.' });
+  const qrs = ids.map((id) => db.prepare('SELECT * FROM qr_codes WHERE id=?').get(id)).filter(Boolean);
+  if (!qrs.length) return res.status(404).json({ error: 'No matching QR codes.' });
+
+  qrs.forEach((qr) => {
+    qrService.markPrinted(qr.id);
+    audit.record({ entityType: 'QRCode', entityId: qr.id, action: qr.print_count > 0 ? 'QR_REPRINT' : 'QR_PRINT',
+      newValue: { print_count: qr.print_count + 1, format: 'PDF' }, user: req.user, sourceScreen: 'QR Printing' });
+  });
+  try {
+    await streamLabelsPdf(res, qrs);
+  } catch (err) {
+    console.error('PDF generation failed:', err);
+    if (!res.headersSent) res.status(500).json({ error: 'PDF generation failed.' });
+  }
+});
+
 /** GET /api/receiving/qr/:id — QR detail for printing. */
 router.get('/qr/:id', requirePermission(['goods_receipt', 'qr_printing']), (req, res) => {
   const qr = db.prepare('SELECT * FROM qr_codes WHERE id=?').get(req.params.id);

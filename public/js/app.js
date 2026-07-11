@@ -12,6 +12,7 @@ const MENU = [
   { section: 'General' },
   { route: 'dashboard', label: 'Dashboard', icon: '📊', permission: 'dashboard' },
   { route: 'kpi', label: 'KPI Dashboard', icon: '📈', permission: 'kpi_dashboard' },
+  { route: 'ai', label: 'AI Stock Analytics', icon: '🤖', permission: 'ai_analytics' },
   { route: 'notifications', label: 'Notifications', icon: '🔔', permission: 'notifications' },
   { section: 'Material Requests' },
   { route: 'create-request', label: 'Create Request', icon: '📝', permission: 'create_request' },
@@ -25,7 +26,7 @@ const MENU = [
   { route: 'picking', label: 'My Picking Tasks', icon: '📲', permission: 'picking' },
   { route: 'gi-posting', label: 'Goods Issue Posting', icon: '📦', permission: 'gi_posting' },
   { section: 'Receiving & Quality' },
-  { route: 'receiving', label: 'Goods Receipt & QR', icon: '📥', permission: 'goods_receipt' },
+  { route: 'receiving', label: 'Goods Receipt & QR', icon: '📥', permission: ['goods_receipt', 'erp_operator', 'picking'] },
   { route: 'qr-printing', label: 'QR Label Printing', icon: '🏷️', permission: 'qr_printing' },
   { route: 'batches', label: 'Batch Tracking', icon: '🧫', permission: 'batch_tracking' },
   { route: 'expiry', label: 'Expiry Alerts', icon: '⏰', permission: 'expiry_alerts' },
@@ -50,6 +51,7 @@ const MENU = [
 const ROUTE_PAGES = {
   'dashboard': { title: 'Dashboard', page: 'dashboard', permission: 'dashboard' },
   'kpi': { title: 'KPI Dashboard', page: 'kpi', permission: 'kpi_dashboard' },
+  'ai': { title: 'AI Stock Analytics', page: 'ai', permission: 'ai_analytics' },
   'notifications': { title: 'Notifications', page: 'notifications', permission: 'notifications' },
   'create-request': { title: 'Create Material Request', page: 'createRequest', permission: 'create_request' },
   'requests': { title: 'Material Requests', page: 'requests', permission: 'material_requests' },
@@ -61,7 +63,9 @@ const ROUTE_PAGES = {
   'picker-assign': { title: 'Picker Assignment', page: 'pickerAssign', permission: 'picker_assignment' },
   'picking': { title: 'My Picking Tasks', page: 'picking', permission: 'picking' },
   'gi-posting': { title: 'Goods Issue Posting', page: 'giPosting', permission: 'gi_posting' },
-  'receiving': { title: 'Goods Receipt & QR', page: 'receiving', permission: 'goods_receipt' },
+  // Receiving hosts three steps: receive (goods_receipt), GR number
+  // (erp_operator), and bin assignment (picking) — any of them may open it.
+  'receiving': { title: 'Goods Receipt & QR', page: 'receiving', permission: ['goods_receipt', 'erp_operator', 'picking'] },
   'qr-printing': { title: 'QR Label Printing', page: 'qrPrinting', permission: 'qr_printing' },
   'batches': { title: 'Batch Tracking', page: 'batches', permission: 'batch_tracking' },
   'expiry': { title: 'Expiry Alerts', page: 'expiry', permission: 'expiry_alerts' },
@@ -85,6 +89,7 @@ const App = {
 
   can(permission) {
     if (!this.user) return false;
+    if (Array.isArray(permission)) return permission.some((p) => this.can(p));
     if (this.user.role === 'admin') return true;
     return this.user.permissions.includes(permission);
   },
@@ -177,10 +182,10 @@ const App = {
     MENU.forEach((entry) => {
       if (entry.section) { pendingSection = entry.section; return; }
       if (!this.can(entry.permission)) return;
-      if (pendingSection) { items.push(`<div class="section">${UI.esc(pendingSection)}</div>`); pendingSection = null; }
+      if (pendingSection) { items.push(`<div class="section">${UI.esc(t(pendingSection))}</div>`); pendingSection = null; }
       items.push(`
         <a href="#/${entry.route}" class="${entry.route === activeRoute ? 'active' : ''}">
-          <span>${entry.icon}</span> ${UI.esc(entry.label)}
+          <span>${entry.icon}</span> ${UI.esc(t(entry.label))}
         </a>`);
     });
 
@@ -194,14 +199,22 @@ const App = {
           <header class="topbar">
             <div class="left">
               <button class="menu-toggle" id="menu-toggle" aria-label="Toggle menu">☰</button>
-              <span class="page-title">${UI.esc(title)}</span>
+              <span class="page-title">${UI.esc(t(title))}</span>
             </div>
             <div class="user-box">
+              <div class="pref-controls">
+                <select id="lang-select" title="${UI.esc(t('Language'))}">
+                  <option value="en" ${Lang.current === 'en' ? 'selected' : ''}>EN</option>
+                  <option value="ar" ${Lang.current === 'ar' ? 'selected' : ''}>عربي</option>
+                  <option value="fr" ${Lang.current === 'fr' ? 'selected' : ''}>FR</option>
+                </select>
+                <button class="theme-btn" id="theme-toggle" title="${UI.esc(t('Theme'))}">${Theme.current === 'dark' ? '☀️' : '🌙'}</button>
+              </div>
               <div>
                 <div class="user-name">${UI.esc(this.user.name)}</div>
                 <div class="user-role">${UI.esc(this.user.role)}</div>
               </div>
-              <button class="btn secondary sm" id="logout-btn">Logout</button>
+              <button class="btn secondary sm" id="logout-btn">${UI.esc(t('Logout'))}</button>
             </div>
           </header>
           <main class="content" id="page-content">
@@ -211,6 +224,8 @@ const App = {
       </div>`;
 
     document.getElementById('logout-btn').addEventListener('click', () => this.logout());
+    document.getElementById('lang-select').addEventListener('change', (e) => Lang.set(e.target.value));
+    document.getElementById('theme-toggle').addEventListener('click', () => Theme.toggle());
 
     // Mobile/tablet sidebar toggle with backdrop.
     const sidebar = document.getElementById('sidebar');

@@ -11,6 +11,7 @@ const { isNonEmptyString } = require('./../utils/validate');
 const audit = require('./../services/audit');
 const notify = require('./../services/notify');
 const erp = require('./../services/erp');
+const { recordMovement } = require('./../services/ledger');
 const { setHeaderStatus, refreshRollups, getHeaderOr404 } = require('./../services/requests');
 const { HEADER_STATUS, LINE_STATUS } = require('./../workflow/states');
 
@@ -104,6 +105,13 @@ router.post('/:id/post', (req, res) => {
     } });
     db.prepare("UPDATE material_request_lines SET line_status=?, issued_quantity=picked_quantity WHERE request_id=? AND line_status=?")
       .run(LINE_STATUS.GI_POSTED, header.id, LINE_STATUS.PENDING_GI);
+    // Movement ledger: goods issue = stock OUT (one row per issued line).
+    picked.forEach((l) => recordMovement({
+      type: 'OUT', materialId: l.material_id, warehouseCode: header.issue_warehouse_code,
+      quantity: l.picked_quantity, userId: req.user.id,
+      reservationNumber: header.erp_reservation_number || header.erp_reference_number,
+      notes: `GI ${result.response.giDocumentNumber} / ${header.request_number}`,
+    }));
     setHeaderStatus(header, finalStatus, { user: req.user, sourceScreen: 'GI Posting',
       set: { closed_at: new Date().toISOString() } });
     refreshRollups(header.id);
