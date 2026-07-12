@@ -134,10 +134,36 @@ router.post('/:id/return-to-picker', (req, res) => {
     return res.status(400).json({ error: 'Only GI-stage requests can be returned to picker.' });
   }
   const task = db.prepare("SELECT * FROM picking_tasks WHERE request_id=? ORDER BY id DESC LIMIT 1").get(header.id);
-  db.transaction(() => {
+  const returnToPicker = db.transaction(() => {
+    // Re-open the allocations the previous confirm consumed/cancelled and put
+    // the picked stock back on the batches. Without this, a second confirm
+    // finds no open allocations and would record picked quantities without
+    // moving any batch stock — lines and physical inventory would disagree.
+    const allocs = db.prepare(
+      "SELECT * FROM picking_allocations WHERE request_id=? AND status IN ('PICKED','SHORT','CANCELLED')"
+    ).all(header.id);
+    allocs.forEach((a) => {
+      db.prepare('UPDATE batches SET remaining_quantity = remaining_quantity + ?, reserved_quantity = reserved_quantity + ? WHERE id=?')
+        .run(a.picked_quantity || 0, a.proposed_quantity, a.batch_id);
+      // Already-validated scans stay valid; never-scanned proposals go back to PROPOSED.
+      db.prepare('UPDATE picking_allocations SET status=?, picked_quantity=0 WHERE id=?')
+        .run(a.scanned_qr_value ? 'SCANNED' : 'PROPOSED', a.id);
+    });
+    db.prepare(`
+      UPDATE material_request_lines
+      SET picked_quantity=0, shortage_quantity=0, shortage_reason=NULL,
+          line_status=?, updated_at=datetime('now')
+      WHERE request_id=? AND line_status IN (?,?,?,?)
+    `).run(LINE_STATUS.PICKING_IN_PROGRESS, header.id,
+      LINE_STATUS.PENDING_GI, LINE_STATUS.PICKED, LINE_STATUS.PARTIALLY_PICKED, LINE_STATUS.SHORTAGE);
+
     setHeaderStatus(header, HEADER_STATUS.PICKING_IN_PROGRESS, { user: req.user, reason: req.body.reason, sourceScreen: 'GI Posting' });
     if (task) db.prepare("UPDATE picking_tasks SET task_status='Picking in Progress', updated_at=datetime('now') WHERE id=?").run(task.id);
-  })();
+    audit.record({ entityType: 'MaterialRequestHeader', entityId: header.id, requestNumber: header.request_number,
+      action: 'RETURN_TO_PICKER', newValue: { reopened_allocations: allocs.length },
+      reason: req.body.reason, user: req.user, sourceScreen: 'GI Posting' });
+  });
+  try { returnToPicker(); } catch (err) { return res.status(err.status || 500).json({ error: err.message }); }
   if (task) notify.send({ requestNumber: header.request_number, taskId: task.id, recipientUserId: task.assigned_picker_id,
     notificationType: 'RETURNED_TO_PICKER', title: `Request ${header.request_number} returned for re-pick`, message: req.body.reason || '' });
   res.json({ message: 'Returned to picker.' });

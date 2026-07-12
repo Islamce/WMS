@@ -167,6 +167,12 @@ router.post('/lines/:lineId/confirm', requirePermission('picking'), (req, res) =
 
   // QR verification required for batch/expiry-managed lines (unless overridden).
   const allocs = db.prepare("SELECT * FROM picking_allocations WHERE line_id=? AND status IN ('PROPOSED','SCANNED')").all(line.id);
+  // A pick that moves quantity must consume batch stock through open
+  // allocations — otherwise picked_quantity and physical inventory diverge
+  // (e.g. a duplicate confirm after the line was already confirmed).
+  if (picked > 0 && allocs.length === 0) {
+    return res.status(400).json({ error: 'This line has no open allocations to pick from (already confirmed or not allocated). Re-run allocation or return the task properly.' });
+  }
   if ((line.is_batch_managed || line.is_expiry_managed)) {
     const unscanned = allocs.filter((a) => a.status === 'PROPOSED');
     if (picked > 0 && unscanned.length > 0) {

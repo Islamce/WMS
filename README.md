@@ -146,13 +146,15 @@ DB_PATH=./data/wms.db
 ### Testing & CI
 
 ```bash
-npm test        # full end-to-end suite (98 checks) — needs Node 18+ and python3
+npm test        # full end-to-end suite (113 checks) — needs Node 18+ and python3
 ```
 
 The runner (`tests/run.sh`) rebuilds a fresh database, boots the server, and
-executes four suites: the 25-scenario workflow regression, UI-refinement
-checks, P0 regressions (reservation-leak, login rate-limit, JWT guard), and
-the feature suite (AI analytics, PDF labels, mass upload, quality step).
+executes five suites: the 25-scenario workflow regression, UI-refinement
+checks, P0 regressions (reservation-leak, login rate-limit, JWT guard), P1
+regressions (self-approval block, dashboard→batches stock source,
+return-to-picker allocation restore, security headers, body limit), and the
+feature suite (AI analytics, PDF labels, mass upload, quality step).
 GitHub Actions (`.github/workflows/ci.yml`) runs the same command on every
 push to `main` and on every pull request.
 
@@ -161,6 +163,10 @@ push to `main` and on every pull request.
 - `NODE_ENV=production` **requires** a real `JWT_SECRET` (≥ 32 chars, not the
   example placeholder) — the server refuses to boot otherwise.
 - Login is rate-limited: 10 failed attempts per email/IP per 15 minutes.
+- Security headers are set by `helmet` (CSP, `X-Content-Type-Options`, etc.);
+  the CSP allows only same-origin scripts (no inline handlers).
+- Segregation of duties: a user can never approve or modify their own material
+  request, even if they hold the `approvals` permission.
 - Change the default admin password before going live.
 
 ### Database migration & seeding

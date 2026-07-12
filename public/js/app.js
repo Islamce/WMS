@@ -170,8 +170,9 @@ const App = {
       <div class="auth-wrap"><div class="auth-card">
         <div class="logo">📦 WMS</div>
         <p class="subtitle">Your account has no screen permissions yet.<br>Ask an administrator to grant you access.</p>
-        <button class="btn block" onclick="App.logout()">Back to login</button>
+        <button class="btn block" id="no-access-logout">Back to login</button>
       </div></div>`;
+    document.getElementById('no-access-logout').addEventListener('click', () => App.logout());
   },
 
   renderLayout(activeRoute, title) {

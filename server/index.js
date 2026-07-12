@@ -4,6 +4,7 @@
  */
 const path = require('path');
 const express = require('express');
+const helmet = require('helmet');
 const config = require('./config');
 
 // Ensure the schema exists before handling requests (idempotent).
@@ -11,7 +12,25 @@ require('./db/migrate');
 
 const app = express();
 
-app.use(express.json());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],           // all JS is served from /js and /vendor
+      scriptSrcAttr: ["'none'"],       // no inline event handlers anywhere
+      styleSrc: ["'self'", "'unsafe-inline'"], // pages use inline style attributes
+      imgSrc: ["'self'", 'data:', 'blob:'],    // QR previews are data:/blob: images
+      objectSrc: ["'none'"],
+      // Not upgrading requests keeps plain-HTTP localhost testing working;
+      // TLS termination is the reverse proxy's job in production.
+      upgradeInsecureRequests: null,
+    },
+  },
+}));
+
+// The bulk CSV upload screens send up to ~2,000 rows in one JSON body, which
+// exceeds express.json()'s default 100 KB cap.
+app.use(express.json({ limit: '2mb' }));
 
 // Unauthenticated health check — handy for verifying the server is reachable
 // through a proxy/port-forward (e.g. GitHub Codespaces). A 200 here means the

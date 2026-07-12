@@ -25,9 +25,9 @@ Pages.dashboard = {
     el.innerHTML = `
       <div class="grid kpis">
         <div class="kpi accent"><div class="label">Total Materials</div><div class="value">${UI.fmtQty(k.total_materials)}</div></div>
-        <div class="kpi accent"><div class="label">Total Locations</div><div class="value">${UI.fmtQty(k.total_locations)}</div></div>
-        <div class="kpi green"><div class="label">Occupied Locations</div><div class="value">${UI.fmtQty(k.occupied_locations)}</div></div>
-        <div class="kpi amber"><div class="label">Empty Locations</div><div class="value">${UI.fmtQty(k.empty_locations)}</div></div>
+        <div class="kpi accent"><div class="label">Bin Locations</div><div class="value">${UI.fmtQty(k.total_locations)}</div></div>
+        <div class="kpi green"><div class="label">Occupied Bins</div><div class="value">${UI.fmtQty(k.occupied_locations)}</div></div>
+        <div class="kpi amber"><div class="label">Empty Bins</div><div class="value">${UI.fmtQty(k.empty_locations)}</div></div>
         <div class="kpi accent"><div class="label">Total Stock Quantity</div><div class="value">${UI.fmtQty(k.total_stock)}</div></div>
         <div class="kpi green"><div class="label">Stock In</div><div class="value">${UI.fmtQty(k.stock_in_today)}</div><div class="sub">today · ${UI.fmtQty(k.stock_in_month)} this month</div></div>
         <div class="kpi red"><div class="label">Stock Out</div><div class="value">${UI.fmtQty(k.stock_out_today)}</div><div class="sub">today · ${UI.fmtQty(k.stock_out_month)} this month</div></div>
@@ -37,7 +37,7 @@ Pages.dashboard = {
       <div class="grid two">
         <div class="card"><h3>Stock IN vs OUT — last 30 days</h3><div class="chart-box"><canvas id="ch-inout"></canvas></div></div>
         <div class="card"><h3>Stock quantity by material group</h3><div class="chart-box"><canvas id="ch-group"></canvas></div></div>
-        <div class="card"><h3>Stock quantity by location</h3><div class="chart-box"><canvas id="ch-location"></canvas></div></div>
+        <div class="card"><h3>Stock quantity by warehouse</h3><div class="chart-box"><canvas id="ch-location"></canvas></div></div>
         <div class="card"><h3>Transactions by user</h3><div class="chart-box"><canvas id="ch-users"></canvas></div></div>
       </div>
 
@@ -55,7 +55,7 @@ Pages.dashboard = {
           </table></div>
         </div>
         <div class="card">
-          <h3>Top 10 locations by stock</h3>
+          <h3>Top 10 bins by stock</h3>
           <div class="table-wrap"><table>
             <thead><tr><th>Location</th><th class="text-right">Quantity</th></tr></thead>
             <tbody>

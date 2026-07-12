@@ -30,11 +30,17 @@ router.get('/', (req, res) => {
   res.json({ requests: rows });
 });
 
-function loadApprovable(res, id) {
+function loadApprovable(res, id, user) {
   const header = db.prepare('SELECT * FROM material_request_headers WHERE id=?').get(id);
   if (!header) { res.status(404).json({ error: 'Request not found.' }); return null; }
   if (!APPROVABLE.includes(header.request_status)) {
     res.status(400).json({ error: `Request is not awaiting approval (status '${header.request_status}').` });
+    return null;
+  }
+  // Segregation of duties: nobody may act as approver on their own request,
+  // regardless of role. Another approver (or admin) must take the decision.
+  if (user && header.requester_id === user.id) {
+    res.status(403).json({ error: 'You cannot approve or modify your own request (segregation of duties).' });
     return null;
   }
   return header;
@@ -45,7 +51,7 @@ function loadApprovable(res, id) {
  * date, cost objects). Each changed field is audited individually.
  */
 router.patch('/:id/header', (req, res) => {
-  const header = loadApprovable(res, req.params.id);
+  const header = loadApprovable(res, req.params.id, req.user);
   if (!header) return;
   const editable = ['priority', 'required_date', 'cost_center', 'wbs_element', 'internal_order', 'production_order'];
   const b = req.body || {};
@@ -72,7 +78,7 @@ router.patch('/:id/header', (req, res) => {
 
 /** PATCH /api/approvals/:id/lines/:lineId — modify a line's approved quantity. */
 router.patch('/:id/lines/:lineId', (req, res) => {
-  const header = loadApprovable(res, req.params.id);
+  const header = loadApprovable(res, req.params.id, req.user);
   if (!header) return;
   const line = db.prepare('SELECT * FROM material_request_lines WHERE id=? AND request_id=?')
     .get(req.params.lineId, header.id);
@@ -94,7 +100,7 @@ router.patch('/:id/lines/:lineId', (req, res) => {
 
 /** DELETE /api/approvals/:id/lines/:lineId — remove a line (reason mandatory). */
 router.delete('/:id/lines/:lineId', (req, res) => {
-  const header = loadApprovable(res, req.params.id);
+  const header = loadApprovable(res, req.params.id, req.user);
   if (!header) return;
   const line = db.prepare('SELECT * FROM material_request_lines WHERE id=? AND request_id=?')
     .get(req.params.lineId, header.id);
@@ -118,7 +124,7 @@ router.delete('/:id/lines/:lineId', (req, res) => {
 
 /** POST /api/approvals/:id/lines — add a new line during approval. */
 router.post('/:id/lines', (req, res) => {
-  const header = loadApprovable(res, req.params.id);
+  const header = loadApprovable(res, req.params.id, req.user);
   if (!header) return;
   const { material_id, requested_quantity, reason } = req.body || {};
   if (!isId(material_id) || !isPositiveNumber(requested_quantity)) {
@@ -153,7 +159,7 @@ router.post('/:id/lines', (req, res) => {
  *         approvedLineIds?: [] (for partial) }
  */
 router.post('/:id/decision', (req, res) => {
-  const header = loadApprovable(res, req.params.id);
+  const header = loadApprovable(res, req.params.id, req.user);
   if (!header) return;
   const { decision, comments, reason, approvedLineIds } = req.body || {};
   const lines = db.prepare('SELECT * FROM material_request_lines WHERE request_id=?').all(header.id);
