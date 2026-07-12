@@ -1,6 +1,8 @@
 /**
- * Admin dashboard KPIs and chart data. Everything is computed live from
- * material_location_stock (current balances) and stock_transactions (history).
+ * Admin dashboard KPIs and chart data. Current balances come from `batches`
+ * (the workflow stock source — receiving, allocation, picking and GI all
+ * operate on it); movement history comes from `stock_transactions`, which the
+ * ledger service writes on every goods receipt (IN) and goods issue (OUT).
  */
 const express = require('express');
 const db = require('../db/connection');
@@ -16,15 +18,18 @@ router.get('/', (req, res) => {
 
   // --- KPI counters -------------------------------------------------------
   const totalMaterials = one('SELECT COUNT(*) AS n FROM materials').n;
-  const totalLocations = one('SELECT COUNT(*) AS n FROM locations').n;
+  // Occupancy is measured on physical bin locations vs the batches stored in them.
+  const totalLocations = one('SELECT COUNT(*) AS n FROM bin_locations WHERE is_active = 1').n;
   const emptyLocations = one(`
-    SELECT COUNT(*) AS n FROM locations l
-    WHERE NOT EXISTS (
-      SELECT 1 FROM material_location_stock mls
-      WHERE mls.location_id = l.id AND mls.quantity > 0
+    SELECT COUNT(*) AS n FROM bin_locations bl
+    WHERE bl.is_active = 1 AND NOT EXISTS (
+      SELECT 1 FROM batches b
+      WHERE b.warehouse_code = bl.warehouse_code
+        AND b.bin_location IN (bl.bin_code, bl.full_bin_location)
+        AND b.remaining_quantity > 0
     )
   `).n;
-  const totalStock = one('SELECT COALESCE(SUM(quantity), 0) AS n FROM material_location_stock').n;
+  const totalStock = one('SELECT COALESCE(SUM(remaining_quantity), 0) AS n FROM batches').n;
 
   const movementSince = (type, dateExpr) => one(`
     SELECT COALESCE(SUM(quantity), 0) AS n FROM stock_transactions
@@ -40,15 +45,16 @@ router.get('/', (req, res) => {
 
   // --- Top lists ----------------------------------------------------------
   const topMaterials = all(`
-    SELECT m.item_code, m.description, m.unit, SUM(mls.quantity) AS quantity
-    FROM material_location_stock mls JOIN materials m ON m.id = mls.material_id
-    GROUP BY mls.material_id HAVING quantity > 0
+    SELECT m.item_code, m.description, m.unit, SUM(b.remaining_quantity) AS quantity
+    FROM batches b JOIN materials m ON m.id = b.material_id
+    GROUP BY b.material_id HAVING quantity > 0
     ORDER BY quantity DESC LIMIT 10
   `);
   const topLocations = all(`
-    SELECT l.code, SUM(mls.quantity) AS quantity
-    FROM material_location_stock mls JOIN locations l ON l.id = mls.location_id
-    GROUP BY mls.location_id HAVING quantity > 0
+    SELECT COALESCE(NULLIF(b.bin_location, ''), b.warehouse_code) AS code,
+           SUM(b.remaining_quantity) AS quantity
+    FROM batches b
+    GROUP BY code HAVING quantity > 0
     ORDER BY quantity DESC LIMIT 10
   `);
 
@@ -76,16 +82,17 @@ router.get('/', (req, res) => {
 
   const stockByGroup = all(`
     SELECT COALESCE(NULLIF(m.material_group, ''), 'UNGROUPED') AS material_group,
-           SUM(mls.quantity) AS quantity
-    FROM material_location_stock mls JOIN materials m ON m.id = mls.material_id
+           SUM(b.remaining_quantity) AS quantity
+    FROM batches b JOIN materials m ON m.id = b.material_id
     GROUP BY material_group HAVING quantity > 0
     ORDER BY quantity DESC LIMIT 12
   `);
 
   const stockByLocation = all(`
-    SELECT l.code, SUM(mls.quantity) AS quantity
-    FROM material_location_stock mls JOIN locations l ON l.id = mls.location_id
-    GROUP BY mls.location_id HAVING quantity > 0
+    SELECT COALESCE(b.warehouse_code, 'UNASSIGNED') AS code,
+           SUM(b.remaining_quantity) AS quantity
+    FROM batches b
+    GROUP BY code HAVING quantity > 0
     ORDER BY quantity DESC LIMIT 12
   `);
 
