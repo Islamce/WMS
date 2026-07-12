@@ -10,7 +10,7 @@ const { isId } = require('./../utils/validate');
 const audit = require('./../services/audit');
 const notify = require('./../services/notify');
 const allocation = require('./../services/allocation');
-const { setHeaderStatus, getHeaderOr404 } = require('./../services/requests');
+const { setHeaderStatus, getHeaderOr404, releaseOpenAllocations } = require('./../services/requests');
 const { HEADER_STATUS, LINE_STATUS, TASK_STATUS } = require('./../workflow/states');
 
 const router = express.Router();
@@ -41,8 +41,10 @@ router.get('/queue', requirePermission(['warehouse_dashboard', 'bin_batch_assign
 router.post('/:id/allocate', requirePermission('bin_batch_assignment'), (req, res) => {
   const header = getHeaderOr404(res, req.params.id);
   if (!header) return;
+  // Re-allocation is permitted up until a picker is assigned; it is
+  // reservation-safe because releaseOpenAllocations() runs first.
   const allowed = [HEADER_STATUS.PENDING_BIN_ASSIGNMENT, HEADER_STATUS.WAREHOUSE_ASSIGNED,
-    HEADER_STATUS.LOCATION_ASSIGNED, HEADER_STATUS.BATCH_ASSIGNED];
+    HEADER_STATUS.LOCATION_ASSIGNED, HEADER_STATUS.BATCH_ASSIGNED, HEADER_STATUS.PENDING_PICKER_ASSIGNMENT];
   if (!allowed.includes(header.request_status)) {
     return res.status(400).json({ error: `Request is not ready for allocation (status '${header.request_status}').` });
   }
@@ -53,8 +55,11 @@ router.post('/:id/allocate', requirePermission('bin_batch_assignment'), (req, re
 
   const results = [];
   const run = db.transaction(() => {
-    // clear any prior proposals for a clean re-allocation
-    db.prepare("DELETE FROM picking_allocations WHERE request_id=? AND status='PROPOSED'").run(header.id);
+    // Clean re-allocation: FIRST release the batch reservations held by prior
+    // proposals (otherwise reserved_quantity double-counts on every re-run),
+    // then remove the superseded proposal rows.
+    releaseOpenAllocations(header.id);
+    db.prepare("DELETE FROM picking_allocations WHERE request_id=? AND status='CANCELLED'").run(header.id);
 
     for (const line of lines) {
       const qty = line.approved_quantity ?? line.requested_quantity;

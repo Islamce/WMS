@@ -9,7 +9,7 @@ const { authenticate, requirePermission } = require('./../middleware/auth');
 const { isNonEmptyString, isPositiveNumber, isId, parsePagination } = require('./../utils/validate');
 const audit = require('./../services/audit');
 const notify = require('./../services/notify');
-const { nextRequestNumber, setHeaderStatus, refreshRollups, getHeaderOr404 } = require('./../services/requests');
+const { nextRequestNumber, setHeaderStatus, refreshRollups, getHeaderOr404, releaseOpenAllocations } = require('./../services/requests');
 const { HEADER_STATUS, LINE_STATUS } = require('./../workflow/states');
 
 const router = express.Router();
@@ -182,11 +182,18 @@ router.post('/:id/cancel', requirePermission('material_requests'), (req, res) =>
   if (terminal.includes(header.request_status)) {
     return res.status(400).json({ error: `Cannot cancel a request in status '${header.request_status}'.` });
   }
-  setHeaderStatus(header, HEADER_STATUS.CANCELLED, {
-    user: req.user, reason: req.body.reason, sourceScreen: 'Request Detail',
-    set: { closed_at: new Date().toISOString(), closure_reason: req.body.reason || 'Cancelled by requester' },
+  const cancel = db.transaction(() => {
+    // Release any batch reservations still held by this request so the
+    // stock immediately becomes available again.
+    const released = releaseOpenAllocations(header.id);
+    setHeaderStatus(header, HEADER_STATUS.CANCELLED, {
+      user: req.user, reason: req.body.reason, sourceScreen: 'Request Detail',
+      set: { closed_at: new Date().toISOString(), closure_reason: req.body.reason || 'Cancelled by requester' },
+    });
+    return released;
   });
-  res.json({ message: 'Request cancelled.' });
+  const released = cancel();
+  res.json({ message: `Request cancelled.${released ? ` Released ${released} stock reservation(s).` : ''}` });
 });
 
 module.exports = router;

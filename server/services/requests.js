@@ -67,6 +67,29 @@ function refreshRollups(requestId) {
   return { total, completed, shortage, cancelled };
 }
 
+/**
+ * Release batch reservations held by a request's open (not yet picked)
+ * allocations and mark those allocations CANCELLED. Called when a request is
+ * cancelled/put on hold and before re-allocation, so reserved_quantity never
+ * leaks and stock stays available. Returns the number of allocations released.
+ */
+function releaseOpenAllocations(requestId) {
+  const open = db.prepare(`
+    SELECT id, batch_id, proposed_quantity FROM picking_allocations
+    WHERE request_id = ? AND status IN ('PROPOSED','SCANNED')
+  `).all(requestId);
+  const decBatch = db.prepare(
+    'UPDATE batches SET reserved_quantity = MAX(0, reserved_quantity - ?) WHERE id = ?'
+  );
+  const cancelAlloc = db.prepare("UPDATE picking_allocations SET status='CANCELLED' WHERE id = ?");
+  open.forEach((a) => {
+    if (a.batch_id) decBatch.run(a.proposed_quantity, a.batch_id);
+    cancelAlloc.run(a.id);
+  });
+  db.prepare('UPDATE material_request_lines SET reserved_quantity = 0 WHERE request_id = ?').run(requestId);
+  return open.length;
+}
+
 function getHeaderOr404(res, id) {
   const header = db.prepare('SELECT * FROM material_request_headers WHERE id = ?').get(id);
   if (!header) {
@@ -76,4 +99,4 @@ function getHeaderOr404(res, id) {
   return header;
 }
 
-module.exports = { nextRequestNumber, setHeaderStatus, refreshRollups, getHeaderOr404 };
+module.exports = { nextRequestNumber, setHeaderStatus, refreshRollups, getHeaderOr404, releaseOpenAllocations };

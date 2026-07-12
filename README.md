@@ -143,6 +143,26 @@ JWT_EXPIRES_IN=8h
 DB_PATH=./data/wms.db
 ```
 
+### Testing & CI
+
+```bash
+npm test        # full end-to-end suite (98 checks) — needs Node 18+ and python3
+```
+
+The runner (`tests/run.sh`) rebuilds a fresh database, boots the server, and
+executes four suites: the 25-scenario workflow regression, UI-refinement
+checks, P0 regressions (reservation-leak, login rate-limit, JWT guard), and
+the feature suite (AI analytics, PDF labels, mass upload, quality step).
+GitHub Actions (`.github/workflows/ci.yml`) runs the same command on every
+push to `main` and on every pull request.
+
+### Production notes
+
+- `NODE_ENV=production` **requires** a real `JWT_SECRET` (≥ 32 chars, not the
+  example placeholder) — the server refuses to boot otherwise.
+- Login is rate-limited: 10 failed attempts per email/IP per 15 minutes.
+- Change the default admin password before going live.
+
 ### Database migration & seeding
 
 - `npm run migrate` — creates all tables and indexes (idempotent).
