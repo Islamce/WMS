@@ -158,6 +158,15 @@ feature suite (AI analytics, PDF labels, mass upload, quality step).
 GitHub Actions (`.github/workflows/ci.yml`) runs the same command on every
 push to `main` and on every pull request.
 
+### Deploying to Hostinger
+
+See **[DEPLOY-HOSTINGER.md](DEPLOY-HOSTINGER.md)** for step-by-step instructions
+covering a Hostinger VPS (Docker via `docker-compose.yml`, or PM2 via
+`ecosystem.config.js`) and shared hosting with the hPanel Node.js app (the root
+`app.js` is the Passenger startup file). The app honours `PORT`/`NODE_ENV`/
+`JWT_SECRET`/`DB_PATH` from the environment and sets `trust proxy` so it runs
+correctly behind Hostinger's reverse proxy.
+
 ### Production notes
 
 - `NODE_ENV=production` **requires** a real `JWT_SECRET` (≥ 32 chars, not the

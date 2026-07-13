@@ -1,0 +1,12 @@
+node_modules
+npm-debug.log
+data
+*.db
+*.db-shm
+*.db-wal
+.env
+.git
+.github
+wms flutter application
+tests
+*.md

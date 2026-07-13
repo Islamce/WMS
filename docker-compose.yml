@@ -1,0 +1,28 @@
+# One-command deploy for a Hostinger VPS (or any Docker host).
+#   docker compose up -d --build      # build + start
+#   docker compose run --rm wms npm run seed   # one-time: default admin + samples
+#   docker compose logs -f            # tail logs
+services:
+  wms:
+    build: .
+    restart: unless-stopped
+    ports:
+      # host:container — put Hostinger's reverse proxy / a public port in front.
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      # REQUIRED: replace with a real secret (see .env.example for how to make one).
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in your shell or a .env file}
+      JWT_EXPIRES_IN: 8h
+      DB_PATH: /app/data/wms.db
+    volumes:
+      # Persist the SQLite database across rebuilds/restarts.
+      - wms-data:/app/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3000/healthz',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  wms-data:
