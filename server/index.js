@@ -10,6 +10,24 @@ const config = require('./config');
 // Ensure the schema exists before handling requests (idempotent).
 require('./db/migrate');
 
+// First-run bootstrap: on an empty database — e.g. a fresh git-connected
+// deploy (Hostinger Web Apps, etc.) with no shell to run `npm run seed` — create
+// the default admin, roles/permissions, movement types, warehouses/bins and demo
+// data so the app is usable immediately. No-op once any user exists; the seed is
+// idempotent. Disable by setting SKIP_AUTO_SEED=1.
+if (process.env.SKIP_AUTO_SEED !== '1') {
+  try {
+    const db = require('./db/connection');
+    const { n } = db.prepare('SELECT COUNT(*) AS n FROM users').get();
+    if (n === 0) {
+      console.log('Empty database detected — running first-run seed…');
+      require('./db/seed').seed();
+    }
+  } catch (err) {
+    console.error('First-run seed check failed:', err.message);
+  }
+}
+
 const app = express();
 
 // Behind Hostinger's (or any) reverse proxy, trust the first proxy hop so

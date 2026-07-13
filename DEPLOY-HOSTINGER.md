@@ -6,9 +6,15 @@ your Hostinger plan:
 
 | Your Hostinger plan | Use | Difficulty |
 |---------------------|-----|------------|
+| **Business / Cloud** with the **Web Apps** deployer (Express is supported) | Path D — git-connected Web App | easiest, auto-deploys on push |
 | **VPS** (KVM 1/2/…) | Path A — Docker **or** Path B — PM2 | recommended, full control |
-| **Business / Cloud shared hosting** (has "Node.js" in hPanel) | Path C — hPanel Node.js app | easiest, some limitations |
+| **Business / Cloud shared hosting** (older "Node.js" app in hPanel) | Path C — hPanel Node.js app | easy |
 | Premium / Single shared hosting (no Node.js) | ❌ not supported — Node.js can't run there | — |
+
+> **First-run bootstrap:** on an empty database the server auto-creates the
+> schema, the default admin, roles/permissions, warehouses/bins and demo data —
+> so git-connected deploys (Path D) work with **no shell step**. Set
+> `SKIP_AUTO_SEED=1` to turn this off. `npm run seed` still works for manual setup.
 
 > **Native module note:** WMS uses `better-sqlite3`, a compiled addon. It
 > installs cleanly on a VPS. On shared Node.js hosting it usually works from
@@ -19,6 +25,45 @@ Before you start, generate a real JWT secret (you'll paste it in below):
 ```bash
 node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
 ```
+
+---
+
+## Path D — Business/Cloud with the Web Apps deployer (git-connected)
+
+If your plan shows the **Web Apps** deployer (framework list includes **Express**,
+Node 18–24), this is the easiest path — it deploys straight from GitHub and
+redeploys on every push.
+
+1. hPanel → **Web Apps** (or **Websites → Create/Deploy → Web App**) → **Connect
+   a Git repository** → authorize GitHub and pick **`Islamce/WMS`**, branch
+   **`main`**.
+2. When asked for build settings, use:
+   - **Framework:** Express (auto-detected)
+   - **Root directory:** `/` (the repo root — `package.json` is there)
+   - **Node.js version:** `20.x`
+   - **Package manager:** `npm`
+   - **Install command:** `npm install`
+   - **Build command:** *(leave empty — there is no build step)*
+   - **Start command:** `npm start`  (= `node server/index.js`)
+3. Add **environment variables**:
+   - `NODE_ENV = production`
+   - `JWT_SECRET = <paste the generated secret>`
+   - `JWT_EXPIRES_IN = 8h`
+   - `DB_PATH = ./data/wms.db`  (or a persistent-storage path — see the note below)
+4. Deploy. On first boot the app **auto-creates and seeds** the database (default
+   admin + demo data), so there's nothing else to run. Watch the deploy log for
+   `Empty database detected — running first-run seed…`.
+5. Enable **SSL** for the domain (free, in hPanel). Then open the site and log in.
+
+> ⚠️ **Data persistence — check this.** SQLite stores everything in one file at
+> `DB_PATH`. If Hostinger's Web App runtime uses **ephemeral** storage (a fresh
+> filesystem on each redeploy), that file — and all warehouse data — resets on
+> every deploy. Before relying on it for real data:
+> - Look for a **Persistent storage / Disk / Volume** option in the Web App
+>   settings and mount it (e.g. at `/data`), then set `DB_PATH=/data/wms.db`.
+> - If there is **no** persistent-disk option, use **Path A/B (VPS)** for real
+>   data, or ask me to migrate the app to the MySQL database included with your
+>   Business plan (a larger change, but the durable answer for shared hosting).
 
 ---
 

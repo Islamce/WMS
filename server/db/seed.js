@@ -91,6 +91,9 @@ function seed() {
   require('./seed3').seed3();
 }
 
-seed();
+// Run automatically when executed directly (`npm run seed` /
+// `node server/db/seed.js`), but not when required as a module — the server's
+// first-run bootstrap imports and calls seed() itself only on an empty DB.
+if (require.main === module) seed();
 
 module.exports = { seed };
