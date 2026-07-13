@@ -49,6 +49,7 @@ run_suite refinements_test.py
 run_suite p0_regression_test.py
 run_suite p1_regression_test.py
 run_suite password_test.py
+run_suite reports_test.py
 stop_server
 
 echo ""

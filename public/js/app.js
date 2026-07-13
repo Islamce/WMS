@@ -280,11 +280,11 @@ const App = {
     const initials = (this.user.name || '?').split(/\s+/).map((s) => s[0]).slice(0, 2).join('').toUpperCase();
 
     document.getElementById('app').innerHTML = `
-      <div class="layout ${this.isCollapsed() ? 'nav-collapsed' : ''}" id="layout">
+      <div class="layout" id="layout">
         <aside class="sidebar" id="sidebar">
           <div class="brand">
             <span class="brand-mark">▦</span><span class="brand-name">WMS</span>
-            <button class="rail-toggle" id="rail-toggle" title="${t('Collapse')}">${svg('panel-left')}</button>
+            <button class="rail-toggle" id="sidebar-close" title="${t('Close')}" aria-label="${t('Close')}">${svg('x')}</button>
           </div>
           <button class="nav-search" id="nav-search">${svg('search')}<span class="lbl">${t('Search')}…</span><kbd>/</kbd></button>
           <nav class="nav-tree"><div class="nav-top">${homeLink}</div>${groups}</nav>
@@ -328,16 +328,28 @@ const App = {
     const layout = document.getElementById('layout');
     const sidebar = document.getElementById('sidebar');
 
-    // Rail collapse (desktop) — persisted.
-    document.getElementById('rail-toggle').addEventListener('click', () => {
-      const collapsed = layout.classList.toggle('nav-collapsed');
-      localStorage.setItem(LS.collapsed, collapsed ? '1' : '0');
+    // The sidebar is an off-canvas drawer, hidden until the menu button is
+    // pressed (at every screen width) so the content gets full width.
+    const closeDrawer = () => { layout.classList.remove('nav-open'); document.querySelector('.scrim')?.remove(); document.getElementById('menu-toggle')?.setAttribute('aria-expanded', 'false'); };
+    const openDrawer = () => {
+      layout.classList.add('nav-open');
+      document.getElementById('menu-toggle')?.setAttribute('aria-expanded', 'true');
+      if (!document.querySelector('.scrim')) {
+        const scrim = document.createElement('div');
+        scrim.className = 'scrim';
+        scrim.addEventListener('click', closeDrawer);
+        layout.appendChild(scrim);
+      }
+    };
+    document.getElementById('menu-toggle').addEventListener('click', () => {
+      layout.classList.contains('nav-open') ? closeDrawer() : openDrawer();
     });
+    document.getElementById('sidebar-close').addEventListener('click', closeDrawer);
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDrawer(); });
 
     // Collapsible groups — persisted.
     sidebar.querySelectorAll('.nav-group-head').forEach((head) => {
       head.addEventListener('click', () => {
-        if (layout.classList.contains('nav-collapsed')) return; // groups always shown when collapsed
         const group = head.closest('.nav-group');
         group.classList.toggle('open');
         const set = new Set([...sidebar.querySelectorAll('.nav-group.open')].map((g) => g.dataset.key));
@@ -345,15 +357,7 @@ const App = {
       });
     });
 
-    // Mobile drawer.
-    const closeDrawer = () => { layout.classList.remove('nav-open'); document.querySelector('.scrim')?.remove(); };
-    document.getElementById('menu-toggle').addEventListener('click', () => {
-      layout.classList.add('nav-open');
-      const scrim = document.createElement('div');
-      scrim.className = 'scrim';
-      scrim.addEventListener('click', closeDrawer);
-      layout.appendChild(scrim);
-    });
+    // Selecting a destination closes the drawer.
     sidebar.querySelectorAll('.nav-item').forEach((a) => a.addEventListener('click', closeDrawer));
 
     // Topbar controls.

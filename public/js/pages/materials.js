@@ -12,6 +12,7 @@ Pages.materials = {
           <input type="text" class="search-input" id="mat-search" placeholder="Search code, description, group…"
                  value="${UI.esc(this.state.search)}" />
           <div class="spacer"></div>
+          <span id="mat-export"></span>
           <button class="btn secondary" id="mat-upload">⬆ Mass Upload</button>
           <button class="btn" id="mat-add">+ Add Material</button>
         </div>
@@ -24,6 +25,17 @@ Pages.materials = {
       this.state.page = 1;
       this.load();
     }, 300));
+    el.querySelector('#mat-export').appendChild(UI.exportControl({
+      filename: 'materials', title: 'Materials',
+      // Export the full filtered list (not just the current page).
+      rows: async () => (await Api.get(`/api/materials?page=1&limit=5000&search=${encodeURIComponent(this.state.search)}`)).materials,
+      columns: [
+        { key: 'item_code', label: 'Item Code' }, { key: 'description', label: 'Description' },
+        { key: 'unit', label: 'Unit' }, { key: 'material_type', label: 'Type' },
+        { key: 'material_group', label: 'Group' }, { key: 'plant', label: 'Plant' },
+        { key: 'price', label: 'Price' }, { key: 'currency', label: 'Currency' },
+      ],
+    }));
     el.querySelector('#mat-add').addEventListener('click', () => this.openForm());
     el.querySelector('#mat-upload').addEventListener('click', () => UI.csvUploadModal({
       title: 'Mass upload materials (CSV)',

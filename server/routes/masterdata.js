@@ -175,15 +175,39 @@ router.get('/expiry-alerts', requirePermission('expiry_alerts'), (req, res) => {
 // --- Audit trail ------------------------------------------------------------
 router.get('/audit', requirePermission('audit_trail'), (req, res) => {
   const { page, limit, offset } = parsePagination(req.query, { page: 1, limit: 25 });
+  const q = req.query;
   const filters = [];
   const params = [];
-  if (req.query.request_number) { filters.push('request_number = ?'); params.push(req.query.request_number); }
-  if (req.query.entity_type) { filters.push('entity_type = ?'); params.push(req.query.entity_type); }
-  if (req.query.action) { filters.push('action = ?'); params.push(req.query.action); }
+  // process = source_screen, task = request_number, user = changed_by_name,
+  // movement/action = action, entity = entity_type, plus a date range.
+  if (q.source_screen) { filters.push('source_screen = ?'); params.push(q.source_screen); }
+  if (q.entity_type) { filters.push('entity_type = ?'); params.push(q.entity_type); }
+  if (q.action) { filters.push('action = ?'); params.push(q.action); }
+  if (q.changed_by_name) { filters.push('changed_by_name = ?'); params.push(q.changed_by_name); }
+  if (q.request_number) { filters.push('request_number LIKE ?'); params.push(`%${q.request_number}%`); }
+  if (q.search) { filters.push('(request_number LIKE ? OR old_value LIKE ? OR new_value LIKE ? OR reason LIKE ?)');
+    const like = `%${q.search}%`; params.push(like, like, like, like); }
+  if (q.date_from) { filters.push('date(changed_at) >= date(?)'); params.push(q.date_from); }
+  if (q.date_to) { filters.push('date(changed_at) <= date(?)'); params.push(q.date_to); }
   const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+
   const { total } = db.prepare(`SELECT COUNT(*) AS total FROM audit_trail ${where}`).get(...params);
   const rows = db.prepare(`SELECT * FROM audit_trail ${where} ORDER BY id DESC LIMIT ? OFFSET ?`).all(...params, limit, offset);
-  res.json({ audit: rows, total, page, limit });
+
+  // Facets for the filter dropdowns (over the whole table).
+  const distinct = (col) => db.prepare(`SELECT DISTINCT ${col} AS v FROM audit_trail WHERE ${col} IS NOT NULL AND ${col} != '' ORDER BY ${col}`).all().map((r) => r.v);
+  // Summary over the current filter selection.
+  const byAction = db.prepare(`SELECT action, COUNT(*) AS count FROM audit_trail ${where} GROUP BY action ORDER BY count DESC LIMIT 12`).all(...params);
+  const byUser = db.prepare(`SELECT changed_by_name AS user, COUNT(*) AS count FROM audit_trail ${where} GROUP BY changed_by_name ORDER BY count DESC LIMIT 12`).all(...params);
+
+  res.json({
+    audit: rows, total, page, limit,
+    facets: {
+      actions: distinct('action'), entities: distinct('entity_type'),
+      users: distinct('changed_by_name'), sources: distinct('source_screen'),
+    },
+    summary: { total, by_action: byAction, by_user: byUser },
+  });
 });
 
 module.exports = router;

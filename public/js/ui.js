@@ -180,6 +180,71 @@ const UI = {
     return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
   },
 
+  _download(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  },
+
+  _cell(row, col) {
+    let v = typeof col.value === 'function' ? col.value(row) : row[col.key];
+    return v == null ? '' : String(v);
+  },
+
+  /**
+   * Reusable report export control. Returns a button element (with a small
+   * CSV / Excel / PDF menu) that exports the given data.
+   *   columns: [{ key, label, value? }]
+   *   rows:    array of objects (or a function returning the array)
+   * CSV and Excel are built in-browser; PDF is rendered server-side (pdfkit).
+   */
+  exportControl({ filename = 'report', title = 'Report', columns, rows }) {
+    const getRows = () => (typeof rows === 'function' ? rows() : rows) || [];
+    const wrap = document.createElement('div');
+    wrap.className = 'export-control';
+    wrap.innerHTML = `
+      <button class="btn secondary sm" type="button">⬇ Export</button>
+      <div class="export-menu" hidden>
+        <button type="button" data-fmt="csv">CSV (.csv)</button>
+        <button type="button" data-fmt="xls">Excel (.xls)</button>
+        <button type="button" data-fmt="pdf">PDF (.pdf)</button>
+      </div>`;
+    const menu = wrap.querySelector('.export-menu');
+    wrap.querySelector('.btn').addEventListener('click', (e) => { e.stopPropagation(); menu.hidden = !menu.hidden; });
+    document.addEventListener('click', () => { menu.hidden = true; });
+
+    const csvEscape = (v) => `"${String(v).replace(/"/g, '""')}"`;
+    wrap.querySelectorAll('[data-fmt]').forEach((btn) => btn.addEventListener('click', async () => {
+      menu.hidden = true;
+      const data = (await getRows()) || []; // rows may be an array or an async fetch
+      if (!data.length) return UI.toast('Nothing to export.', 'error');
+      const fmt = btn.dataset.fmt;
+      try {
+        if (fmt === 'csv') {
+          const head = columns.map((c) => csvEscape(c.label || c.key)).join(',');
+          const body = data.map((r) => columns.map((c) => csvEscape(UI._cell(r, c))).join(',')).join('\n');
+          UI._download(new Blob(['﻿' + head + '\n' + body], { type: 'text/csv;charset=utf-8' }), `${filename}.csv`);
+        } else if (fmt === 'xls') {
+          // HTML-table workbook — opens natively in Excel / LibreOffice.
+          const th = columns.map((c) => `<th>${UI.esc(c.label || c.key)}</th>`).join('');
+          const tr = data.map((r) => `<tr>${columns.map((c) => `<td>${UI.esc(UI._cell(r, c))}</td>`).join('')}</tr>`).join('');
+          const html = `<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8"></head>
+            <body><table border="1"><thead><tr>${th}</tr></thead><tbody>${tr}</tbody></table></body></html>`;
+          UI._download(new Blob([html], { type: 'application/vnd.ms-excel' }), `${filename}.xls`);
+        } else {
+          const cols = columns.map((c) => ({ key: c.key || c.label, label: c.label || c.key }));
+          const flatRows = data.map((r) => {
+            const o = {}; columns.forEach((c) => { o[c.key || c.label] = UI._cell(r, c); }); return o;
+          });
+          const blob = await Api.postBlob('/api/export/pdf', { title, filename, columns: cols, rows: flatRows });
+          UI._download(blob, `${filename}.pdf`);
+        }
+      } catch (err) { UI.toast(err.message, 'error'); }
+    }));
+    return wrap;
+  },
+
   /**
    * Material picker: a searchable dropdown. Attaches to a text input; opens on
    * focus (showing the first materials) and filters as you type. Calls

@@ -8,13 +8,26 @@ Pages.batches = {
     this.el = el;
     el.innerHTML = `<div class="card">
       <div class="toolbar"><h3 class="mb-0">Batch Tracking</h3><div class="spacer"></div>
-        <input type="text" class="search-input" id="bt-search" placeholder="Search batch / material / warehouse…"></div>
+        <input type="text" class="search-input" id="bt-search" placeholder="Search batch / material / warehouse…">
+        <span id="bt-export"></span></div>
       <div class="table-wrap" id="bt-table"><div class="loading">Loading…</div></div></div>`;
     el.querySelector('#bt-search').addEventListener('input', UI.debounce((e) => this.load(e.target.value), 300));
     await this.load('');
   },
   async load(q) {
     const { batches } = await Api.get(`/api/master/batches?search=${encodeURIComponent(q || '')}`);
+    const slot = this.el.querySelector('#bt-export');
+    slot.innerHTML = '';
+    slot.appendChild(UI.exportControl({
+      filename: 'batch-tracking', title: 'Batch Tracking', rows: batches,
+      columns: [
+        { key: 'batch_number', label: 'Batch' }, { key: 'material_code', label: 'Material' },
+        { key: 'material_description', label: 'Description' }, { key: 'warehouse_code', label: 'Warehouse' },
+        { key: 'bin_location', label: 'Bin' }, { key: 'remaining_quantity', label: 'On hand' },
+        { key: 'reserved_quantity', label: 'Reserved' }, { key: 'available_quantity', label: 'Available' },
+        { key: 'expiry_date', label: 'Expiry' }, { key: 'quality_status', label: 'Quality' }, { key: 'alert_level', label: 'Alert' },
+      ],
+    }));
     this.el.querySelector('#bt-table').innerHTML = `
       <table><thead><tr><th>Batch</th><th>Material</th><th>WH / Bin</th><th class="text-right">On hand</th>
         <th class="text-right">Reserved</th><th class="text-right">Available</th><th>Expiry</th><th>Quality</th><th>Alert</th></tr></thead>
@@ -43,7 +56,7 @@ Pages.expiry = {
         <div class="kpi amber"><div class="label">Critical (≤30d)</div><div class="value">${summary.CRITICAL || 0}</div></div>
         <div class="kpi amber"><div class="label">Early Warning (≤90d)</div><div class="value">${summary.EARLY_WARNING || 0}</div></div>
       </div>
-      <div class="card"><h3>Expiry Alerts</h3><div class="table-wrap"><table>
+      <div class="card"><div class="toolbar"><h3 class="mb-0">Expiry Alerts</h3><div class="spacer"></div><span id="ex-export"></span></div><div class="table-wrap"><table>
         <thead><tr><th>Batch</th><th>Material</th><th>WH / Bin</th><th class="text-right">Qty</th><th>Expiry</th><th>Days</th><th>Level</th></tr></thead>
         <tbody>${alerts.map((a) => `
           <tr><td><strong>${UI.esc(a.batch_number)}</strong></td><td>${UI.esc(a.material_code)}</td>
@@ -52,6 +65,16 @@ Pages.expiry = {
             <td>${a.days_to_expiry}</td><td><span class="badge ${ALERT_BADGE[a.alert_level]}">${a.alert_level}</span></td></tr>`).join('')
           || '<tr><td colspan="7" class="muted">No expiry alerts 🎉</td></tr>'}</tbody>
       </table></div></div>`;
+    const slot = el.querySelector('#ex-export');
+    if (slot) slot.appendChild(UI.exportControl({
+      filename: 'expiry-alerts', title: 'Expiry Alerts', rows: alerts,
+      columns: [
+        { key: 'batch_number', label: 'Batch' }, { key: 'material_code', label: 'Material' },
+        { key: 'warehouse_code', label: 'Warehouse' }, { key: 'bin_location', label: 'Bin' },
+        { key: 'remaining_quantity', label: 'Qty' }, { key: 'expiry_date', label: 'Expiry' },
+        { key: 'days_to_expiry', label: 'Days' }, { key: 'alert_level', label: 'Level' },
+      ],
+    }));
   },
 };
 

@@ -18,9 +18,23 @@ Pages.alllocations = {
           <input type="text" class="search-input" id="al-search" placeholder="Filter by location code…" />
           <div class="spacer"></div>
           <span class="muted">${locations.length} locations</span>
+          <span id="al-export"></span>
         </div>
       </div>
       <div id="al-list"></div>`;
+
+    el.querySelector('#al-export').appendChild(UI.exportControl({
+      filename: 'locations', title: 'All Locations',
+      rows: () => locations.map((l) => ({
+        code: l.code, warehouse_code: l.warehouse_code || '', materials_count: l.materials_count,
+        total_quantity: l.total_quantity, materials: l.materials.map((m) => `${m.item_code}:${UI.fmtQty(m.quantity)}`).join(' | '),
+      })),
+      columns: [
+        { key: 'code', label: 'Bin / Location' }, { key: 'warehouse_code', label: 'Warehouse' },
+        { key: 'materials_count', label: 'Materials' }, { key: 'total_quantity', label: 'Total Qty' },
+        { key: 'materials', label: 'Contents' },
+      ],
+    }));
 
     const renderList = (filter) => {
       const list = filter
