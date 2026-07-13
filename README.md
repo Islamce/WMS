@@ -146,7 +146,7 @@ DB_PATH=./data/wms.db
 ### Testing & CI
 
 ```bash
-npm test        # full end-to-end suite (113 checks) — needs Node 18+ and python3
+npm test        # full end-to-end suite (122 checks) — needs Node 18+ and python3
 ```
 
 The runner (`tests/run.sh`) rebuilds a fresh database, boots the server, and

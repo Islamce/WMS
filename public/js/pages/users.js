@@ -92,7 +92,8 @@ Pages.users = {
       if (u.status === 'disabled' || u.status === 'rejected') {
         actions += `<button class="btn success sm" data-action="active" data-id="${u.id}">Activate</button> `;
       }
-      actions += `<button class="btn secondary sm" data-action="permissions" data-id="${u.id}" data-name="${UI.esc(u.name)}">Permissions</button>`;
+      actions += `<button class="btn secondary sm" data-action="permissions" data-id="${u.id}" data-name="${UI.esc(u.name)}">Permissions</button> `;
+      actions += `<button class="btn secondary sm" data-action="reset-pw" data-id="${u.id}" data-name="${UI.esc(u.name)}">Reset password</button>`;
     } else {
       actions = '<span class="muted">This is you</span>';
     }
@@ -110,6 +111,7 @@ Pages.users = {
 
   async action(action, userId, userName) {
     if (action === 'permissions') return this.openPermissions(userId, userName);
+    if (action === 'reset-pw') return this.openResetPassword(userId, userName);
     try {
       const { message } = await Api.patch(`/api/users/${userId}/status`, { status: action });
       UI.toast(message);
@@ -117,6 +119,28 @@ Pages.users = {
     } catch (err) {
       UI.toast(err.message, 'error');
     }
+  },
+
+  openResetPassword(userId, userName) {
+    UI.modal({
+      title: `Reset password — ${userName}`,
+      submitLabel: 'Reset password',
+      bodyHtml: `
+        <p class="muted" style="margin-bottom:12px">Set a new password for this user. They can change it themselves afterwards.</p>
+        <div class="form-group"><label>New password</label><input type="password" id="rp-new"><div class="hint">At least 8 characters.</div></div>
+        <div class="form-group"><label>Confirm new password</label><input type="password" id="rp-confirm"></div>`,
+      onSubmit: async (overlay, close) => {
+        const nw = overlay.querySelector('#rp-new').value;
+        const cf = overlay.querySelector('#rp-confirm').value;
+        if (nw.length < 8) return UI.toast('Password must be at least 8 characters.', 'error');
+        if (nw !== cf) return UI.toast('Passwords do not match.', 'error');
+        try {
+          const { message } = await Api.patch(`/api/users/${userId}/password`, { new_password: nw });
+          UI.toast(message);
+          close();
+        } catch (err) { UI.toast(err.message, 'error'); }
+      },
+    });
   },
 
   async openPermissions(userId, userName) {
