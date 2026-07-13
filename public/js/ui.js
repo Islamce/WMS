@@ -40,10 +40,14 @@ const UI = {
     if (!zone) {
       zone = document.createElement('div');
       zone.id = 'toast-zone';
+      // Announce toasts to assistive tech; errors are assertive, others polite.
+      zone.setAttribute('role', 'status');
+      zone.setAttribute('aria-live', 'polite');
       document.body.appendChild(zone);
     }
     const el = document.createElement('div');
     el.className = `toast ${type}`;
+    el.setAttribute('role', type === 'error' ? 'alert' : 'status');
     el.textContent = message;
     zone.appendChild(el);
     setTimeout(() => el.remove(), 4000);
@@ -56,20 +60,32 @@ const UI = {
   modal({ title, bodyHtml, wide = false, onSubmit, submitLabel = 'Save' }) {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
+    const titleId = `modal-title-${Date.now()}`;
     overlay.innerHTML = `
-      <div class="modal ${wide ? 'wide' : ''}">
-        <h3>${UI.esc(title)}</h3>
+      <div class="modal ${wide ? 'wide' : ''}" role="dialog" aria-modal="true" aria-labelledby="${titleId}">
+        <h3 id="${titleId}">${UI.esc(title)}</h3>
         <form id="modal-form" novalidate>
           <div class="modal-body">${bodyHtml}</div>
           <div class="actions">
-            <button type="button" class="btn secondary" data-close>Cancel</button>
+            <button type="button" class="btn secondary" data-close>${UI.esc(t('Cancel'))}</button>
             <button type="submit" class="btn">${UI.esc(submitLabel)}</button>
           </div>
         </form>
       </div>`;
-    const close = () => overlay.remove();
+    const prevFocus = document.activeElement;
+    const close = () => { overlay.remove(); if (prevFocus && prevFocus.focus) prevFocus.focus(); };
     overlay.addEventListener('click', (e) => {
       if (e.target === overlay || e.target.hasAttribute('data-close')) close();
+    });
+    // Esc closes; Tab is trapped within the dialog for keyboard users.
+    overlay.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); return close(); }
+      if (e.key !== 'Tab') return;
+      const f = overlay.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])');
+      if (!f.length) return;
+      const first = f[0], last = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
     });
     overlay.querySelector('#modal-form').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -178,6 +194,71 @@ const UI = {
   debounce(fn, ms = 300) {
     let t;
     return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+  },
+
+  _download(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  },
+
+  _cell(row, col) {
+    let v = typeof col.value === 'function' ? col.value(row) : row[col.key];
+    return v == null ? '' : String(v);
+  },
+
+  /**
+   * Reusable report export control. Returns a button element (with a small
+   * CSV / Excel / PDF menu) that exports the given data.
+   *   columns: [{ key, label, value? }]
+   *   rows:    array of objects (or a function returning the array)
+   * CSV and Excel are built in-browser; PDF is rendered server-side (pdfkit).
+   */
+  exportControl({ filename = 'report', title = 'Report', columns, rows }) {
+    const getRows = () => (typeof rows === 'function' ? rows() : rows) || [];
+    const wrap = document.createElement('div');
+    wrap.className = 'export-control';
+    wrap.innerHTML = `
+      <button class="btn secondary sm" type="button">⬇ Export</button>
+      <div class="export-menu" hidden>
+        <button type="button" data-fmt="csv">CSV (.csv)</button>
+        <button type="button" data-fmt="xls">Excel (.xls)</button>
+        <button type="button" data-fmt="pdf">PDF (.pdf)</button>
+      </div>`;
+    const menu = wrap.querySelector('.export-menu');
+    wrap.querySelector('.btn').addEventListener('click', (e) => { e.stopPropagation(); menu.hidden = !menu.hidden; });
+    document.addEventListener('click', () => { menu.hidden = true; });
+
+    const csvEscape = (v) => `"${String(v).replace(/"/g, '""')}"`;
+    wrap.querySelectorAll('[data-fmt]').forEach((btn) => btn.addEventListener('click', async () => {
+      menu.hidden = true;
+      const data = (await getRows()) || []; // rows may be an array or an async fetch
+      if (!data.length) return UI.toast('Nothing to export.', 'error');
+      const fmt = btn.dataset.fmt;
+      try {
+        if (fmt === 'csv') {
+          const head = columns.map((c) => csvEscape(c.label || c.key)).join(',');
+          const body = data.map((r) => columns.map((c) => csvEscape(UI._cell(r, c))).join(',')).join('\n');
+          UI._download(new Blob(['﻿' + head + '\n' + body], { type: 'text/csv;charset=utf-8' }), `${filename}.csv`);
+        } else if (fmt === 'xls') {
+          // HTML-table workbook — opens natively in Excel / LibreOffice.
+          const th = columns.map((c) => `<th>${UI.esc(c.label || c.key)}</th>`).join('');
+          const tr = data.map((r) => `<tr>${columns.map((c) => `<td>${UI.esc(UI._cell(r, c))}</td>`).join('')}</tr>`).join('');
+          const html = `<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8"></head>
+            <body><table border="1"><thead><tr>${th}</tr></thead><tbody>${tr}</tbody></table></body></html>`;
+          UI._download(new Blob([html], { type: 'application/vnd.ms-excel' }), `${filename}.xls`);
+        } else {
+          const cols = columns.map((c) => ({ key: c.key || c.label, label: c.label || c.key }));
+          const flatRows = data.map((r) => {
+            const o = {}; columns.forEach((c) => { o[c.key || c.label] = UI._cell(r, c); }); return o;
+          });
+          const blob = await Api.postBlob('/api/export/pdf', { title, filename, columns: cols, rows: flatRows });
+          UI._download(blob, `${filename}.pdf`);
+        }
+      } catch (err) { UI.toast(err.message, 'error'); }
+    }));
+    return wrap;
   },
 
   /**

@@ -6,11 +6,11 @@
 const express = require('express');
 const db = require('./../db/connection');
 const { authenticate, requirePermission } = require('./../middleware/auth');
-const { isId } = require('./../utils/validate');
+const { isId, isPositiveNumber } = require('./../utils/validate');
 const audit = require('./../services/audit');
 const notify = require('./../services/notify');
 const allocation = require('./../services/allocation');
-const { setHeaderStatus, getHeaderOr404, releaseOpenAllocations } = require('./../services/requests');
+const { setHeaderStatus, getHeaderOr404, releaseOpenAllocations, sweepReservations } = require('./../services/requests');
 const { HEADER_STATUS, LINE_STATUS, TASK_STATUS } = require('./../workflow/states');
 
 const router = express.Router();
@@ -182,6 +182,16 @@ router.post('/:id/assign-picker', requirePermission('picker_assignment'), (req, 
     message: `You have been assigned a picking task. Please accept it.` });
 
   res.json({ message: `Picking task assigned to ${picker.name}. Awaiting acceptance.`, task_id: taskId });
+});
+
+/** POST /api/warehouse/sweep-reservations — release timed-out reservations now.
+ *  Body { testMinutes } fast-forwards the TTL clock for deterministic testing. */
+router.post('/sweep-reservations', requirePermission('bin_batch_assignment'), (req, res) => {
+  const now = isPositiveNumber(req.body.testMinutes)
+    ? Date.now() + Number(req.body.testMinutes) * 60000
+    : Date.now();
+  const released = sweepReservations(now);
+  res.json({ message: `Released ${released.length} timed-out reservation(s).`, released });
 });
 
 module.exports = router;

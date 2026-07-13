@@ -10,7 +10,11 @@
     "migrate": "node server/db/migrate.js",
     "seed": "node server/db/seed.js",
     "setup": "npm run migrate && npm run seed",
-    "test": "bash tests/run.sh"
+    "backup": "node scripts/backup.js",
+    "lint": "eslint . --ext .js",
+    "lint:fix": "eslint . --ext .js --fix",
+    "test": "bash tests/run.sh",
+    "test:smoke": "node tests/smoke/playwright_smoke.js"
   },
   "engines": {
     "node": ">=18"
@@ -26,5 +30,9 @@
     "jsonwebtoken": "^9.0.2",
     "pdfkit": "^0.19.1",
     "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.0",
+    "playwright": "^1.48.0"
   }
 }

@@ -27,6 +27,8 @@ Pages.requestDetail = {
             ? `<button class="btn sm" id="rd-submit">Submit</button>` : ''}
           ${!['Completed', 'Cancelled', 'GI Posted', 'Rejected'].includes(r.request_status)
             ? `<button class="btn danger sm" id="rd-cancel">Cancel</button>` : ''}
+          ${['Completed', 'Partially Completed', 'Closed with Shortage'].includes(r.request_status) && App.can('gi_posting')
+            ? `<button class="btn warn sm" id="rd-reverse">Reverse GI</button>` : ''}
         </div>
       </div>
 
@@ -97,7 +99,18 @@ Pages.requestDetail = {
               </tr>`).join('')}
           </tbody>
         </table></div>
-      </div>` : ''}`;
+      </div>` : ''}
+
+      <div class="card" id="rd-attachments">
+        <h3>${t('Attachments')}</h3>
+        <div class="attach-upload">
+          <input type="file" id="rd-file" />
+          <button class="btn sm" id="rd-upload">${t('Upload file')}</button>
+        </div>
+        <div id="rd-attach-list" class="muted">${t('Loading…')}</div>
+      </div>`;
+
+    this.loadAttachments(el, id);
 
     const submitBtn = el.querySelector('#rd-submit');
     if (submitBtn) submitBtn.addEventListener('click', async () => {
@@ -114,5 +127,69 @@ Pages.requestDetail = {
           catch (err) { UI.toast(err.message, 'error'); }
         } });
     });
+    const reverseBtn = el.querySelector('#rd-reverse');
+    if (reverseBtn) reverseBtn.addEventListener('click', () => {
+      UI.modal({ title: 'Reverse Goods Issue', submitLabel: 'Reverse GI',
+        bodyHtml: '<p class="hint">This returns the issued stock to its batches and closes the request as Reversed.</p>'
+          + '<div class="form-group"><label>Reason</label><input type="text" id="rv-reason" /></div>',
+        onSubmit: async (ov, close) => {
+          try { await Api.post(`/api/gi/${id}/reverse`, { reason: ov.querySelector('#rv-reason').value });
+            UI.toast('Goods issue reversed.'); close(); this.render(el, id); }
+          catch (err) { UI.toast(err.message, 'error'); }
+        } });
+    });
+
+    const uploadBtn = el.querySelector('#rd-upload');
+    if (uploadBtn) uploadBtn.addEventListener('click', () => this.upload(el, id));
+  },
+
+  async loadAttachments(el, id) {
+    const box = el.querySelector('#rd-attach-list');
+    if (!box) return;
+    try {
+      const { attachments } = await Api.get(`/api/requests/${id}/attachments`);
+      if (!attachments.length) { box.innerHTML = `<span class="muted">${t('No attachments')}</span>`; return; }
+      box.classList.remove('muted');
+      box.innerHTML = `<ul class="attach-list">${attachments.map((a) => `
+        <li>
+          <a href="#" data-dl="${a.id}">${UI.esc(a.file_name)}</a>
+          <span class="muted sm">${(a.byte_size / 1024).toFixed(0)} KB · ${UI.esc(a.uploaded_by_name || '')}</span>
+          <button class="btn sm danger" data-del="${a.id}" aria-label="${t('Delete')}">✕</button>
+        </li>`).join('')}</ul>`;
+      box.querySelectorAll('[data-dl]').forEach((a) => a.addEventListener('click', (e) => {
+        e.preventDefault(); this.download(a.dataset.dl);
+      }));
+      box.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', async () => {
+        try { await Api.delete(`/api/attachments/${b.dataset.del}`); UI.toast(t('Attachment deleted.')); this.loadAttachments(el, id); }
+        catch (err) { UI.toast(err.message, 'error'); }
+      }));
+    } catch (err) { box.innerHTML = `<span class="muted">${UI.esc(err.message)}</span>`; }
+  },
+
+  upload(el, id) {
+    const input = el.querySelector('#rd-file');
+    const file = input && input.files[0];
+    if (!file) return UI.toast(t('Choose a file first.'), 'error');
+    if (file.size > 1.5 * 1024 * 1024) return UI.toast(t('File exceeds the 1.5 MB limit.'), 'error');
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const b64 = String(reader.result).split(',')[1] || '';
+      try {
+        await Api.post(`/api/requests/${id}/attachments`,
+          { file_name: file.name, content_type: file.type || 'application/octet-stream', data_base64: b64 });
+        UI.toast(t('Attachment uploaded.')); input.value = ''; this.loadAttachments(el, id);
+      } catch (err) { UI.toast(err.message, 'error'); }
+    };
+    reader.readAsDataURL(file);
+  },
+
+  async download(aid) {
+    try {
+      const blob = await Api.blob(`/api/attachments/${aid}/download`);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = ''; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) { UI.toast(err.message, 'error'); }
   },
 };

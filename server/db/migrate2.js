@@ -394,6 +394,79 @@ CREATE TABLE IF NOT EXISTS erp_integration_log (
 );
 
 -- ---------------------------------------------------------------------------
+-- Approval matrix: value thresholds that require a higher approval authority.
+-- A request whose approved value reaches min_amount needs an approver holding
+-- required_permission (admins are always exempt). Rows are additive; the
+-- highest matching threshold wins.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS approval_thresholds (
+  id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+  label               TEXT NOT NULL,
+  min_amount          REAL NOT NULL DEFAULT 0,
+  currency            TEXT NOT NULL DEFAULT 'USD',
+  required_permission TEXT NOT NULL,   -- permission key the approver must hold
+  is_active           INTEGER NOT NULL DEFAULT 1,
+  created_at          TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- ---------------------------------------------------------------------------
+-- Request attachments (metadata; bytes live on disk under data/attachments).
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS request_attachments (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  request_id     INTEGER NOT NULL REFERENCES material_request_headers(id) ON DELETE CASCADE,
+  request_number TEXT NOT NULL,
+  file_name      TEXT NOT NULL,
+  content_type   TEXT,
+  byte_size      INTEGER NOT NULL DEFAULT 0,
+  storage_path   TEXT NOT NULL,
+  uploaded_by    INTEGER REFERENCES users(id),
+  uploaded_by_name TEXT,
+  created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- ---------------------------------------------------------------------------
+-- Cycle counts: physical count of a batch's on-hand vs system quantity, with a
+-- posted variance that adjusts batch remaining_quantity and the ledger.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS cycle_counts (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  count_number     TEXT NOT NULL UNIQUE,
+  batch_id         INTEGER NOT NULL REFERENCES batches(id),
+  material_id      INTEGER NOT NULL REFERENCES materials(id),
+  material_code    TEXT,
+  warehouse_code   TEXT,
+  bin_location     TEXT,
+  system_quantity  REAL NOT NULL DEFAULT 0,
+  counted_quantity REAL,
+  variance         REAL,
+  status           TEXT NOT NULL DEFAULT 'OPEN'
+                   CHECK (status IN ('OPEN','COUNTED','POSTED','CANCELLED')),
+  counted_by       INTEGER REFERENCES users(id),
+  counted_by_name  TEXT,
+  posted_by        INTEGER REFERENCES users(id),
+  reason           TEXT,
+  created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at       TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_cycle_counts_batch  ON cycle_counts(batch_id);
+CREATE INDEX IF NOT EXISTS idx_cycle_counts_status ON cycle_counts(status);
+CREATE INDEX IF NOT EXISTS idx_attach_request      ON request_attachments(request_id);
+
+-- ---------------------------------------------------------------------------
+-- Scheduler lock. A single-row-per-job table used to make the background
+-- sweeps (reminders, reservation timeout) safe to run when more than one
+-- process is live (PM2 cluster, rolling deploy). A tick only fires if the
+-- caller can atomically claim the lock past its lease; others skip that tick.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS scheduler_locks (
+  job_name     TEXT PRIMARY KEY,
+  locked_until INTEGER NOT NULL DEFAULT 0,  -- epoch ms the current lease expires
+  holder       TEXT,                        -- id of the process holding it
+  updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- ---------------------------------------------------------------------------
 -- Reference data for dropdowns (departments, plants, cost centers). Admin can
 -- extend rows without code changes.
 -- ---------------------------------------------------------------------------
@@ -428,6 +501,25 @@ CREATE INDEX IF NOT EXISTS idx_audit_request    ON audit_trail(request_number);
 CREATE INDEX IF NOT EXISTS idx_audit_entity     ON audit_trail(entity_type, entity_id);
 CREATE INDEX IF NOT EXISTS idx_notif_recipient  ON notification_log(recipient_user_id);
 CREATE INDEX IF NOT EXISTS idx_erp_request      ON erp_integration_log(request_number);
+
+-- ===========================================================================
+-- Append-only enforcement for the audit trail.
+-- The audit log is legally the record of who changed what; nothing in the app
+-- ever updates or deletes a row. These triggers make that a database-level
+-- guarantee, so even a stray query (or a compromised route) cannot rewrite or
+-- erase history — the transaction aborts.
+-- ===========================================================================
+CREATE TRIGGER IF NOT EXISTS audit_trail_block_update
+BEFORE UPDATE ON audit_trail
+BEGIN
+  SELECT RAISE(ABORT, 'audit_trail is append-only: rows cannot be updated');
+END;
+
+CREATE TRIGGER IF NOT EXISTS audit_trail_block_delete
+BEFORE DELETE ON audit_trail
+BEGIN
+  SELECT RAISE(ABORT, 'audit_trail is append-only: rows cannot be deleted');
+END;
 `;
 
 // Columns to add to the existing materials table (shelf-life / batch control).
@@ -453,6 +545,11 @@ function addMissingColumns() {
       db.exec(`ALTER TABLE materials ADD COLUMN ${name} ${def}`);
     }
   });
+  // Force-a-password-change flag on users (idempotent).
+  const userCols = new Set(db.prepare('PRAGMA table_info(users)').all().map((c) => c.name));
+  if (!userCols.has('must_change_password')) {
+    db.exec('ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0');
+  }
 }
 
 function migrate2() {

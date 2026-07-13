@@ -59,15 +59,30 @@ def bolt_remaining():
     _, r = call('GET', '/api/master/batches?search=MAT-0001', admin)
     return sum(b['remaining_quantity'] for b in r['batches'])
 
-# ===== 1. Self-approval blocked =====
-# Admin holds every permission (incl. create_request + approvals) — the perfect
-# self-approval probe. Admin creates & submits a request, then tries to approve it.
+# ===== 1. Self-approval: admin exempt, non-admin blocked =====
+# Admin is a super-user (needed for testing/bootstrapping) and MAY approve
+# their own request.
 _, r = call('POST', '/api/requests', admin,
-            {'purpose': 'self-approval probe', 'lines': [{'material_id': BOLT, 'requested_quantity': 3}]})
+            {'purpose': 'admin self', 'lines': [{'material_id': BOLT, 'requested_quantity': 3}]})
+aid = r['id']
+call('POST', f'/api/requests/{aid}/submit', admin)
+c, r = call('POST', f'/api/approvals/{aid}/decision', admin, {'decision': 'approve'})
+check('P1-1 admin can approve own request', c == 200, (c, r))
+
+# A non-admin approver still cannot approve their own request. Grant the
+# requester the approvals permission, then have them create + try to approve.
+_, users = call('GET', '/api/users', admin)
+rid_user = next(u['id'] for u in users['users'] if u['email'] == 'requester@example.com')
+_, perms = call('GET', f'/api/users/{rid_user}/permissions', admin)
+direct_ids = [p['id'] for p in perms['permissions'] if p.get('direct')]
+appr_id = next(p['id'] for p in perms['permissions'] if p.get('key') == 'approvals')
+call('PUT', f'/api/users/{rid_user}/permissions', admin, {'permission_ids': direct_ids + [appr_id]})
+_, r = call('POST', '/api/requests', requester,
+            {'purpose': 'self probe', 'lines': [{'material_id': BOLT, 'requested_quantity': 3}]})
 sid = r['id']
-call('POST', f'/api/requests/{sid}/submit', admin)
-c, r = call('POST', f'/api/approvals/{sid}/decision', admin, {'decision': 'approve'})
-check('P1-1 self-approval blocked (403)', c == 403 and 'own request' in r.get('error', '').lower(), (c, r))
+call('POST', f'/api/requests/{sid}/submit', requester)
+c, r = call('POST', f'/api/approvals/{sid}/decision', requester, {'decision': 'approve'})
+check('P1-1 non-admin self-approval blocked (403)', c == 403 and 'own request' in r.get('error', '').lower(), (c, r))
 # a different approver can still approve it
 c, r = call('POST', f'/api/approvals/{sid}/decision', manager, {'decision': 'approve'})
 check('P1-1 another approver can approve', c == 200, (c, r))

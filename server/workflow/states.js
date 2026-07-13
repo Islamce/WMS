@@ -40,6 +40,7 @@ const HEADER_STATUS = {
   CANCELLED: 'Cancelled',
   ON_HOLD: 'On Hold',
   ERP_ERROR: 'ERP Error',
+  REVERSED: 'Reversed',
 };
 
 // --- Line item statuses -----------------------------------------------------
@@ -67,6 +68,7 @@ const LINE_STATUS = {
   REPLACED: 'Replaced',
   PENDING_GI: 'Pending GI',
   GI_POSTED: 'GI Posted',
+  REVERSED: 'Reversed',
   CANCELLED: 'Cancelled',
 };
 
@@ -132,6 +134,11 @@ const HEADER_TRANSITIONS = {
   [HEADER_STATUS.GI_POSTED]: [
     HEADER_STATUS.COMPLETED, HEADER_STATUS.PARTIALLY_COMPLETED, HEADER_STATUS.CLOSED_WITH_SHORTAGE,
   ],
+  // A posted goods issue can be reversed (movement-type reversal) which returns
+  // the issued stock to its batches and closes the request as Reversed.
+  [HEADER_STATUS.COMPLETED]: [HEADER_STATUS.REVERSED],
+  [HEADER_STATUS.PARTIALLY_COMPLETED]: [HEADER_STATUS.REVERSED],
+  [HEADER_STATUS.CLOSED_WITH_SHORTAGE]: [HEADER_STATUS.REVERSED],
   [HEADER_STATUS.ERP_ERROR]: [
     HEADER_STATUS.PENDING_ERP_GI, HEADER_STATUS.ON_HOLD, HEADER_STATUS.PICKING_IN_PROGRESS,
   ],

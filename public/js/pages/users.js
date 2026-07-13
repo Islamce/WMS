@@ -8,8 +8,10 @@ Pages.users = {
   state: { status: '' },
   roles: [],
 
-  async render(el) {
+  async render(el, param) {
     this.el = el;
+    // Deep-link support: #/users/pending pre-filters the list.
+    if (['pending', 'active', 'rejected', 'disabled'].includes(param)) this.state.status = param;
     el.innerHTML = `
       <div class="card">
         <div class="toolbar">

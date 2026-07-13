@@ -30,6 +30,8 @@ const PERMISSIONS = [
   { key: 'notifications', label: 'Notifications Center' },
   { key: 'kpi_dashboard', label: 'KPI Dashboard' },
   { key: 'quality', label: 'Quality Management' },
+  { key: 'approvals_high_value', label: 'High-Value Approvals' },
+  { key: 'cycle_count', label: 'Cycle Counting' },
 ];
 
 // Roles for the end-to-end process and the screens each one gets by default.
@@ -38,8 +40,8 @@ const ROLES = {
   manager: ['dashboard', 'material_requests', 'approvals', 'notifications'],
   erp_operator: ['dashboard', 'material_requests', 'erp_operator', 'movement_types_master', 'notifications'],
   warehouse_supervisor: ['dashboard', 'warehouse_dashboard', 'bin_batch_assignment', 'picker_assignment',
-    'goods_receipt', 'qr_printing', 'expiry_alerts', 'batch_tracking', 'bins_master', 'notifications'],
-  warehouse_operator: ['dashboard', 'warehouse_dashboard', 'gi_posting', 'batch_tracking', 'notifications'],
+    'goods_receipt', 'qr_printing', 'expiry_alerts', 'batch_tracking', 'bins_master', 'cycle_count', 'notifications'],
+  warehouse_operator: ['dashboard', 'warehouse_dashboard', 'gi_posting', 'batch_tracking', 'cycle_count', 'notifications'],
   picker: ['dashboard', 'picking', 'notifications'],
   quality: ['dashboard', 'quality', 'batch_tracking', 'expiry_alerts', 'notifications'],
   integration_admin: ['dashboard', 'material_requests', 'audit_trail', 'kpi_dashboard', 'notifications'],
@@ -121,6 +123,14 @@ function seed2() {
       insRole.run(role, `${role} role`);
       perms.forEach((key) => grantRole.run(role, key));
     });
+
+    // --- approval matrix: high-value requests need a senior approver ---
+    if (db.prepare('SELECT COUNT(*) AS n FROM approval_thresholds').get().n === 0) {
+      db.prepare(`
+        INSERT INTO approval_thresholds (label, min_amount, currency, required_permission)
+        VALUES ('Senior approval (value ≥ 1,000)', 1000, 'USD', 'approvals_high_value')
+      `).run();
+    }
 
     // --- movement types ---
     const insMt = db.prepare(`

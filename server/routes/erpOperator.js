@@ -11,6 +11,7 @@ const { isNonEmptyString } = require('./../utils/validate');
 const audit = require('./../services/audit');
 const notify = require('./../services/notify');
 const erp = require('./../services/erp');
+const sod = require('./../services/sod');
 const { setHeaderStatus, getHeaderOr404 } = require('./../services/requests');
 const { HEADER_STATUS, LINE_STATUS } = require('./../workflow/states');
 
@@ -112,6 +113,10 @@ router.patch('/:id', (req, res) => {
 router.post('/:id/send-to-warehouse', (req, res) => {
   const header = getHeaderOr404(res, req.params.id);
   if (!header) return;
+
+  // SoD: the ERP operator must not be the person who approved the request.
+  const sodErr = sod.conflict(req.user, [{ id: sod.approverId(header.request_number), label: 'approval' }]);
+  if (sodErr) return res.status(403).json({ error: sodErr });
 
   const missing = [];
   if (!header.erp_reservation_number && !header.erp_reference_number) missing.push('ERP Reservation or Reference Number');

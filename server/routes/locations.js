@@ -16,51 +16,77 @@ router.get('/all', requirePermission(['locations', 'stock_in', 'stock_out']), (r
 
 /**
  * GET /api/locations/overview — "All Locations" screen.
- * Every location with material count, total quantity and the materials inside.
+ * Bins come from the Bin Location Master; contents (materials + quantities)
+ * come from the batches physically stored in each bin, so this view always
+ * matches Bin Location Master and Batch Tracking. Batches that carry a bin
+ * value not present in the master are surfaced as extra "unregistered" bins so
+ * no stock is hidden.
  */
 router.get('/overview', requirePermission('all_locations'), (req, res) => {
-  const locations = db.prepare(`
-    SELECT l.id, l.code,
-      COALESCE(s.materials_count, 0) AS materials_count,
-      COALESCE(s.total_quantity, 0) AS total_quantity
-    FROM locations l
-    LEFT JOIN (
-      SELECT location_id,
-             COUNT(CASE WHEN quantity > 0 THEN 1 END) AS materials_count,
-             SUM(quantity) AS total_quantity
-      FROM material_location_stock GROUP BY location_id
-    ) s ON s.location_id = l.id
-    ORDER BY l.code
+  const bins = db.prepare(`
+    SELECT id, warehouse_code, bin_code, full_bin_location, zone, rack, capacity, is_active
+    FROM bin_locations ORDER BY warehouse_code, full_bin_location
   `).all();
 
   const contents = db.prepare(`
-    SELECT mls.location_id, m.id AS material_id, m.item_code, m.description, m.unit, mls.quantity
-    FROM material_location_stock mls
-    JOIN materials m ON m.id = mls.material_id
-    WHERE mls.quantity > 0
-    ORDER BY m.item_code
+    SELECT b.warehouse_code, b.bin_location, b.material_id,
+           b.material_code AS item_code, b.material_description AS description,
+           COALESCE(m.unit, '') AS unit, SUM(b.remaining_quantity) AS quantity
+    FROM batches b LEFT JOIN materials m ON m.id = b.material_id
+    WHERE b.remaining_quantity > 0 AND b.bin_location IS NOT NULL AND b.bin_location != ''
+    GROUP BY b.warehouse_code, b.bin_location, b.material_id
+    ORDER BY b.material_code
   `).all();
 
-  const byLocation = {};
-  contents.forEach((c) => {
-    (byLocation[c.location_id] = byLocation[c.location_id] || []).push(c);
+  const key = (wh, bin) => `${wh || ''}||${bin || ''}`;
+  const byBin = {};
+  contents.forEach((c) => { (byBin[key(c.warehouse_code, c.bin_location)] = byBin[key(c.warehouse_code, c.bin_location)] || []).push(c); });
+  const used = new Set();
+
+  const locations = bins.map((bl) => {
+    const k1 = key(bl.warehouse_code, bl.bin_code);
+    const k2 = key(bl.warehouse_code, bl.full_bin_location);
+    const mats = [...(byBin[k1] || []), ...(byBin[k2] || [])];
+    used.add(k1); used.add(k2);
+    return {
+      id: bl.id, code: bl.full_bin_location, warehouse_code: bl.warehouse_code,
+      bin_code: bl.bin_code, capacity: bl.capacity, registered: true,
+      materials_count: mats.length,
+      total_quantity: mats.reduce((s, m) => s + m.quantity, 0),
+      materials: mats,
+    };
   });
 
-  res.json({ locations: locations.map((l) => ({ ...l, materials: byLocation[l.id] || [] })) });
+  // Any batch bin that isn't in the master (e.g. imported/free-text) — don't hide it.
+  Object.keys(byBin).filter((k) => !used.has(k)).forEach((k) => {
+    const mats = byBin[k];
+    const [wh, bin] = k.split('||');
+    locations.push({
+      id: null, code: bin || '(unassigned)', warehouse_code: wh, registered: false,
+      materials_count: mats.length,
+      total_quantity: mats.reduce((s, m) => s + m.quantity, 0),
+      materials: mats,
+    });
+  });
+
+  res.json({ locations });
 });
 
 /**
  * GET /api/locations/empty — "Empty Locations" screen.
- * Empty = no rows in material_location_stock OR all quantities are zero.
+ * Active master bins that currently hold no stock.
  */
 router.get('/empty', requirePermission('empty_locations'), (req, res) => {
   const locations = db.prepare(`
-    SELECT l.id, l.code FROM locations l
-    WHERE NOT EXISTS (
-      SELECT 1 FROM material_location_stock mls
-      WHERE mls.location_id = l.id AND mls.quantity > 0
+    SELECT bl.id, bl.full_bin_location AS code, bl.warehouse_code
+    FROM bin_locations bl
+    WHERE bl.is_active = 1 AND NOT EXISTS (
+      SELECT 1 FROM batches b
+      WHERE b.warehouse_code = bl.warehouse_code
+        AND b.bin_location IN (bl.bin_code, bl.full_bin_location)
+        AND b.remaining_quantity > 0
     )
-    ORDER BY l.code
+    ORDER BY bl.warehouse_code, bl.full_bin_location
   `).all();
   res.json({ locations });
 });

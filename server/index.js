@@ -55,6 +55,27 @@ app.use(helmet({
 // exceeds express.json()'s default 100 KB cap.
 app.use(express.json({ limit: '2mb' }));
 
+// Coarse global rate limit per client IP across the whole API surface
+// (complements the stricter per-email login limiter). Generous by default;
+// tune with API_RATE_LIMIT / API_RATE_WINDOW_MS, disable with API_RATE_LIMIT=0.
+const { apiRateLimit } = require('./middleware/apiRateLimit');
+app.use('/api', apiRateLimit);
+
+// Lightweight structured request logging for API calls (skip health + static).
+// Set LOG_REQUESTS=0 to silence. One line per request on response finish.
+if (process.env.LOG_REQUESTS !== '0') {
+  app.use((req, res, next) => {
+    if (!req.path.startsWith('/api') || req.path === '/api') return next();
+    const start = process.hrtime.bigint();
+    res.on('finish', () => {
+      const ms = Number(process.hrtime.bigint() - start) / 1e6;
+      const uid = req.user ? req.user.id : '-';
+      console.log(`[${new Date().toISOString()}] ${req.method} ${res.statusCode} ${ms.toFixed(0)}ms ${req.originalUrl} user=${uid} ip=${req.ip}`);
+    });
+    next();
+  });
+}
+
 // Unauthenticated health check — handy for verifying the server is reachable
 // through a proxy/port-forward (e.g. GitHub Codespaces). A 200 here means the
 // app is up; a 401 on the site root then points at the proxy, not the app.
@@ -87,6 +108,11 @@ app.use('/api/picking', require('./routes/picking'));
 app.use('/api/gi', require('./routes/gi'));
 app.use('/api/receiving', require('./routes/receiving'));
 app.use('/api/master', require('./routes/masterdata'));
+app.use('/api/import', require('./routes/import'));
+app.use('/api/export', require('./routes/export'));
+app.use('/api/cycle-count', require('./routes/cycleCount'));
+// Attachment routes live under /api (paths: /requests/:id/attachments, /attachments/:aid/...).
+app.use('/api', require('./routes/attachments'));
 app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/kpi', require('./routes/kpi'));
 app.use('/api/analytics', require('./routes/analytics'));
@@ -111,13 +137,54 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error.' });
 });
 
-// Background scheduler: reminder/escalation sweep for unaccepted picking tasks.
-// Runs every 60s; the same logic is exposed via POST /api/picking/sweep for
-// on-demand runs and deterministic testing.
-const { sweepReminders } = require('./routes/picking');
-setInterval(() => {
-  try { sweepReminders(); } catch (err) { console.error('Reminder sweep error:', err); }
-}, 60 * 1000).unref();
+// Background scheduler: reminder/escalation sweep for unaccepted picking tasks
+// and release of timed-out stock reservations. Runs every 60s; both are also
+// exposed as on-demand endpoints for deterministic testing.
+//
+// Set SCHEDULER_ENABLED=0 to turn the in-process scheduler off entirely (e.g.
+// when a dedicated worker owns it). When several app processes are live (PM2
+// cluster, overlapping deploy), a DB lease keyed per job ensures only ONE of
+// them runs each tick — otherwise every process would double-process the same
+// rows every minute.
+if (process.env.SCHEDULER_ENABLED !== '0') {
+  const { sweepReminders } = require('./routes/picking');
+  const { sweepReservations } = require('./services/requests');
+  const { pruneRetention } = require('./services/retention');
+  const { acquireTick } = require('./services/scheduler');
+  setInterval(() => {
+    try {
+      if (acquireTick('reminders')) sweepReminders();
+    } catch (err) { console.error('Reminder sweep error:', err); }
+    try {
+      if (acquireTick('reservations')) sweepReservations();
+    } catch (err) { console.error('Reservation sweep error:', err); }
+  }, 60 * 1000).unref();
+
+  // Daily data-retention sweep (O-3): prune aged operational logs when
+  // RETENTION_DAYS is set. The audit trail is never touched. A one-hour lease
+  // keeps it single-runner across instances.
+  if (Number(process.env.RETENTION_DAYS) > 0) {
+    const runPrune = () => {
+      try {
+        if (acquireTick('retention', 3600000)) {
+          const r = pruneRetention();
+          if (r.total) console.log(`Retention: pruned ${r.total} aged log row(s).`);
+        }
+      } catch (err) { console.error('Retention sweep error:', err); }
+    };
+    runPrune();
+    setInterval(runPrune, 24 * 60 * 60 * 1000).unref();
+  }
+}
+
+// Optional automated daily database backup (enable by setting BACKUP_DIR).
+if (process.env.BACKUP_DIR) {
+  const { backup } = require('../scripts/backup');
+  const runBackup = () => backup().then((d) => console.log(`Backup written: ${d}`))
+    .catch((e) => console.error('Backup failed:', e.message));
+  runBackup();
+  setInterval(runBackup, 24 * 60 * 60 * 1000).unref();
+}
 
 // Bind to 0.0.0.0 so containerized/port-forwarded environments (Docker,
 // GitHub Codespaces) can reach and auto-detect the port.

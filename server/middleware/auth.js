@@ -40,7 +40,7 @@ function authenticate(req, res, next) {
   }
 
   const user = db.prepare(`
-    SELECT u.id, u.name, u.email, u.status, u.role_id, r.name AS role
+    SELECT u.id, u.name, u.email, u.status, u.role_id, u.must_change_password, r.name AS role
     FROM users u JOIN roles r ON r.id = u.role_id
     WHERE u.id = ?
   `).get(payload.sub);

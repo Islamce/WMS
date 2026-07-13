@@ -35,6 +35,16 @@ const I18N = {
     'Password': 'كلمة المرور', 'Full name': 'الاسم الكامل', 'Save': 'حفظ', 'Cancel': 'إلغاء',
     'Language': 'اللغة', 'Theme': 'المظهر', 'Warehouse Management System': 'نظام إدارة المستودعات',
     'Loading…': 'جارٍ التحميل…',
+    // common actions
+    'Submit': 'إرسال', 'Delete': 'حذف', 'Edit': 'تعديل', 'Add': 'إضافة', 'Close': 'إغلاق', 'Back': 'رجوع',
+    'Search': 'بحث', 'Reset': 'إعادة تعيين', 'Export': 'تصدير', 'Download': 'تنزيل', 'Upload': 'رفع',
+    'Reason': 'السبب', 'Confirm': 'تأكيد', 'Approve': 'موافقة', 'Reject': 'رفض', 'Return': 'إرجاع',
+    'Status': 'الحالة', 'Quantity': 'الكمية', 'Actions': 'إجراءات', 'Details': 'التفاصيل',
+    // new features (P2/P3)
+    'Cycle Counting': 'الجرد الدوري', 'Attachments': 'المرفقات', 'Reverse GI': 'عكس الصرف',
+    'Reverse Goods Issue': 'عكس صرف البضائع', 'High-Value Approvals': 'موافقات عالية القيمة',
+    'Counted quantity': 'الكمية المعدودة', 'Variance': 'الفرق', 'System quantity': 'كمية النظام',
+    'Upload file': 'رفع ملف', 'No attachments': 'لا توجد مرفقات',
   },
   fr: {
     'General': 'Général', 'Material Requests': 'Demandes de matériel', 'Warehouse Execution': 'Exécution entrepôt',
@@ -60,6 +70,16 @@ const I18N = {
     'Password': 'Mot de passe', 'Full name': 'Nom complet', 'Save': 'Enregistrer', 'Cancel': 'Annuler',
     'Language': 'Langue', 'Theme': 'Thème', 'Warehouse Management System': 'Système de gestion d’entrepôt',
     'Loading…': 'Chargement…',
+    // common actions
+    'Submit': 'Soumettre', 'Delete': 'Supprimer', 'Edit': 'Modifier', 'Add': 'Ajouter', 'Close': 'Fermer', 'Back': 'Retour',
+    'Search': 'Rechercher', 'Reset': 'Réinitialiser', 'Export': 'Exporter', 'Download': 'Télécharger', 'Upload': 'Téléverser',
+    'Reason': 'Motif', 'Confirm': 'Confirmer', 'Approve': 'Approuver', 'Reject': 'Rejeter', 'Return': 'Retourner',
+    'Status': 'Statut', 'Quantity': 'Quantité', 'Actions': 'Actions', 'Details': 'Détails',
+    // new features (P2/P3)
+    'Cycle Counting': "Comptage tournant", 'Attachments': 'Pièces jointes', 'Reverse GI': 'Annuler la sortie',
+    'Reverse Goods Issue': 'Annuler la sortie de marchandises', 'High-Value Approvals': 'Approbations à forte valeur',
+    'Counted quantity': 'Quantité comptée', 'Variance': 'Écart', 'System quantity': 'Quantité système',
+    'Upload file': 'Téléverser un fichier', 'No attachments': 'Aucune pièce jointe',
   },
 };
 

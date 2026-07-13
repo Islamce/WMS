@@ -82,6 +82,7 @@ const MODULES = [
     { route: 'qr-printing', label: 'QR Label Printing', icon: 'printer', permission: 'qr_printing' },
     { route: 'batches', label: 'Batch Tracking', icon: 'layers', permission: 'batch_tracking' },
     { route: 'expiry', label: 'Expiry Alerts', icon: 'clock', permission: 'expiry_alerts' },
+    { route: 'cycle-count', label: 'Cycle Counting', icon: 'clipboard', permission: 'cycle_count' },
     { route: 'quality', label: 'Quality', icon: 'shield', permission: 'quality' },
   ] },
   { key: 'inventory', label: 'Inventory', icon: 'map', items: [
@@ -94,6 +95,7 @@ const MODULES = [
     { route: 'warehouses-master', label: 'Warehouses', icon: 'home', permission: 'warehouses_master' },
     { route: 'bins-master', label: 'Bin Locations', icon: 'archive', permission: 'bins_master' },
     { route: 'movement-types', label: 'Movement Types', icon: 'shuffle', permission: 'movement_types_master' },
+    { route: 'import', label: 'Import Data', icon: 'download', permission: ['materials', 'locations', 'warehouses_master', 'bins_master', 'movement_types_master', 'goods_receipt'] },
   ] },
   { key: 'admin', label: 'Administration', icon: 'shield', items: [
     { route: 'audit', label: 'Audit Trail', icon: 'file-text', permission: 'audit_trail' },
@@ -109,6 +111,7 @@ MODULES.forEach((m) => m.items.forEach((it) => { NAV_ITEMS.push(Object.assign({ 
 ROUTE_MODULE['request-detail'] = ROUTE_MODULE['requests'];
 
 const ROUTE_PAGES = {
+  'home': { title: 'Home', page: 'home', permission: null }, // launchpad — any signed-in user
   'dashboard': { title: 'Dashboard', page: 'dashboard', permission: 'dashboard' },
   'kpi': { title: 'KPI Dashboard', page: 'kpi', permission: 'kpi_dashboard' },
   'ai': { title: 'AI Stock Analytics', page: 'ai', permission: 'ai_analytics' },
@@ -127,6 +130,7 @@ const ROUTE_PAGES = {
   'qr-printing': { title: 'QR Label Printing', page: 'qrPrinting', permission: 'qr_printing' },
   'batches': { title: 'Batch Tracking', page: 'batches', permission: 'batch_tracking' },
   'expiry': { title: 'Expiry Alerts', page: 'expiry', permission: 'expiry_alerts' },
+  'cycle-count': { title: 'Cycle Counting', page: 'cycleCount', permission: 'cycle_count' },
   'quality': { title: 'Quality Management', page: 'quality', permission: 'quality' },
   'stock-in': { title: 'Stock In', page: 'stockin', permission: 'stock_in' },
   'stock-out': { title: 'Stock Out', page: 'stockout', permission: 'stock_out' },
@@ -137,6 +141,7 @@ const ROUTE_PAGES = {
   'warehouses-master': { title: 'Warehouse Master', page: 'warehousesMaster', permission: 'warehouses_master' },
   'bins-master': { title: 'Bin Location Master', page: 'binsMaster', permission: 'bins_master' },
   'movement-types': { title: 'Movement Type Config', page: 'movementTypes', permission: 'movement_types_master' },
+  'import': { title: 'Import Center', page: 'importCenter', permission: ['materials', 'locations', 'warehouses_master', 'bins_master', 'movement_types_master', 'goods_receipt'] },
   'audit': { title: 'Audit Trail', page: 'audit', permission: 'audit_trail' },
   'users': { title: 'Users Management', page: 'users', permission: 'users_management' },
   'permissions': { title: 'Permissions Management', page: 'permissions', permission: 'permissions_management' },
@@ -173,12 +178,8 @@ const App = {
     location.hash = '#/login';
   },
 
-  /** Dashboard is the landing page; otherwise the first permitted route. */
-  defaultRoute() {
-    if (this.can('dashboard')) return 'dashboard';
-    const entry = Object.entries(ROUTE_PAGES).find(([, def]) => this.can(def.permission));
-    return entry ? entry[0] : null;
-  },
+  /** The launchpad (Home) is the landing page for every signed-in user. */
+  defaultRoute() { return 'home'; },
 
   route() {
     const raw = location.hash.replace(/^#\//, '') || '';
@@ -189,9 +190,13 @@ const App = {
       return Pages.auth.render('login');
     }
 
+    // Force a password change (e.g. the seeded default admin) before anything else.
+    if (this.user.must_change_password) return this.renderForcedPasswordChange();
+
     let routeKey = hash;
     let def = ROUTE_PAGES[hash];
-    if (!def || !this.can(def.permission)) {
+    // A route with permission `null` (the Home launchpad) is open to any user.
+    if (!def || (def.permission && !this.can(def.permission))) {
       const fallback = this.defaultRoute();
       if (!fallback) return this.renderNoAccess();
       if (hash !== fallback) { location.hash = `#/${fallback}`; return; }
@@ -222,6 +227,36 @@ const App = {
         } else if (badge) { badge.remove(); }
       });
     } catch { /* ignore */ }
+  },
+
+  /** Full-screen gate shown until a forced password change is completed. */
+  renderForcedPasswordChange() {
+    document.getElementById('app').innerHTML = `
+      <div class="auth-wrap"><div class="auth-card">
+        <div class="logo">🔒 ${t('Set a new password')}</div>
+        <p class="subtitle">${t('For security, please change the default password before continuing.')}</p>
+        <div class="form-group"><label>${t('Current password')}</label><input type="password" id="fp-cur"></div>
+        <div class="form-group"><label>${t('New password')}</label><input type="password" id="fp-new"><div class="hint">${t('At least 8 characters.')}</div></div>
+        <div class="form-group"><label>${t('Confirm new password')}</label><input type="password" id="fp-cf"></div>
+        <button class="btn block" id="fp-save">${t('Update password')}</button>
+        <p class="switch"><a href="#" id="fp-logout">${t('Sign out')}</a></p>
+      </div></div>`;
+    const $ = (s) => document.getElementById(s);
+    $('fp-logout').addEventListener('click', (e) => { e.preventDefault(); this.logout(); });
+    $('fp-save').addEventListener('click', async () => {
+      const cur = $('fp-cur').value, nw = $('fp-new').value, cf = $('fp-cf').value;
+      if (!cur || !nw) return UI.toast(t('Fill in all fields.'), 'error');
+      if (nw.length < 8) return UI.toast(t('At least 8 characters.'), 'error');
+      if (nw !== cf) return UI.toast(t('Passwords do not match.'), 'error');
+      try {
+        await Api.patch('/api/auth/password', { current_password: cur, new_password: nw });
+        this.user.must_change_password = false;
+        UI.toast(t('Password changed.'));
+        location.hash = '#/home';
+        this.route();
+      } catch (err) { UI.toast(err.message, 'error'); }
+    });
+    $('fp-cur').focus();
   },
 
   renderNoAccess() {
@@ -264,23 +299,31 @@ const App = {
         </div>`;
     }).join('');
 
+    // Standalone Home (launchpad) link above the module groups.
+    const homeLink = `
+      <a href="#/home" class="nav-item nav-home ${activeRoute === 'home' ? 'active' : ''}" title="${t('Home')}">
+        ${svg('home')}<span class="lbl">${t('Home')}</span>
+      </a>`;
+
     // Breadcrumbs: Home / Module / Page.
     const mod = ROUTE_MODULE[activeRoute];
-    const crumbs = [`<a href="#/${this.can('dashboard') ? 'dashboard' : (this.defaultRoute() || '')}" class="crumb">${t('Home')}</a>`];
+    const crumbs = [`<a href="#/home" class="crumb">${t('Home')}</a>`];
     if (mod) crumbs.push(`<span class="crumb muted">${UI.esc(t(mod.label))}</span>`);
-    crumbs.push(`<span class="crumb current">${UI.esc(t(title))}</span>`);
+    if (activeRoute !== 'home') crumbs.push(`<span class="crumb current">${UI.esc(t(title))}</span>`);
+    else crumbs[0] = `<span class="crumb current">${t('Home')}</span>`;
 
     const initials = (this.user.name || '?').split(/\s+/).map((s) => s[0]).slice(0, 2).join('').toUpperCase();
 
     document.getElementById('app').innerHTML = `
-      <div class="layout ${this.isCollapsed() ? 'nav-collapsed' : ''}" id="layout">
-        <aside class="sidebar" id="sidebar">
+      <a href="#page-content" class="skip-link">${t('Skip to content')}</a>
+      <div class="layout" id="layout">
+        <aside class="sidebar" id="sidebar" aria-label="${t('Main navigation')}">
           <div class="brand">
-            <span class="brand-mark">▦</span><span class="brand-name">WMS</span>
-            <button class="rail-toggle" id="rail-toggle" title="${t('Collapse')}">${svg('panel-left')}</button>
+            <span class="brand-mark" aria-hidden="true">▦</span><span class="brand-name">WMS</span>
+            <button class="rail-toggle" id="sidebar-close" title="${t('Close')}" aria-label="${t('Close')}">${svg('x')}</button>
           </div>
           <button class="nav-search" id="nav-search">${svg('search')}<span class="lbl">${t('Search')}…</span><kbd>/</kbd></button>
-          <nav class="nav-tree">${groups}</nav>
+          <nav class="nav-tree" aria-label="${t('Modules')}"><div class="nav-top">${homeLink}</div>${groups}</nav>
         </aside>
         <div class="main">
           <header class="topbar">
@@ -310,7 +353,7 @@ const App = {
               </div>
             </div>
           </header>
-          <main class="content"><div id="page-content"><div class="loading">Loading…</div></div></main>
+          <main class="content" id="main-content" role="main"><div id="page-content" tabindex="-1"><div class="loading">${t('Loading…')}</div></div></main>
         </div>
       </div>`;
 
@@ -321,16 +364,28 @@ const App = {
     const layout = document.getElementById('layout');
     const sidebar = document.getElementById('sidebar');
 
-    // Rail collapse (desktop) — persisted.
-    document.getElementById('rail-toggle').addEventListener('click', () => {
-      const collapsed = layout.classList.toggle('nav-collapsed');
-      localStorage.setItem(LS.collapsed, collapsed ? '1' : '0');
+    // The sidebar is an off-canvas drawer, hidden until the menu button is
+    // pressed (at every screen width) so the content gets full width.
+    const closeDrawer = () => { layout.classList.remove('nav-open'); document.querySelector('.scrim')?.remove(); document.getElementById('menu-toggle')?.setAttribute('aria-expanded', 'false'); };
+    const openDrawer = () => {
+      layout.classList.add('nav-open');
+      document.getElementById('menu-toggle')?.setAttribute('aria-expanded', 'true');
+      if (!document.querySelector('.scrim')) {
+        const scrim = document.createElement('div');
+        scrim.className = 'scrim';
+        scrim.addEventListener('click', closeDrawer);
+        layout.appendChild(scrim);
+      }
+    };
+    document.getElementById('menu-toggle').addEventListener('click', () => {
+      layout.classList.contains('nav-open') ? closeDrawer() : openDrawer();
     });
+    document.getElementById('sidebar-close').addEventListener('click', closeDrawer);
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDrawer(); });
 
     // Collapsible groups — persisted.
     sidebar.querySelectorAll('.nav-group-head').forEach((head) => {
       head.addEventListener('click', () => {
-        if (layout.classList.contains('nav-collapsed')) return; // groups always shown when collapsed
         const group = head.closest('.nav-group');
         group.classList.toggle('open');
         const set = new Set([...sidebar.querySelectorAll('.nav-group.open')].map((g) => g.dataset.key));
@@ -338,15 +393,7 @@ const App = {
       });
     });
 
-    // Mobile drawer.
-    const closeDrawer = () => { layout.classList.remove('nav-open'); document.querySelector('.scrim')?.remove(); };
-    document.getElementById('menu-toggle').addEventListener('click', () => {
-      layout.classList.add('nav-open');
-      const scrim = document.createElement('div');
-      scrim.className = 'scrim';
-      scrim.addEventListener('click', closeDrawer);
-      layout.appendChild(scrim);
-    });
+    // Selecting a destination closes the drawer.
     sidebar.querySelectorAll('.nav-item').forEach((a) => a.addEventListener('click', closeDrawer));
 
     // Topbar controls.
@@ -449,6 +496,11 @@ const App = {
     });
   },
 };
+
+// Exposed for the Home launchpad (Pages.home) so it can render the same
+// permission-filtered module/item model and icon set as the sidebar.
+App.modules = MODULES;
+App.icon = svg;
 
 window.App = App;
 document.addEventListener('DOMContentLoaded', () => App.init());

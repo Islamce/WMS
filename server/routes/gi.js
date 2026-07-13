@@ -11,6 +11,7 @@ const { isNonEmptyString } = require('./../utils/validate');
 const audit = require('./../services/audit');
 const notify = require('./../services/notify');
 const erp = require('./../services/erp');
+const sod = require('./../services/sod');
 const { recordMovement } = require('./../services/ledger');
 const { setHeaderStatus, refreshRollups, getHeaderOr404 } = require('./../services/requests');
 const { HEADER_STATUS, LINE_STATUS } = require('./../workflow/states');
@@ -58,6 +59,13 @@ router.post('/:id/post', (req, res) => {
   if (picked.length === 0) {
     return res.status(400).json({ error: 'Cannot post GI: no picked quantities. Return to picker.' });
   }
+
+  // SoD: the GI poster must differ from both the approver and the ERP operator.
+  const sodErr = sod.conflict(req.user, [
+    { id: sod.approverId(header.request_number), label: 'approval' },
+    { id: header.erp_created_by, label: 'ERP reservation' },
+  ]);
+  if (sodErr) return res.status(403).json({ error: sodErr });
 
   const b = req.body || {};
   const payload = {
@@ -121,9 +129,85 @@ router.post('/:id/post', (req, res) => {
 
   notify.send({ requestNumber: header.request_number, recipientUserId: header.requester_id,
     notificationType: 'REQUEST_COMPLETED', title: `Request ${header.request_number}: ${finalStatus}`,
-    message: `GI document ${result.response.giDocumentNumber} posted.` });
+    message: `GI document ${result.response.giDocumentNumber} posted.`, email: true });
 
   res.json({ message: `Goods Issue posted. Request ${finalStatus}.`, gi: result.response, status: finalStatus });
+});
+
+// Reversal movement type for each issue movement type (SAP-style pairing).
+const REVERSAL_OF = { 201: '202', 221: '222', 261: '262' };
+const REVERSIBLE_STATUSES = [HEADER_STATUS.COMPLETED, HEADER_STATUS.PARTIALLY_COMPLETED, HEADER_STATUS.CLOSED_WITH_SHORTAGE];
+
+/**
+ * POST /api/gi/:id/reverse — reverse a posted Goods Issue.
+ * Returns the issued stock to its batches (ledger IN with the reversal movement
+ * type) and closes the request as Reversed. body: { reason } (mandatory).
+ */
+router.post('/:id/reverse', (req, res) => {
+  const header = getHeaderOr404(res, req.params.id);
+  if (!header) return;
+  if (!REVERSIBLE_STATUSES.includes(header.request_status)) {
+    return res.status(400).json({ error: `Only a posted/closed request can be reversed (status '${header.request_status}').` });
+  }
+  if (!header.gi_document_number) {
+    return res.status(400).json({ error: 'No goods-issue document on this request to reverse.' });
+  }
+  const reason = (req.body || {}).reason;
+  if (!isNonEmptyString(reason)) {
+    return res.status(400).json({ error: 'A reversal reason is required.' });
+  }
+
+  const reversalType = REVERSAL_OF[header.movement_type] || null;
+  // Allocations that were actually picked hold the batch + issued quantity.
+  const picked = db.prepare(
+    "SELECT * FROM picking_allocations WHERE request_id=? AND status='PICKED' AND picked_quantity > 0"
+  ).all(header.id);
+  const issuedLines = db.prepare(
+    'SELECT * FROM material_request_lines WHERE request_id=? AND issued_quantity > 0'
+  ).all(header.id);
+  if (picked.length === 0 && issuedLines.length === 0) {
+    return res.status(400).json({ error: 'Nothing was issued on this request; nothing to reverse.' });
+  }
+
+  const result = erp.connector().reverseGoodsIssue({
+    requestNumber: header.request_number,
+    originalGiDocument: header.gi_document_number,
+    reversalMovementType: reversalType,
+    payload: { lines: issuedLines.map((l) => ({ material: l.material_code, quantity: l.issued_quantity })) },
+    user: req.user,
+  });
+
+  db.transaction(() => {
+    // Put the issued quantity back on each picked batch.
+    picked.forEach((a) => {
+      db.prepare('UPDATE batches SET remaining_quantity = remaining_quantity + ? WHERE id=?')
+        .run(a.picked_quantity, a.batch_id);
+    });
+    // Ledger IN (reversal) per issued line, and mark the line reversed.
+    issuedLines.forEach((l) => {
+      recordMovement({
+        type: 'IN', materialId: l.material_id, warehouseCode: header.issue_warehouse_code,
+        quantity: l.issued_quantity, userId: req.user.id,
+        reservationNumber: header.erp_reservation_number || header.erp_reference_number,
+        notes: `GI reversal ${result.response.reversalDocumentNumber} / ${header.request_number}`,
+      });
+      db.prepare("UPDATE material_request_lines SET line_status=?, updated_at=datetime('now') WHERE id=?")
+        .run(LINE_STATUS.REVERSED, l.id);
+    });
+    setHeaderStatus(header, HEADER_STATUS.REVERSED, {
+      user: req.user, reason, sourceScreen: 'GI Posting',
+      set: { closure_reason: `Reversed: ${reason} (doc ${result.response.reversalDocumentNumber})`, closed_at: new Date().toISOString() },
+    });
+    audit.record({ entityType: 'MaterialRequestHeader', entityId: header.id, requestNumber: header.request_number,
+      action: 'GI_REVERSED', newValue: { reversal: result.response, reversed_lines: issuedLines.length },
+      reason, user: req.user, sourceScreen: 'GI Posting' });
+  })();
+
+  notify.send({ requestNumber: header.request_number, recipientUserId: header.requester_id,
+    notificationType: 'GI_REVERSED', title: `Request ${header.request_number} goods issue reversed`,
+    message: `Reversal document ${result.response.reversalDocumentNumber} posted. ${reason}`, email: true });
+
+  res.json({ message: 'Goods issue reversed; stock returned to batches.', reversal: result.response });
 });
 
 /** POST /api/gi/:id/return-to-picker — send back for re-pick. */

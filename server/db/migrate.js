@@ -131,6 +131,8 @@ function migrate() {
   console.log('Base schema is up to date.');
   // Apply the MRP / warehouse-execution schema on top of the base tables.
   require('./migrate2').migrate2();
+  // Record the versioned migration history and apply any forward-only deltas.
+  require('./migrations').runMigrations();
 }
 
 migrate();

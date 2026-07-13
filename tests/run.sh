@@ -49,6 +49,9 @@ run_suite refinements_test.py
 run_suite p0_regression_test.py
 run_suite p1_regression_test.py
 run_suite password_test.py
+run_suite reports_test.py
+run_suite p0_hardening_test.py
+run_suite p1_hardening_test.py
 stop_server
 
 echo ""
@@ -56,6 +59,15 @@ echo "=== Phase 2: feature suite (clean dataset) ==="
 fresh_db || exit 1
 start_server || exit 1
 run_suite features_test.py
+run_suite import_test.py
+stop_server
+
+echo ""
+echo "=== Phase 3: P2/P3 enterprise suite (clean dataset) ==="
+fresh_db || exit 1
+start_server || exit 1
+run_suite p2_test.py
+run_suite p3_test.py
 stop_server
 
 echo ""

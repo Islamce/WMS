@@ -49,6 +49,19 @@ const Api = {
     return res.blob();
   },
 
+  /** POST a JSON body and get a binary Blob back (e.g. an exported PDF). */
+  async postBlob(url, body) {
+    const headers = { 'Content-Type': 'application/json' };
+    if (this.token) headers.Authorization = `Bearer ${this.token}`;
+    const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+    if (!res.ok) {
+      let msg = `Request failed (${res.status})`;
+      try { msg = (await res.json()).error || msg; } catch {}
+      throw new Error(msg);
+    }
+    return res.blob();
+  },
+
   get(url) { return this.request('GET', url); },
   post(url, body) { return this.request('POST', url, body); },
   put(url, body) { return this.request('PUT', url, body); },
