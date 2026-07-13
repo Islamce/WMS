@@ -188,6 +188,9 @@ const App = {
       return Pages.auth.render('login');
     }
 
+    // Force a password change (e.g. the seeded default admin) before anything else.
+    if (this.user.must_change_password) return this.renderForcedPasswordChange();
+
     let routeKey = hash;
     let def = ROUTE_PAGES[hash];
     // A route with permission `null` (the Home launchpad) is open to any user.
@@ -222,6 +225,36 @@ const App = {
         } else if (badge) { badge.remove(); }
       });
     } catch { /* ignore */ }
+  },
+
+  /** Full-screen gate shown until a forced password change is completed. */
+  renderForcedPasswordChange() {
+    document.getElementById('app').innerHTML = `
+      <div class="auth-wrap"><div class="auth-card">
+        <div class="logo">🔒 ${t('Set a new password')}</div>
+        <p class="subtitle">${t('For security, please change the default password before continuing.')}</p>
+        <div class="form-group"><label>${t('Current password')}</label><input type="password" id="fp-cur"></div>
+        <div class="form-group"><label>${t('New password')}</label><input type="password" id="fp-new"><div class="hint">${t('At least 8 characters.')}</div></div>
+        <div class="form-group"><label>${t('Confirm new password')}</label><input type="password" id="fp-cf"></div>
+        <button class="btn block" id="fp-save">${t('Update password')}</button>
+        <p class="switch"><a href="#" id="fp-logout">${t('Sign out')}</a></p>
+      </div></div>`;
+    const $ = (s) => document.getElementById(s);
+    $('fp-logout').addEventListener('click', (e) => { e.preventDefault(); this.logout(); });
+    $('fp-save').addEventListener('click', async () => {
+      const cur = $('fp-cur').value, nw = $('fp-new').value, cf = $('fp-cf').value;
+      if (!cur || !nw) return UI.toast(t('Fill in all fields.'), 'error');
+      if (nw.length < 8) return UI.toast(t('At least 8 characters.'), 'error');
+      if (nw !== cf) return UI.toast(t('Passwords do not match.'), 'error');
+      try {
+        await Api.patch('/api/auth/password', { current_password: cur, new_password: nw });
+        this.user.must_change_password = false;
+        UI.toast(t('Password changed.'));
+        location.hash = '#/home';
+        this.route();
+      } catch (err) { UI.toast(err.message, 'error'); }
+    });
+    $('fp-cur').focus();
   },
 
   renderNoAccess() {

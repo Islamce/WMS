@@ -146,7 +146,7 @@ DB_PATH=./data/wms.db
 ### Testing & CI
 
 ```bash
-npm test        # full end-to-end suite (147 checks) — needs Node 18+ and python3
+npm test        # full end-to-end suite (159 checks) — needs Node 18+ and python3
 ```
 
 The runner (`tests/run.sh`) rebuilds a fresh database, boots the server, and
@@ -177,6 +177,11 @@ correctly behind Hostinger's reverse proxy.
 - Segregation of duties: a user can never approve or modify their own material
   request, even if they hold the `approvals` permission.
 - Change the default admin password before going live.
+- The seeded admin must change its password on first login (forced).
+- API request logging to stdout (`LOG_REQUESTS`); enable automated daily
+  SQLite backups with `BACKUP_DIR` (or `npm run backup`); stale stock
+  reservations auto-release after `RESERVATION_TTL_HOURS` (default 24h).
+
 
 ### Database migration & seeding
 

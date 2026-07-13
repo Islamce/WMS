@@ -75,6 +75,7 @@ router.post('/login', loginRateLimit, (req, res) => {
       name: user.name,
       email: user.email,
       role: user.role,
+      must_change_password: !!user.must_change_password,
       permissions: getUserPermissions(user.id),
     },
   });
@@ -105,7 +106,7 @@ router.patch('/password', authenticate, (req, res) => {
     return res.status(400).json({ error: 'Current password is incorrect.' });
   }
   const hash = bcrypt.hashSync(new_password, 10);
-  db.prepare("UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?")
+  db.prepare("UPDATE users SET password_hash = ?, must_change_password = 0, updated_at = datetime('now') WHERE id = ?")
     .run(hash, req.user.id);
   res.json({ message: 'Password changed.' });
 });

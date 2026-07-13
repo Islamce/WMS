@@ -4,7 +4,8 @@
  */
 const db = require('./../db/connection');
 const audit = require('./audit');
-const { canTransition } = require('./../workflow/states');
+const notify = require('./notify');
+const { canTransition, HEADER_STATUS } = require('./../workflow/states');
 
 /** Generate the next request number: MR-YYYY-000123. */
 function nextRequestNumber() {
@@ -99,4 +100,45 @@ function getHeaderOr404(res, id) {
   return header;
 }
 
-module.exports = { nextRequestNumber, setHeaderStatus, refreshRollups, getHeaderOr404, releaseOpenAllocations };
+// Stages where stock is reserved but not yet consumed by a goods issue.
+const RESERVED_STAGES = [
+  HEADER_STATUS.PENDING_BIN_ASSIGNMENT, HEADER_STATUS.LOCATION_ASSIGNED, HEADER_STATUS.BATCH_ASSIGNED,
+  HEADER_STATUS.PENDING_PICKER_ASSIGNMENT, HEADER_STATUS.ASSIGNED_TO_PICKER,
+  HEADER_STATUS.PENDING_PICKER_ACCEPTANCE, HEADER_STATUS.REMINDER_SENT, HEADER_STATUS.ESCALATED_TO_SUPERVISOR,
+];
+
+/**
+ * Release reservations for requests that have held stock past the TTL without
+ * being picked, so the stock returns to available. The request is put On Hold
+ * and the warehouse team is notified. Idempotent and safe to run every minute.
+ * @param {number} nowMs override "now" for deterministic testing.
+ */
+function sweepReservations(nowMs = Date.now()) {
+  const ttlHours = Number(process.env.RESERVATION_TTL_HOURS) || 24;
+  const ttlMs = ttlHours * 3600 * 1000;
+  const rows = db.prepare(
+    `SELECT * FROM material_request_headers WHERE request_status IN (${RESERVED_STAGES.map(() => '?').join(',')})`
+  ).all(...RESERVED_STAGES);
+
+  const released = [];
+  rows.forEach((h) => {
+    const ts = (h.updated_at || h.created_at || '').replace(' ', 'T') + 'Z';
+    const age = nowMs - new Date(ts).getTime();
+    if (!(age >= ttlMs)) return;
+    const n = releaseOpenAllocations(h.id);
+    try {
+      setHeaderStatus(h, HEADER_STATUS.ON_HOLD, {
+        reason: `Reservation timed out after ${ttlHours}h`, sourceScreen: 'Scheduler',
+      });
+      audit.record({ entityType: 'MaterialRequestHeader', entityId: h.id, requestNumber: h.request_number,
+        action: 'RESERVATION_TIMEOUT', newValue: { released_allocations: n, ttl_hours: ttlHours }, sourceScreen: 'Scheduler' });
+      notify.notifyPermission('bin_batch_assignment', { requestNumber: h.request_number,
+        notificationType: 'RESERVATION_TIMEOUT', title: `Reservation released for ${h.request_number}`,
+        message: `Held stock was returned to available after ${ttlHours}h without picking. Re-allocate when ready.` });
+    } catch { /* skip a header that cannot transition */ }
+    released.push({ request: h.request_number, released: n });
+  });
+  return released;
+}
+
+module.exports = { nextRequestNumber, setHeaderStatus, refreshRollups, getHeaderOr404, releaseOpenAllocations, sweepReservations };

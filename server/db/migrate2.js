@@ -453,6 +453,11 @@ function addMissingColumns() {
       db.exec(`ALTER TABLE materials ADD COLUMN ${name} ${def}`);
     }
   });
+  // Force-a-password-change flag on users (idempotent).
+  const userCols = new Set(db.prepare('PRAGMA table_info(users)').all().map((c) => c.name));
+  if (!userCols.has('must_change_password')) {
+    db.exec('ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0');
+  }
 }
 
 function migrate2() {

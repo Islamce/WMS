@@ -72,9 +72,11 @@ function seed() {
     const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(DEFAULT_ADMIN.email);
     if (!existing) {
       const hash = bcrypt.hashSync(DEFAULT_ADMIN.password, 10);
+      // must_change_password=1 forces the well-known default password to be
+      // changed on first login.
       db.prepare(`
-        INSERT INTO users (name, email, password_hash, role_id, status)
-        VALUES (?, ?, ?, (SELECT id FROM roles WHERE name = 'admin'), 'active')
+        INSERT INTO users (name, email, password_hash, role_id, status, must_change_password)
+        VALUES (?, ?, ?, (SELECT id FROM roles WHERE name = 'admin'), 'active', 1)
       `).run(DEFAULT_ADMIN.name, DEFAULT_ADMIN.email, hash);
       console.log(`Created default admin: ${DEFAULT_ADMIN.email}`);
     }

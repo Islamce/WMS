@@ -55,6 +55,21 @@ app.use(helmet({
 // exceeds express.json()'s default 100 KB cap.
 app.use(express.json({ limit: '2mb' }));
 
+// Lightweight structured request logging for API calls (skip health + static).
+// Set LOG_REQUESTS=0 to silence. One line per request on response finish.
+if (process.env.LOG_REQUESTS !== '0') {
+  app.use((req, res, next) => {
+    if (!req.path.startsWith('/api') || req.path === '/api') return next();
+    const start = process.hrtime.bigint();
+    res.on('finish', () => {
+      const ms = Number(process.hrtime.bigint() - start) / 1e6;
+      const uid = req.user ? req.user.id : '-';
+      console.log(`[${new Date().toISOString()}] ${req.method} ${res.statusCode} ${ms.toFixed(0)}ms ${req.originalUrl} user=${uid} ip=${req.ip}`);
+    });
+    next();
+  });
+}
+
 // Unauthenticated health check — handy for verifying the server is reachable
 // through a proxy/port-forward (e.g. GitHub Codespaces). A 200 here means the
 // app is up; a 401 on the site root then points at the proxy, not the app.
@@ -113,13 +128,24 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error.' });
 });
 
-// Background scheduler: reminder/escalation sweep for unaccepted picking tasks.
-// Runs every 60s; the same logic is exposed via POST /api/picking/sweep for
-// on-demand runs and deterministic testing.
+// Background scheduler: reminder/escalation sweep for unaccepted picking tasks
+// and release of timed-out stock reservations. Runs every 60s; both are also
+// exposed as on-demand endpoints for deterministic testing.
 const { sweepReminders } = require('./routes/picking');
+const { sweepReservations } = require('./services/requests');
 setInterval(() => {
   try { sweepReminders(); } catch (err) { console.error('Reminder sweep error:', err); }
+  try { sweepReservations(); } catch (err) { console.error('Reservation sweep error:', err); }
 }, 60 * 1000).unref();
+
+// Optional automated daily database backup (enable by setting BACKUP_DIR).
+if (process.env.BACKUP_DIR) {
+  const { backup } = require('../scripts/backup');
+  const runBackup = () => backup().then((d) => console.log(`Backup written: ${d}`))
+    .catch((e) => console.error('Backup failed:', e.message));
+  runBackup();
+  setInterval(runBackup, 24 * 60 * 60 * 1000).unref();
+}
 
 // Bind to 0.0.0.0 so containerized/port-forwarded environments (Docker,
 // GitHub Codespaces) can reach and auto-detect the port.
