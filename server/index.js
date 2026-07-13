@@ -12,6 +12,11 @@ require('./db/migrate');
 
 const app = express();
 
+// Behind Hostinger's (or any) reverse proxy, trust the first proxy hop so
+// req.ip / X-Forwarded-For reflect the real client — the login rate limiter
+// keys on it, and it keeps request logging accurate. Harmless in local dev.
+app.set('trust proxy', 1);
+
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
