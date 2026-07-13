@@ -37,9 +37,9 @@ function loadApprovable(res, id, user) {
     res.status(400).json({ error: `Request is not awaiting approval (status '${header.request_status}').` });
     return null;
   }
-  // Segregation of duties: nobody may act as approver on their own request,
-  // regardless of role. Another approver (or admin) must take the decision.
-  if (user && header.requester_id === user.id) {
+  // Segregation of duties: a regular approver may not act on their own request.
+  // Admins are exempt (super-user, and needed for testing/bootstrapping).
+  if (user && user.role !== 'admin' && header.requester_id === user.id) {
     res.status(403).json({ error: 'You cannot approve or modify your own request (segregation of duties).' });
     return null;
   }

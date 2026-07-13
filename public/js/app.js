@@ -94,6 +94,7 @@ const MODULES = [
     { route: 'warehouses-master', label: 'Warehouses', icon: 'home', permission: 'warehouses_master' },
     { route: 'bins-master', label: 'Bin Locations', icon: 'archive', permission: 'bins_master' },
     { route: 'movement-types', label: 'Movement Types', icon: 'shuffle', permission: 'movement_types_master' },
+    { route: 'import', label: 'Import Data', icon: 'download', permission: ['materials', 'locations', 'warehouses_master', 'bins_master', 'movement_types_master', 'goods_receipt'] },
   ] },
   { key: 'admin', label: 'Administration', icon: 'shield', items: [
     { route: 'audit', label: 'Audit Trail', icon: 'file-text', permission: 'audit_trail' },
@@ -109,6 +110,7 @@ MODULES.forEach((m) => m.items.forEach((it) => { NAV_ITEMS.push(Object.assign({ 
 ROUTE_MODULE['request-detail'] = ROUTE_MODULE['requests'];
 
 const ROUTE_PAGES = {
+  'home': { title: 'Home', page: 'home', permission: null }, // launchpad — any signed-in user
   'dashboard': { title: 'Dashboard', page: 'dashboard', permission: 'dashboard' },
   'kpi': { title: 'KPI Dashboard', page: 'kpi', permission: 'kpi_dashboard' },
   'ai': { title: 'AI Stock Analytics', page: 'ai', permission: 'ai_analytics' },
@@ -137,6 +139,7 @@ const ROUTE_PAGES = {
   'warehouses-master': { title: 'Warehouse Master', page: 'warehousesMaster', permission: 'warehouses_master' },
   'bins-master': { title: 'Bin Location Master', page: 'binsMaster', permission: 'bins_master' },
   'movement-types': { title: 'Movement Type Config', page: 'movementTypes', permission: 'movement_types_master' },
+  'import': { title: 'Import Center', page: 'importCenter', permission: ['materials', 'locations', 'warehouses_master', 'bins_master', 'movement_types_master', 'goods_receipt'] },
   'audit': { title: 'Audit Trail', page: 'audit', permission: 'audit_trail' },
   'users': { title: 'Users Management', page: 'users', permission: 'users_management' },
   'permissions': { title: 'Permissions Management', page: 'permissions', permission: 'permissions_management' },
@@ -173,12 +176,8 @@ const App = {
     location.hash = '#/login';
   },
 
-  /** Dashboard is the landing page; otherwise the first permitted route. */
-  defaultRoute() {
-    if (this.can('dashboard')) return 'dashboard';
-    const entry = Object.entries(ROUTE_PAGES).find(([, def]) => this.can(def.permission));
-    return entry ? entry[0] : null;
-  },
+  /** The launchpad (Home) is the landing page for every signed-in user. */
+  defaultRoute() { return 'home'; },
 
   route() {
     const raw = location.hash.replace(/^#\//, '') || '';
@@ -191,7 +190,8 @@ const App = {
 
     let routeKey = hash;
     let def = ROUTE_PAGES[hash];
-    if (!def || !this.can(def.permission)) {
+    // A route with permission `null` (the Home launchpad) is open to any user.
+    if (!def || (def.permission && !this.can(def.permission))) {
       const fallback = this.defaultRoute();
       if (!fallback) return this.renderNoAccess();
       if (hash !== fallback) { location.hash = `#/${fallback}`; return; }
@@ -264,11 +264,18 @@ const App = {
         </div>`;
     }).join('');
 
+    // Standalone Home (launchpad) link above the module groups.
+    const homeLink = `
+      <a href="#/home" class="nav-item nav-home ${activeRoute === 'home' ? 'active' : ''}" title="${t('Home')}">
+        ${svg('home')}<span class="lbl">${t('Home')}</span>
+      </a>`;
+
     // Breadcrumbs: Home / Module / Page.
     const mod = ROUTE_MODULE[activeRoute];
-    const crumbs = [`<a href="#/${this.can('dashboard') ? 'dashboard' : (this.defaultRoute() || '')}" class="crumb">${t('Home')}</a>`];
+    const crumbs = [`<a href="#/home" class="crumb">${t('Home')}</a>`];
     if (mod) crumbs.push(`<span class="crumb muted">${UI.esc(t(mod.label))}</span>`);
-    crumbs.push(`<span class="crumb current">${UI.esc(t(title))}</span>`);
+    if (activeRoute !== 'home') crumbs.push(`<span class="crumb current">${UI.esc(t(title))}</span>`);
+    else crumbs[0] = `<span class="crumb current">${t('Home')}</span>`;
 
     const initials = (this.user.name || '?').split(/\s+/).map((s) => s[0]).slice(0, 2).join('').toUpperCase();
 
@@ -280,7 +287,7 @@ const App = {
             <button class="rail-toggle" id="rail-toggle" title="${t('Collapse')}">${svg('panel-left')}</button>
           </div>
           <button class="nav-search" id="nav-search">${svg('search')}<span class="lbl">${t('Search')}…</span><kbd>/</kbd></button>
-          <nav class="nav-tree">${groups}</nav>
+          <nav class="nav-tree"><div class="nav-top">${homeLink}</div>${groups}</nav>
         </aside>
         <div class="main">
           <header class="topbar">
@@ -449,6 +456,11 @@ const App = {
     });
   },
 };
+
+// Exposed for the Home launchpad (Pages.home) so it can render the same
+// permission-filtered module/item model and icon set as the sidebar.
+App.modules = MODULES;
+App.icon = svg;
 
 window.App = App;
 document.addEventListener('DOMContentLoaded', () => App.init());

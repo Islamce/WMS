@@ -22,16 +22,18 @@ Pages.dashboard = {
     }
 
     const k = data.kpis;
+    // Deep-link a tile to its screen only when the user can open it.
+    const nav = (perm, route) => (App.can(perm) ? ` data-nav="${route}"` : '');
     el.innerHTML = `
       <div class="grid kpis">
-        <div class="kpi accent"><div class="label">Total Materials</div><div class="value">${UI.fmtQty(k.total_materials)}</div></div>
-        <div class="kpi accent"><div class="label">Bin Locations</div><div class="value">${UI.fmtQty(k.total_locations)}</div></div>
-        <div class="kpi green"><div class="label">Occupied Bins</div><div class="value">${UI.fmtQty(k.occupied_locations)}</div></div>
-        <div class="kpi amber"><div class="label">Empty Bins</div><div class="value">${UI.fmtQty(k.empty_locations)}</div></div>
-        <div class="kpi accent"><div class="label">Total Stock Quantity</div><div class="value">${UI.fmtQty(k.total_stock)}</div></div>
-        <div class="kpi green"><div class="label">Stock In</div><div class="value">${UI.fmtQty(k.stock_in_today)}</div><div class="sub">today · ${UI.fmtQty(k.stock_in_month)} this month</div></div>
-        <div class="kpi red"><div class="label">Stock Out</div><div class="value">${UI.fmtQty(k.stock_out_today)}</div><div class="sub">today · ${UI.fmtQty(k.stock_out_month)} this month</div></div>
-        <div class="kpi amber"><div class="label">Pending Users</div><div class="value">${UI.fmtQty(k.pending_users)}</div><div class="sub">${App.can('users_management') ? '<a href="#/users">review now</a>' : 'waiting for approval'}</div></div>
+        <div class="kpi accent"${nav('materials', 'materials')}><div class="label">Total Materials</div><div class="value">${UI.fmtQty(k.total_materials)}</div></div>
+        <div class="kpi accent"${nav('all_locations', 'all-locations')}><div class="label">Bin Locations</div><div class="value">${UI.fmtQty(k.total_locations)}</div></div>
+        <div class="kpi green"${nav('all_locations', 'all-locations')}><div class="label">Occupied Bins</div><div class="value">${UI.fmtQty(k.occupied_locations)}</div></div>
+        <div class="kpi amber"${nav('empty_locations', 'empty-locations')}><div class="label">Empty Bins</div><div class="value">${UI.fmtQty(k.empty_locations)}</div></div>
+        <div class="kpi accent"${nav('batch_tracking', 'batches')}><div class="label">Total Stock Quantity</div><div class="value">${UI.fmtQty(k.total_stock)}</div></div>
+        <div class="kpi green"${nav('batch_tracking', 'batches')}><div class="label">Stock In</div><div class="value">${UI.fmtQty(k.stock_in_today)}</div><div class="sub">today · ${UI.fmtQty(k.stock_in_month)} this month</div></div>
+        <div class="kpi red"${nav('gi_posting', 'gi-posting')}><div class="label">Stock Out</div><div class="value">${UI.fmtQty(k.stock_out_today)}</div><div class="sub">today · ${UI.fmtQty(k.stock_out_month)} this month</div></div>
+        <div class="kpi amber"${nav('users_management', 'users/pending')}><div class="label">Pending Users</div><div class="value">${UI.fmtQty(k.pending_users)}</div><div class="sub">${App.can('users_management') ? 'review now' : 'waiting for approval'}</div></div>
       </div>
 
       <div class="grid two">
@@ -48,7 +50,7 @@ Pages.dashboard = {
             <thead><tr><th>Item Code</th><th>Description</th><th class="text-right">Quantity</th><th>Unit</th></tr></thead>
             <tbody>
               ${data.top_materials.map((m) => `
-                <tr><td>${UI.esc(m.item_code)}</td><td class="wrap">${UI.esc(m.description)}</td>
+                <tr${App.can('materials') ? ' data-nav="materials" class="row-link"' : ''}><td>${UI.esc(m.item_code)}</td><td class="wrap">${UI.esc(m.description)}</td>
                 <td class="text-right">${UI.fmtQty(m.quantity)}</td><td>${UI.esc(m.unit)}</td></tr>`).join('')
                 || '<tr><td colspan="4" class="muted">No stock yet</td></tr>'}
             </tbody>
@@ -60,7 +62,7 @@ Pages.dashboard = {
             <thead><tr><th>Location</th><th class="text-right">Quantity</th></tr></thead>
             <tbody>
               ${data.top_locations.map((l) => `
-                <tr><td>${UI.esc(l.code)}</td><td class="text-right">${UI.fmtQty(l.quantity)}</td></tr>`).join('')
+                <tr${App.can('all_locations') ? ' data-nav="all-locations" class="row-link"' : ''}><td>${UI.esc(l.code)}</td><td class="text-right">${UI.fmtQty(l.quantity)}</td></tr>`).join('')
                 || '<tr><td colspan="2" class="muted">No stock yet</td></tr>'}
             </tbody>
           </table></div>
@@ -87,6 +89,12 @@ Pages.dashboard = {
       </div>`;
 
     this.renderCharts(data.charts);
+
+    // Interactive: KPI tiles and top-list rows jump to their screen.
+    el.querySelectorAll('[data-nav]').forEach((n) => {
+      n.classList.add('clickable');
+      n.addEventListener('click', () => { location.hash = `#/${n.dataset.nav}`; });
+    });
   },
 
   destroyCharts() {
@@ -129,7 +137,7 @@ Pages.dashboard = {
       options: lineOpts,
     }));
 
-    const bar = (canvasId, rows, labelKey, valueKey, color, horizontal = false) => {
+    const bar = (canvasId, rows, labelKey, valueKey, color, horizontal = false, navRoute = null) => {
       const opts = this.baseOptions();
       if (horizontal) {
         opts.indexAxis = 'y';
@@ -137,6 +145,11 @@ Pages.dashboard = {
           x: { beginAtZero: true, grid: { color: VIZ.grid }, ticks: { color: VIZ.muted } },
           y: { grid: { display: false }, ticks: { color: VIZ.muted } },
         };
+      }
+      // Clicking a bar jumps to the relevant screen.
+      if (navRoute && App.can(this.NAV_PERM[navRoute])) {
+        opts.onClick = (_e, els) => { if (els.length) location.hash = `#/${navRoute}`; };
+        opts.onHover = (e, els) => { e.native.target.style.cursor = els.length ? 'pointer' : 'default'; };
       }
       this.charts.push(new Chart(document.getElementById(canvasId), {
         type: 'bar',
@@ -153,8 +166,11 @@ Pages.dashboard = {
       }));
     };
 
-    bar('ch-group', charts.stock_by_group, 'material_group', 'quantity', VIZ.bar1);
-    bar('ch-location', charts.stock_by_location, 'code', 'quantity', VIZ.bar2);
-    bar('ch-users', charts.transactions_by_user, 'name', 'transactions', VIZ.bar1, true);
+    bar('ch-group', charts.stock_by_group, 'material_group', 'quantity', VIZ.bar1, false, 'materials');
+    bar('ch-location', charts.stock_by_location, 'code', 'quantity', VIZ.bar2, false, 'all-locations');
+    bar('ch-users', charts.transactions_by_user, 'name', 'transactions', VIZ.bar1, true, 'audit');
   },
+
+  // Permission required to open each chart's deep-link target.
+  NAV_PERM: { 'materials': 'materials', 'all-locations': 'all_locations', 'audit': 'audit_trail' },
 };

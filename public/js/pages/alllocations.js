@@ -30,10 +30,12 @@ Pages.alllocations = {
         <div class="card">
           <div class="toolbar mb-0" style="margin-bottom:10px">
             <strong style="font-size:15px">📍 ${UI.esc(loc.code)}</strong>
+            ${loc.warehouse_code ? `<span class="badge">${UI.esc(loc.warehouse_code)}</span>` : ''}
             <span class="badge role">${loc.materials_count} materials</span>
             <span class="badge ${loc.total_quantity > 0 ? 'active' : 'disabled'}">
               ${UI.fmtQty(loc.total_quantity)} total qty
             </span>
+            ${loc.registered === false ? '<span class="badge disabled">not in bin master</span>' : ''}
           </div>
           ${loc.materials.length ? `
             <div class="table-wrap"><table>
