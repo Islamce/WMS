@@ -55,6 +55,12 @@ app.use(helmet({
 // exceeds express.json()'s default 100 KB cap.
 app.use(express.json({ limit: '2mb' }));
 
+// Coarse global rate limit per client IP across the whole API surface
+// (complements the stricter per-email login limiter). Generous by default;
+// tune with API_RATE_LIMIT / API_RATE_WINDOW_MS, disable with API_RATE_LIMIT=0.
+const { apiRateLimit } = require('./middleware/apiRateLimit');
+app.use('/api', apiRateLimit);
+
 // Lightweight structured request logging for API calls (skip health + static).
 // Set LOG_REQUESTS=0 to silence. One line per request on response finish.
 if (process.env.LOG_REQUESTS !== '0') {

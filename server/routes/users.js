@@ -6,7 +6,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const db = require('../db/connection');
 const { authenticate, requirePermission } = require('../middleware/auth');
-const { isId, isNonEmptyString } = require('../utils/validate');
+const { isId, isNonEmptyString, validatePasswordPolicy } = require('../utils/validate');
 
 const router = express.Router();
 
@@ -85,9 +85,8 @@ router.patch('/:id/password', asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { new_password } = req.body || {};
   if (!isId(id)) return res.status(400).json({ error: 'Invalid user id.' });
-  if (!isNonEmptyString(new_password) || new_password.length < 8) {
-    return res.status(400).json({ error: 'New password must be at least 8 characters.' });
-  }
+  const pol = validatePasswordPolicy(new_password);
+  if (!pol.ok) return res.status(400).json({ error: pol.error });
   const hash = await bcrypt.hash(new_password, 10);
   const result = db.prepare(
     "UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?"

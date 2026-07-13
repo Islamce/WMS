@@ -10,6 +10,7 @@ const { authenticate, requirePermission } = require('./../middleware/auth');
 const { isId, isPositiveNumber, isNonEmptyString } = require('./../utils/validate');
 const audit = require('./../services/audit');
 const notify = require('./../services/notify');
+const approvalMatrix = require('./../services/approvalMatrix');
 const { setHeaderStatus, refreshRollups, getHeaderOr404 } = require('./../services/requests');
 const { HEADER_STATUS, LINE_STATUS } = require('./../workflow/states');
 
@@ -17,6 +18,11 @@ const router = express.Router();
 router.use(authenticate, requirePermission('approvals'));
 
 const APPROVABLE = [HEADER_STATUS.PENDING_MANAGER_APPROVAL, HEADER_STATUS.UNDER_REVIEW];
+
+/** GET /api/approvals/matrix — the value-based approval authority table. */
+router.get('/matrix', (req, res) => {
+  res.json({ thresholds: approvalMatrix.listThresholds() });
+});
 
 /** GET /api/approvals — manager inbox (pending requests). */
 router.get('/', (req, res) => {
@@ -172,7 +178,7 @@ router.post('/:id/decision', (req, res) => {
         set: { rejected_at: new Date().toISOString(), rejection_reason: reason, approval_comments: comments || null } });
     })();
     notify.send({ requestNumber: header.request_number, recipientUserId: header.requester_id,
-      notificationType: 'REQUEST_REJECTED', title: `Request ${header.request_number} rejected`, message: reason });
+      notificationType: 'REQUEST_REJECTED', title: `Request ${header.request_number} rejected`, message: reason, email: true });
     return res.json({ message: 'Request rejected.' });
   }
 
@@ -194,6 +200,17 @@ router.post('/:id/decision', (req, res) => {
       : new Set(lines.map((l) => l.id));
     if (decision === 'partial' && approvedSet.size === 0) {
       return res.status(400).json({ error: 'Select at least one line to partially approve.' });
+    }
+
+    // Approval matrix: a high-value request needs an approver holding the
+    // required authority. Admins are exempt.
+    const value = approvalMatrix.requestValue(header.id);
+    const requiredPerm = approvalMatrix.requiredPermissionFor(value);
+    if (requiredPerm && req.user.role !== 'admin' && !req.user.permissions.includes(requiredPerm)) {
+      return res.status(403).json({
+        error: `This request's value (${value.toFixed(2)}) requires the '${requiredPerm}' authority to approve.`,
+        required_permission: requiredPerm, request_value: value,
+      });
     }
 
     db.transaction(() => {
@@ -223,7 +240,7 @@ router.post('/:id/decision', (req, res) => {
     notify.send({ requestNumber: header.request_number, recipientUserId: header.requester_id,
       notificationType: 'REQUEST_APPROVED',
       title: `Request ${header.request_number} ${decision === 'partial' ? 'partially ' : ''}approved`,
-      message: comments || 'Your request was approved and moved to ERP processing.' });
+      message: comments || 'Your request was approved and moved to ERP processing.', email: true });
     notify.notifyPermission('erp_operator', { requestNumber: header.request_number,
       notificationType: 'ERP_QUEUE', title: `Request ${header.request_number} ready for ERP processing`,
       message: 'An approved request is waiting in the ERP Operator queue.' });

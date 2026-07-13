@@ -67,6 +67,17 @@ const manual = {
     log({ requestNumber, transactionType: 'GI_POSTING', payload, response, status: 'SUCCESS', user });
     return { ok: true, response };
   },
+
+  reverseGoodsIssue({ requestNumber, payload, originalGiDocument, reversalMovementType, user }) {
+    const response = {
+      reversalDocumentNumber: `REV-${originalGiDocument || requestNumber}`,
+      reversalMovementType: reversalMovementType || null,
+      postingDate: new Date().toISOString().slice(0, 10),
+      status: 'REVERSED',
+    };
+    log({ requestNumber, transactionType: 'GI_REVERSAL', payload, response, status: 'SUCCESS', user });
+    return { ok: true, response };
+  },
 };
 
 const connectors = { MANUAL: manual };

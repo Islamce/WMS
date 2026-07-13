@@ -63,6 +63,13 @@ run_suite import_test.py
 stop_server
 
 echo ""
+echo "=== Phase 3: P2/P3 enterprise suite (clean dataset) ==="
+fresh_db || exit 1
+start_server || exit 1
+run_suite p2_test.py
+stop_server
+
+echo ""
 if [ "$FAILED" -eq 0 ]; then
   echo "✅ ALL TEST SUITES PASSED"
 else

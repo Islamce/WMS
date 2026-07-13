@@ -27,6 +27,8 @@ Pages.requestDetail = {
             ? `<button class="btn sm" id="rd-submit">Submit</button>` : ''}
           ${!['Completed', 'Cancelled', 'GI Posted', 'Rejected'].includes(r.request_status)
             ? `<button class="btn danger sm" id="rd-cancel">Cancel</button>` : ''}
+          ${['Completed', 'Partially Completed', 'Closed with Shortage'].includes(r.request_status) && App.can('gi_posting')
+            ? `<button class="btn warn sm" id="rd-reverse">Reverse GI</button>` : ''}
         </div>
       </div>
 
@@ -111,6 +113,17 @@ Pages.requestDetail = {
         onSubmit: async (ov, close) => {
           try { await Api.post(`/api/requests/${id}/cancel`, { reason: ov.querySelector('#cx-reason').value });
             UI.toast('Request cancelled.'); close(); this.render(el, id); }
+          catch (err) { UI.toast(err.message, 'error'); }
+        } });
+    });
+    const reverseBtn = el.querySelector('#rd-reverse');
+    if (reverseBtn) reverseBtn.addEventListener('click', () => {
+      UI.modal({ title: 'Reverse Goods Issue', submitLabel: 'Reverse GI',
+        bodyHtml: '<p class="hint">This returns the issued stock to its batches and closes the request as Reversed.</p>'
+          + '<div class="form-group"><label>Reason</label><input type="text" id="rv-reason" /></div>',
+        onSubmit: async (ov, close) => {
+          try { await Api.post(`/api/gi/${id}/reverse`, { reason: ov.querySelector('#rv-reason').value });
+            UI.toast('Goods issue reversed.'); close(); this.render(el, id); }
           catch (err) { UI.toast(err.message, 'error'); }
         } });
     });

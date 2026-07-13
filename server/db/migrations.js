@@ -43,6 +43,11 @@ const MIGRATIONS = [
     description: 'Cross-process scheduler lease table for single-runner background sweeps.',
     up() { /* table created by the idempotent baseline in migrate2.js */ },
   },
+  {
+    id: '005_enterprise_completeness',
+    description: 'Approval matrix, request attachments, and cycle-count tables (P2/P3).',
+    up() { /* tables created by the idempotent baseline in migrate2.js */ },
+  },
 ];
 
 function ensureTable() {

@@ -23,5 +23,14 @@ jobs:
       - name: Syntax check
         run: find server public/js index.js -name '*.js' -print0 | xargs -0 -n1 node --check
 
+      - name: Lint (ESLint)
+        run: npm run lint
+
       - name: Run end-to-end test suites
         run: npm test
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Browser smoke test (Playwright)
+        run: npm run test:smoke

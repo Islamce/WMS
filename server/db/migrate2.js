@@ -394,6 +394,66 @@ CREATE TABLE IF NOT EXISTS erp_integration_log (
 );
 
 -- ---------------------------------------------------------------------------
+-- Approval matrix: value thresholds that require a higher approval authority.
+-- A request whose approved value reaches min_amount needs an approver holding
+-- required_permission (admins are always exempt). Rows are additive; the
+-- highest matching threshold wins.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS approval_thresholds (
+  id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+  label               TEXT NOT NULL,
+  min_amount          REAL NOT NULL DEFAULT 0,
+  currency            TEXT NOT NULL DEFAULT 'USD',
+  required_permission TEXT NOT NULL,   -- permission key the approver must hold
+  is_active           INTEGER NOT NULL DEFAULT 1,
+  created_at          TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- ---------------------------------------------------------------------------
+-- Request attachments (metadata; bytes live on disk under data/attachments).
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS request_attachments (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  request_id     INTEGER NOT NULL REFERENCES material_request_headers(id) ON DELETE CASCADE,
+  request_number TEXT NOT NULL,
+  file_name      TEXT NOT NULL,
+  content_type   TEXT,
+  byte_size      INTEGER NOT NULL DEFAULT 0,
+  storage_path   TEXT NOT NULL,
+  uploaded_by    INTEGER REFERENCES users(id),
+  uploaded_by_name TEXT,
+  created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- ---------------------------------------------------------------------------
+-- Cycle counts: physical count of a batch's on-hand vs system quantity, with a
+-- posted variance that adjusts batch remaining_quantity and the ledger.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS cycle_counts (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  count_number     TEXT NOT NULL UNIQUE,
+  batch_id         INTEGER NOT NULL REFERENCES batches(id),
+  material_id      INTEGER NOT NULL REFERENCES materials(id),
+  material_code    TEXT,
+  warehouse_code   TEXT,
+  bin_location     TEXT,
+  system_quantity  REAL NOT NULL DEFAULT 0,
+  counted_quantity REAL,
+  variance         REAL,
+  status           TEXT NOT NULL DEFAULT 'OPEN'
+                   CHECK (status IN ('OPEN','COUNTED','POSTED','CANCELLED')),
+  counted_by       INTEGER REFERENCES users(id),
+  counted_by_name  TEXT,
+  posted_by        INTEGER REFERENCES users(id),
+  reason           TEXT,
+  created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at       TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_cycle_counts_batch  ON cycle_counts(batch_id);
+CREATE INDEX IF NOT EXISTS idx_cycle_counts_status ON cycle_counts(status);
+CREATE INDEX IF NOT EXISTS idx_attach_request      ON request_attachments(request_id);
+
+-- ---------------------------------------------------------------------------
 -- Scheduler lock. A single-row-per-job table used to make the background
 -- sweeps (reminders, reservation timeout) safe to run when more than one
 -- process is live (PM2 cluster, rolling deploy). A tick only fires if the

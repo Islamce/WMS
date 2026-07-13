@@ -5,7 +5,7 @@ const db = require('../db/connection');
 const config = require('../config');
 const { authenticate, getUserPermissions } = require('../middleware/auth');
 const { loginRateLimit, recordLoginFailure, clearLoginFailures } = require('../middleware/rateLimit');
-const { isNonEmptyString, isEmail } = require('../utils/validate');
+const { isNonEmptyString, isEmail, validatePasswordPolicy } = require('../utils/validate');
 
 const router = express.Router();
 
@@ -29,9 +29,8 @@ router.post('/signup', asyncHandler(async (req, res) => {
 
   if (!isNonEmptyString(name)) return res.status(400).json({ error: 'Name is required.' });
   if (!isEmail(email)) return res.status(400).json({ error: 'A valid email is required.' });
-  if (!isNonEmptyString(password) || password.length < 8) {
-    return res.status(400).json({ error: 'Password must be at least 8 characters.' });
-  }
+  const pol = validatePasswordPolicy(password);
+  if (!pol.ok) return res.status(400).json({ error: pol.error });
 
   const exists = db.prepare('SELECT id FROM users WHERE email = ?').get(email.trim());
   if (exists) return res.status(409).json({ error: 'An account with this email already exists.' });
@@ -112,9 +111,8 @@ router.patch('/password', authenticate, asyncHandler(async (req, res) => {
   if (!isNonEmptyString(current_password) || !isNonEmptyString(new_password)) {
     return res.status(400).json({ error: 'Current and new passwords are required.' });
   }
-  if (new_password.length < 8) {
-    return res.status(400).json({ error: 'New password must be at least 8 characters.' });
-  }
+  const pol = validatePasswordPolicy(new_password);
+  if (!pol.ok) return res.status(400).json({ error: pol.error });
   const row = db.prepare('SELECT password_hash FROM users WHERE id = ?').get(req.user.id);
   if (!row || !(await bcrypt.compare(current_password, row.password_hash))) {
     return res.status(400).json({ error: 'Current password is incorrect.' });
