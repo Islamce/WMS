@@ -4,6 +4,7 @@ import '../core/api_client.dart';
 import '../core/format.dart';
 import '../main.dart';
 import '../widgets/common.dart';
+import '../widgets/material_search.dart';
 
 class _Line {
   _Line(this.materialId, this.label, this.qty, this.available);
@@ -49,10 +50,7 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
       List<Map<String, dynamic>>.from((_meta?[key] ?? []).map((e) => Map<String, dynamic>.from(e)));
 
   Future<void> _addLine() async {
-    final picked = await showSearch<Map<String, dynamic>?>(
-      context: context,
-      delegate: _MaterialSearchDelegate(SessionScope.of(context)),
-    );
+    final picked = await pickMaterial(context, SessionScope.of(context));
     if (picked == null) return;
     final qty = await _askQuantity(picked);
     if (qty == null) return;
@@ -245,63 +243,6 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
             ),
           ),
       ],
-    );
-  }
-}
-
-/// Material search with live results from /api/materials/search.
-class _MaterialSearchDelegate extends SearchDelegate<Map<String, dynamic>?> {
-  _MaterialSearchDelegate(this.session);
-  final dynamic session;
-
-  @override
-  String get searchFieldLabel => 'Search material code or name';
-
-  @override
-  List<Widget> buildActions(BuildContext context) =>
-      [IconButton(icon: const Icon(Icons.clear), onPressed: () => query = '')];
-
-  @override
-  Widget buildLeading(BuildContext context) =>
-      IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => close(context, null));
-
-  @override
-  Widget buildResults(BuildContext context) => _results();
-
-  @override
-  Widget buildSuggestions(BuildContext context) => _results();
-
-  Widget _results() {
-    return FutureBuilder<List<Map<String, dynamic>>>(
-      future: () async {
-        final res = await session.api.get('/api/materials/search?q=${Uri.encodeQueryComponent(query)}');
-        return List<Map<String, dynamic>>.from(
-            (res['materials'] ?? []).map((e) => Map<String, dynamic>.from(e)));
-      }(),
-      builder: (context, snap) {
-        if (snap.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snap.hasError) {
-          return Center(child: Text('${snap.error}', style: const TextStyle(color: Colors.grey)));
-        }
-        final items = snap.data ?? [];
-        if (items.isEmpty) {
-          return const Center(child: Text('No materials found.', style: TextStyle(color: Colors.grey)));
-        }
-        return ListView.separated(
-          itemCount: items.length,
-          separatorBuilder: (_, __) => const Divider(height: 1),
-          itemBuilder: (context, i) {
-            final m = items[i];
-            return ListTile(
-              title: Text('${m['item_code']} · ${m['description'] ?? ''}'),
-              subtitle: Text('Available: ${fmtQty(m['total_available'])} ${m['unit'] ?? ''}'),
-              onTap: () => close(context, m),
-            );
-          },
-        );
-      },
     );
   }
 }

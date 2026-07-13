@@ -17,8 +17,18 @@ permissions decide which menu items appear):
 | Requests | Create Request (material search, dropdowns, stock note) | `create_request` |
 | Requests | Requests list + detail (submit / cancel) | `material_requests` |
 | Requests | Approvals (approve / reject / return) | `approvals` |
+| Requests | ERP Operator (reservation, movement type, plant, storage loc, warehouse → send) | `erp_operator` |
+| Warehouse | Bin & Batch Assignment (run FIFO/FEFO allocation) | `bin_batch_assignment` |
+| Warehouse | Picker Assignment (assign an active picker) | `picker_assignment` |
 | Warehouse | My Picking Tasks (accept → start → QR scan → confirm → complete) | `picking` |
 | Warehouse | Goods Issue Posting (post GI / return to picker) | `gi_posting` |
+| Receiving | Goods Receipt (receive into warehouse; PO + auto batch + quality hold) | `goods_receipt` |
+| Receiving | Quality Inspection (release / block / reject held batches) | `quality` |
+| Receiving | Batch Tracking (searchable batch list with quality + expiry) | `batch_tracking` |
+| Receiving | Expiry Alerts (batches near / past expiry, by severity) | `expiry_alerts` |
+| Admin | Materials (searchable read-only master data) | `materials` |
+| Admin | Users (approve / reject / enable / disable) | `users_management` |
+| Admin | Audit Trail (append-only change log) | `audit_trail` |
 
 Segregation of duties, shortage-reason prompts, FIFO/FEFO allocations and every
 workflow guard are enforced by the shared backend, so the mobile app inherits
