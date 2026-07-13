@@ -67,6 +67,7 @@ echo "=== Phase 3: P2/P3 enterprise suite (clean dataset) ==="
 fresh_db || exit 1
 start_server || exit 1
 run_suite p2_test.py
+run_suite p3_test.py
 stop_server
 
 echo ""

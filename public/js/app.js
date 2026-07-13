@@ -82,6 +82,7 @@ const MODULES = [
     { route: 'qr-printing', label: 'QR Label Printing', icon: 'printer', permission: 'qr_printing' },
     { route: 'batches', label: 'Batch Tracking', icon: 'layers', permission: 'batch_tracking' },
     { route: 'expiry', label: 'Expiry Alerts', icon: 'clock', permission: 'expiry_alerts' },
+    { route: 'cycle-count', label: 'Cycle Counting', icon: 'clipboard', permission: 'cycle_count' },
     { route: 'quality', label: 'Quality', icon: 'shield', permission: 'quality' },
   ] },
   { key: 'inventory', label: 'Inventory', icon: 'map', items: [
@@ -129,6 +130,7 @@ const ROUTE_PAGES = {
   'qr-printing': { title: 'QR Label Printing', page: 'qrPrinting', permission: 'qr_printing' },
   'batches': { title: 'Batch Tracking', page: 'batches', permission: 'batch_tracking' },
   'expiry': { title: 'Expiry Alerts', page: 'expiry', permission: 'expiry_alerts' },
+  'cycle-count': { title: 'Cycle Counting', page: 'cycleCount', permission: 'cycle_count' },
   'quality': { title: 'Quality Management', page: 'quality', permission: 'quality' },
   'stock-in': { title: 'Stock In', page: 'stockin', permission: 'stock_in' },
   'stock-out': { title: 'Stock Out', page: 'stockout', permission: 'stock_out' },
@@ -313,14 +315,15 @@ const App = {
     const initials = (this.user.name || '?').split(/\s+/).map((s) => s[0]).slice(0, 2).join('').toUpperCase();
 
     document.getElementById('app').innerHTML = `
+      <a href="#page-content" class="skip-link">${t('Skip to content')}</a>
       <div class="layout" id="layout">
-        <aside class="sidebar" id="sidebar">
+        <aside class="sidebar" id="sidebar" aria-label="${t('Main navigation')}">
           <div class="brand">
-            <span class="brand-mark">▦</span><span class="brand-name">WMS</span>
+            <span class="brand-mark" aria-hidden="true">▦</span><span class="brand-name">WMS</span>
             <button class="rail-toggle" id="sidebar-close" title="${t('Close')}" aria-label="${t('Close')}">${svg('x')}</button>
           </div>
           <button class="nav-search" id="nav-search">${svg('search')}<span class="lbl">${t('Search')}…</span><kbd>/</kbd></button>
-          <nav class="nav-tree"><div class="nav-top">${homeLink}</div>${groups}</nav>
+          <nav class="nav-tree" aria-label="${t('Modules')}"><div class="nav-top">${homeLink}</div>${groups}</nav>
         </aside>
         <div class="main">
           <header class="topbar">
@@ -350,7 +353,7 @@ const App = {
               </div>
             </div>
           </header>
-          <main class="content"><div id="page-content"><div class="loading">Loading…</div></div></main>
+          <main class="content" id="main-content" role="main"><div id="page-content" tabindex="-1"><div class="loading">${t('Loading…')}</div></div></main>
         </div>
       </div>`;
 

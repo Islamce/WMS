@@ -40,10 +40,14 @@ const UI = {
     if (!zone) {
       zone = document.createElement('div');
       zone.id = 'toast-zone';
+      // Announce toasts to assistive tech; errors are assertive, others polite.
+      zone.setAttribute('role', 'status');
+      zone.setAttribute('aria-live', 'polite');
       document.body.appendChild(zone);
     }
     const el = document.createElement('div');
     el.className = `toast ${type}`;
+    el.setAttribute('role', type === 'error' ? 'alert' : 'status');
     el.textContent = message;
     zone.appendChild(el);
     setTimeout(() => el.remove(), 4000);
@@ -56,20 +60,32 @@ const UI = {
   modal({ title, bodyHtml, wide = false, onSubmit, submitLabel = 'Save' }) {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
+    const titleId = `modal-title-${Date.now()}`;
     overlay.innerHTML = `
-      <div class="modal ${wide ? 'wide' : ''}">
-        <h3>${UI.esc(title)}</h3>
+      <div class="modal ${wide ? 'wide' : ''}" role="dialog" aria-modal="true" aria-labelledby="${titleId}">
+        <h3 id="${titleId}">${UI.esc(title)}</h3>
         <form id="modal-form" novalidate>
           <div class="modal-body">${bodyHtml}</div>
           <div class="actions">
-            <button type="button" class="btn secondary" data-close>Cancel</button>
+            <button type="button" class="btn secondary" data-close>${UI.esc(t('Cancel'))}</button>
             <button type="submit" class="btn">${UI.esc(submitLabel)}</button>
           </div>
         </form>
       </div>`;
-    const close = () => overlay.remove();
+    const prevFocus = document.activeElement;
+    const close = () => { overlay.remove(); if (prevFocus && prevFocus.focus) prevFocus.focus(); };
     overlay.addEventListener('click', (e) => {
       if (e.target === overlay || e.target.hasAttribute('data-close')) close();
+    });
+    // Esc closes; Tab is trapped within the dialog for keyboard users.
+    overlay.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); return close(); }
+      if (e.key !== 'Tab') return;
+      const f = overlay.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])');
+      if (!f.length) return;
+      const first = f[0], last = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
     });
     overlay.querySelector('#modal-form').addEventListener('submit', async (e) => {
       e.preventDefault();

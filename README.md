@@ -146,7 +146,9 @@ DB_PATH=./data/wms.db
 ### Testing & CI
 
 ```bash
-npm test        # full end-to-end suite (174 checks) — needs Node 18+ and python3
+npm test        # full end-to-end suite (205 checks) — needs Node 18+ and python3
+npm run lint    # ESLint (0 errors)
+npm run test:smoke  # Playwright browser smoke (login + shell, no console errors)
 ```
 
 The runner (`tests/run.sh`) rebuilds a fresh database, boots the server, and
@@ -178,8 +180,17 @@ correctly behind Hostinger's reverse proxy.
 - Security headers are set by `helmet` (CSP, `X-Content-Type-Options`, etc.);
   the CSP allows only same-origin scripts (no inline handlers).
 - Segregation of duties: a user can never approve or modify their own material
-  request, even if they hold the `approvals` permission (admin is exempt so it
-  can drive tests).
+  request; and the three control points (approve → create ERP reservation →
+  post goods issue) must be performed by three different people (admin exempt).
+- Goods Issue reversal returns issued stock to its batches and closes the
+  request as Reversed (movement-type reversal, reason mandatory).
+- Approval matrix: high-value requests (see `approval_thresholds`) require an
+  approver holding `approvals_high_value`.
+- Optional email notifications (SMTP via `nodemailer`, logged fallback),
+  request attachments, cycle counting, and configurable data retention for
+  operational logs (`RETENTION_DAYS`; the audit trail is never pruned).
+- Passwords must be ≥8 chars with a letter and a digit; a coarse global API
+  rate limit (`API_RATE_LIMIT`) complements the per-email login limiter.
 - Change the default admin password before going live.
 - The seeded admin must change its password on first login (forced).
 - Passwords are hashed asynchronously on the request path (login, signup,

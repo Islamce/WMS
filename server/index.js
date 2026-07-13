@@ -110,6 +110,9 @@ app.use('/api/receiving', require('./routes/receiving'));
 app.use('/api/master', require('./routes/masterdata'));
 app.use('/api/import', require('./routes/import'));
 app.use('/api/export', require('./routes/export'));
+app.use('/api/cycle-count', require('./routes/cycleCount'));
+// Attachment routes live under /api (paths: /requests/:id/attachments, /attachments/:aid/...).
+app.use('/api', require('./routes/attachments'));
 app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/kpi', require('./routes/kpi'));
 app.use('/api/analytics', require('./routes/analytics'));
@@ -146,6 +149,7 @@ app.use((err, req, res, next) => {
 if (process.env.SCHEDULER_ENABLED !== '0') {
   const { sweepReminders } = require('./routes/picking');
   const { sweepReservations } = require('./services/requests');
+  const { pruneRetention } = require('./services/retention');
   const { acquireTick } = require('./services/scheduler');
   setInterval(() => {
     try {
@@ -155,6 +159,22 @@ if (process.env.SCHEDULER_ENABLED !== '0') {
       if (acquireTick('reservations')) sweepReservations();
     } catch (err) { console.error('Reservation sweep error:', err); }
   }, 60 * 1000).unref();
+
+  // Daily data-retention sweep (O-3): prune aged operational logs when
+  // RETENTION_DAYS is set. The audit trail is never touched. A one-hour lease
+  // keeps it single-runner across instances.
+  if (Number(process.env.RETENTION_DAYS) > 0) {
+    const runPrune = () => {
+      try {
+        if (acquireTick('retention', 3600000)) {
+          const r = pruneRetention();
+          if (r.total) console.log(`Retention: pruned ${r.total} aged log row(s).`);
+        }
+      } catch (err) { console.error('Retention sweep error:', err); }
+    };
+    runPrune();
+    setInterval(runPrune, 24 * 60 * 60 * 1000).unref();
+  }
 }
 
 // Optional automated daily database backup (enable by setting BACKUP_DIR).

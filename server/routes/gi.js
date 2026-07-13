@@ -11,6 +11,7 @@ const { isNonEmptyString } = require('./../utils/validate');
 const audit = require('./../services/audit');
 const notify = require('./../services/notify');
 const erp = require('./../services/erp');
+const sod = require('./../services/sod');
 const { recordMovement } = require('./../services/ledger');
 const { setHeaderStatus, refreshRollups, getHeaderOr404 } = require('./../services/requests');
 const { HEADER_STATUS, LINE_STATUS } = require('./../workflow/states');
@@ -58,6 +59,13 @@ router.post('/:id/post', (req, res) => {
   if (picked.length === 0) {
     return res.status(400).json({ error: 'Cannot post GI: no picked quantities. Return to picker.' });
   }
+
+  // SoD: the GI poster must differ from both the approver and the ERP operator.
+  const sodErr = sod.conflict(req.user, [
+    { id: sod.approverId(header.request_number), label: 'approval' },
+    { id: header.erp_created_by, label: 'ERP reservation' },
+  ]);
+  if (sodErr) return res.status(403).json({ error: sodErr });
 
   const b = req.body || {};
   const payload = {
