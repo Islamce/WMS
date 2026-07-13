@@ -48,6 +48,7 @@ run_suite workflow_test.py
 run_suite refinements_test.py
 run_suite p0_regression_test.py
 run_suite p1_regression_test.py
+run_suite password_test.py
 stop_server
 
 echo ""

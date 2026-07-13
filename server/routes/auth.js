@@ -88,4 +88,26 @@ router.get('/me', authenticate, (req, res) => {
   res.json({ user: req.user });
 });
 
+/**
+ * PATCH /api/auth/password
+ * Change the signed-in user's own password (current password required).
+ */
+router.patch('/password', authenticate, (req, res) => {
+  const { current_password, new_password } = req.body || {};
+  if (!isNonEmptyString(current_password) || !isNonEmptyString(new_password)) {
+    return res.status(400).json({ error: 'Current and new passwords are required.' });
+  }
+  if (new_password.length < 8) {
+    return res.status(400).json({ error: 'New password must be at least 8 characters.' });
+  }
+  const row = db.prepare('SELECT password_hash FROM users WHERE id = ?').get(req.user.id);
+  if (!row || !bcrypt.compareSync(current_password, row.password_hash)) {
+    return res.status(400).json({ error: 'Current password is incorrect.' });
+  }
+  const hash = bcrypt.hashSync(new_password, 10);
+  db.prepare("UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?")
+    .run(hash, req.user.id);
+  res.json({ message: 'Password changed.' });
+});
+
 module.exports = router;

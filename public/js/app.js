@@ -1,52 +1,112 @@
 /**
- * App shell: session handling, hash router, sidebar/topbar layout,
- * permission-based menu visibility.
+ * App shell: session, hash router, and an enterprise-style layout —
+ * collapsible hierarchical sidebar, breadcrumbs, global command-palette search
+ * and a user menu. Screens are permission-gated; each page module renders into
+ * #page-content, so page logic is untouched by this shell.
  *
- * To add a new screen: create public/js/pages/<name>.js registering
- * Pages.<name>, add a MENU entry with its permission key, seed the
- * permission key in server/db/seed.js and protect its API routes.
+ * To add a screen: create public/js/pages/<name>.js registering Pages.<name>,
+ * add it to MODULES + ROUTE_PAGES with its permission key, seed the key in
+ * server/db/seed.js and protect its API routes.
  */
 window.Pages = window.Pages || {};
 
-const MENU = [
-  { section: 'General' },
-  { route: 'dashboard', label: 'Dashboard', icon: '📊', permission: 'dashboard' },
-  { route: 'kpi', label: 'KPI Dashboard', icon: '📈', permission: 'kpi_dashboard' },
-  { route: 'ai', label: 'AI Stock Analytics', icon: '🤖', permission: 'ai_analytics' },
-  { route: 'notifications', label: 'Notifications', icon: '🔔', permission: 'notifications' },
-  { section: 'Material Requests' },
-  { route: 'create-request', label: 'Create Request', icon: '📝', permission: 'create_request' },
-  { route: 'requests', label: 'Requests', icon: '📋', permission: 'material_requests' },
-  { route: 'approvals', label: 'Approvals', icon: '✅', permission: 'approvals' },
-  { route: 'erp-operator', label: 'ERP Operator', icon: '🔗', permission: 'erp_operator' },
-  { section: 'Warehouse Execution' },
-  { route: 'warehouse', label: 'Warehouse Dashboard', icon: '🏭', permission: 'warehouse_dashboard' },
-  { route: 'allocation', label: 'Bin & Batch Assign', icon: '🧭', permission: 'bin_batch_assignment' },
-  { route: 'picker-assign', label: 'Picker Assignment', icon: '🧑‍🏭', permission: 'picker_assignment' },
-  { route: 'picking', label: 'My Picking Tasks', icon: '📲', permission: 'picking' },
-  { route: 'gi-posting', label: 'Goods Issue Posting', icon: '📦', permission: 'gi_posting' },
-  { section: 'Receiving & Quality' },
-  { route: 'receiving', label: 'Goods Receipt & QR', icon: '📥', permission: ['goods_receipt', 'erp_operator', 'picking'] },
-  { route: 'qr-printing', label: 'QR Label Printing', icon: '🏷️', permission: 'qr_printing' },
-  { route: 'batches', label: 'Batch Tracking', icon: '🧫', permission: 'batch_tracking' },
-  { route: 'expiry', label: 'Expiry Alerts', icon: '⏰', permission: 'expiry_alerts' },
-  { route: 'quality', label: 'Quality', icon: '🔬', permission: 'quality' },
-  { section: 'Inventory' },
-  // Stock In = Goods Receipt, Stock Out = Goods Issuance (handled by the
-  // warehouse workflow above), so the basic stock screens are retired.
-  { route: 'all-locations', label: 'All Locations', icon: '🗺️', permission: 'all_locations' },
-  { route: 'empty-locations', label: 'Empty Locations', icon: '🕳️', permission: 'empty_locations' },
-  { section: 'Master Data' },
-  { route: 'materials', label: 'Materials', icon: '📦', permission: 'materials' },
-  { route: 'locations', label: 'Locations', icon: '📍', permission: 'locations' },
-  { route: 'warehouses-master', label: 'Warehouses', icon: '🏬', permission: 'warehouses_master' },
-  { route: 'bins-master', label: 'Bin Locations', icon: '🗄️', permission: 'bins_master' },
-  { route: 'movement-types', label: 'Movement Types', icon: '↔️', permission: 'movement_types_master' },
-  { section: 'Administration' },
-  { route: 'audit', label: 'Audit Trail', icon: '📜', permission: 'audit_trail' },
-  { route: 'users', label: 'Users Management', icon: '👥', permission: 'users_management' },
-  { route: 'permissions', label: 'Permissions', icon: '🔐', permission: 'permissions_management' },
+// --- Inline icon set (feather-style, stroke = currentColor) ----------------
+const ICONS = {
+  grid: '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>',
+  'bar-chart': '<line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/>',
+  cpu: '<rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><line x1="9" y1="1" x2="9" y2="4"/><line x1="15" y1="1" x2="15" y2="4"/><line x1="9" y1="20" x2="9" y2="23"/><line x1="15" y1="20" x2="15" y2="23"/><line x1="20" y1="9" x2="23" y2="9"/><line x1="20" y1="14" x2="23" y2="14"/><line x1="1" y1="9" x2="4" y2="9"/><line x1="1" y1="14" x2="4" y2="14"/>',
+  bell: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
+  'file-text': '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>',
+  'file-plus': '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/>',
+  list: '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>',
+  'check-circle': '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',
+  link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+  truck: '<rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>',
+  home: '<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
+  compass: '<circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/>',
+  'user-plus': '<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/>',
+  smartphone: '<rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>',
+  send: '<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>',
+  download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
+  printer: '<polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/>',
+  layers: '<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>',
+  clock: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+  shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>',
+  map: '<polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/>',
+  square: '<rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>',
+  database: '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>',
+  box: '<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/>',
+  pin: '<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>',
+  archive: '<polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/>',
+  shuffle: '<polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/>',
+  users: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  lock: '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  search: '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
+  'chevron-right': '<polyline points="9 18 15 12 9 6"/>',
+  menu: '<line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>',
+  sun: '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>',
+  moon: '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>',
+  x: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
+  'log-out': '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>',
+  key: '<path d="M21 2l-2 2"/><path d="M14.5 6.5l3 3"/><path d="M13.4 7.6a5.5 5.5 0 1 0-7.8 7.8 5.5 5.5 0 0 0 7.8-7.8zm0 0L19 2l3 3-3.5 3.5"/>',
+  'panel-left': '<rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/>',
+  dot: '<circle cx="12" cy="12" r="2.5"/>',
+};
+function svg(name, extra) {
+  return `<svg class="ico${extra ? ' ' + extra : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ICONS.dot}</svg>`;
+}
+
+// --- Navigation model: modules → items (hierarchical) ----------------------
+const MODULES = [
+  { key: 'overview', label: 'Overview', icon: 'grid', items: [
+    { route: 'dashboard', label: 'Dashboard', icon: 'grid', permission: 'dashboard' },
+    { route: 'kpi', label: 'KPI Dashboard', icon: 'bar-chart', permission: 'kpi_dashboard' },
+    { route: 'ai', label: 'AI Stock Analytics', icon: 'cpu', permission: 'ai_analytics' },
+    { route: 'notifications', label: 'Notifications', icon: 'bell', permission: 'notifications' },
+  ] },
+  { key: 'requests', label: 'Material Requests', icon: 'file-text', items: [
+    { route: 'create-request', label: 'Create Request', icon: 'file-plus', permission: 'create_request' },
+    { route: 'requests', label: 'Requests', icon: 'list', permission: 'material_requests' },
+    { route: 'approvals', label: 'Approvals', icon: 'check-circle', permission: 'approvals' },
+    { route: 'erp-operator', label: 'ERP Operator', icon: 'link', permission: 'erp_operator' },
+  ] },
+  { key: 'warehouse', label: 'Warehouse Execution', icon: 'truck', items: [
+    { route: 'warehouse', label: 'Warehouse Dashboard', icon: 'home', permission: 'warehouse_dashboard' },
+    { route: 'allocation', label: 'Bin & Batch Assign', icon: 'compass', permission: 'bin_batch_assignment' },
+    { route: 'picker-assign', label: 'Picker Assignment', icon: 'user-plus', permission: 'picker_assignment' },
+    { route: 'picking', label: 'My Picking Tasks', icon: 'smartphone', permission: 'picking' },
+    { route: 'gi-posting', label: 'Goods Issue Posting', icon: 'send', permission: 'gi_posting' },
+  ] },
+  { key: 'receiving', label: 'Receiving & Quality', icon: 'download', items: [
+    { route: 'receiving', label: 'Goods Receipt & QR', icon: 'download', permission: ['goods_receipt', 'erp_operator', 'picking'] },
+    { route: 'qr-printing', label: 'QR Label Printing', icon: 'printer', permission: 'qr_printing' },
+    { route: 'batches', label: 'Batch Tracking', icon: 'layers', permission: 'batch_tracking' },
+    { route: 'expiry', label: 'Expiry Alerts', icon: 'clock', permission: 'expiry_alerts' },
+    { route: 'quality', label: 'Quality', icon: 'shield', permission: 'quality' },
+  ] },
+  { key: 'inventory', label: 'Inventory', icon: 'map', items: [
+    { route: 'all-locations', label: 'All Locations', icon: 'map', permission: 'all_locations' },
+    { route: 'empty-locations', label: 'Empty Locations', icon: 'square', permission: 'empty_locations' },
+  ] },
+  { key: 'master', label: 'Master Data', icon: 'database', items: [
+    { route: 'materials', label: 'Materials', icon: 'box', permission: 'materials' },
+    { route: 'locations', label: 'Locations', icon: 'pin', permission: 'locations' },
+    { route: 'warehouses-master', label: 'Warehouses', icon: 'home', permission: 'warehouses_master' },
+    { route: 'bins-master', label: 'Bin Locations', icon: 'archive', permission: 'bins_master' },
+    { route: 'movement-types', label: 'Movement Types', icon: 'shuffle', permission: 'movement_types_master' },
+  ] },
+  { key: 'admin', label: 'Administration', icon: 'shield', items: [
+    { route: 'audit', label: 'Audit Trail', icon: 'file-text', permission: 'audit_trail' },
+    { route: 'users', label: 'Users', icon: 'users', permission: 'users_management' },
+    { route: 'permissions', label: 'Permissions', icon: 'lock', permission: 'permissions_management' },
+  ] },
 ];
+
+// Flattened lookups (route → item, route → module).
+const NAV_ITEMS = [];
+const ROUTE_MODULE = {};
+MODULES.forEach((m) => m.items.forEach((it) => { NAV_ITEMS.push(Object.assign({ module: m }, it)); ROUTE_MODULE[it.route] = m; }));
+ROUTE_MODULE['request-detail'] = ROUTE_MODULE['requests'];
 
 const ROUTE_PAGES = {
   'dashboard': { title: 'Dashboard', page: 'dashboard', permission: 'dashboard' },
@@ -63,8 +123,6 @@ const ROUTE_PAGES = {
   'picker-assign': { title: 'Picker Assignment', page: 'pickerAssign', permission: 'picker_assignment' },
   'picking': { title: 'My Picking Tasks', page: 'picking', permission: 'picking' },
   'gi-posting': { title: 'Goods Issue Posting', page: 'giPosting', permission: 'gi_posting' },
-  // Receiving hosts three steps: receive (goods_receipt), GR number
-  // (erp_operator), and bin assignment (picking) — any of them may open it.
   'receiving': { title: 'Goods Receipt & QR', page: 'receiving', permission: ['goods_receipt', 'erp_operator', 'picking'] },
   'qr-printing': { title: 'QR Label Printing', page: 'qrPrinting', permission: 'qr_printing' },
   'batches': { title: 'Batch Tracking', page: 'batches', permission: 'batch_tracking' },
@@ -83,6 +141,8 @@ const ROUTE_PAGES = {
   'users': { title: 'Users Management', page: 'users', permission: 'users_management' },
   'permissions': { title: 'Permissions Management', page: 'permissions', permission: 'permissions_management' },
 };
+
+const LS = { collapsed: 'wms_nav_collapsed', groups: 'wms_nav_groups' };
 
 const App = {
   user: null,
@@ -105,10 +165,7 @@ const App = {
     this.route();
   },
 
-  onSessionExpired() {
-    this.user = null;
-    this.route();
-  },
+  onSessionExpired() { this.user = null; this.route(); },
 
   logout() {
     Api.setToken(null);
@@ -116,15 +173,15 @@ const App = {
     location.hash = '#/login';
   },
 
-  /** First allowed route for this user (used after login / bad routes). */
+  /** Dashboard is the landing page; otherwise the first permitted route. */
   defaultRoute() {
+    if (this.can('dashboard')) return 'dashboard';
     const entry = Object.entries(ROUTE_PAGES).find(([, def]) => this.can(def.permission));
     return entry ? entry[0] : null;
   },
 
   route() {
     const raw = location.hash.replace(/^#\//, '') || '';
-    // Support "route/param" (e.g. request-detail/5).
     const [hash, param] = raw.split('/');
 
     if (!this.user) {
@@ -142,109 +199,254 @@ const App = {
       def = ROUTE_PAGES[fallback];
     }
 
-    // Highlight the base menu entry even for detail sub-routes.
     const activeMenu = routeKey === 'request-detail' ? 'requests' : routeKey;
     this.renderLayout(activeMenu, def.title);
     Pages[def.page].render(document.getElementById('page-content'), param);
     this.refreshNotificationBadge();
   },
 
-  /** Poll unread notification count and reflect it in the sidebar. */
   async refreshNotificationBadge() {
     if (!this.can('notifications')) return;
     try {
       const { unread } = await Api.get('/api/notifications/unread-count');
-      const link = document.querySelector('.sidebar nav a[href="#/notifications"]');
-      if (link) {
-        let badge = link.querySelector('.notif-badge');
+      const targets = [
+        document.querySelector('.nav-item[href="#/notifications"]'),
+        document.getElementById('topbar-bell'),
+      ];
+      targets.forEach((el) => {
+        if (!el) return;
+        let badge = el.querySelector('.notif-badge');
         if (unread > 0) {
-          if (!badge) { badge = document.createElement('span'); badge.className = 'notif-badge'; link.appendChild(badge); }
-          badge.textContent = unread;
+          if (!badge) { badge = document.createElement('span'); badge.className = 'notif-badge'; el.appendChild(badge); }
+          badge.textContent = unread > 99 ? '99+' : unread;
         } else if (badge) { badge.remove(); }
-      }
+      });
     } catch { /* ignore */ }
   },
 
   renderNoAccess() {
     document.getElementById('app').innerHTML = `
       <div class="auth-wrap"><div class="auth-card">
-        <div class="logo">📦 WMS</div>
+        <div class="logo">▦ WMS</div>
         <p class="subtitle">Your account has no screen permissions yet.<br>Ask an administrator to grant you access.</p>
         <button class="btn block" id="no-access-logout">Back to login</button>
       </div></div>`;
     document.getElementById('no-access-logout').addEventListener('click', () => App.logout());
   },
 
+  // --- Sidebar preferences (persisted) -------------------------------------
+  isCollapsed() { return localStorage.getItem(LS.collapsed) === '1'; },
+  openGroups() {
+    try { const v = JSON.parse(localStorage.getItem(LS.groups)); if (Array.isArray(v)) return new Set(v); } catch { /* default */ }
+    return new Set(MODULES.map((m) => m.key)); // all open by default
+  },
+  saveOpenGroups(set) { localStorage.setItem(LS.groups, JSON.stringify([...set])); },
+
   renderLayout(activeRoute, title) {
-    // Menu items are filtered by permission; sections with no visible
-    // items are dropped.
-    const items = [];
-    let pendingSection = null;
-    MENU.forEach((entry) => {
-      if (entry.section) { pendingSection = entry.section; return; }
-      if (!this.can(entry.permission)) return;
-      if (pendingSection) { items.push(`<div class="section">${UI.esc(t(pendingSection))}</div>`); pendingSection = null; }
-      items.push(`
-        <a href="#/${entry.route}" class="${entry.route === activeRoute ? 'active' : ''}">
-          <span>${entry.icon}</span> ${UI.esc(t(entry.label))}
-        </a>`);
-    });
+    const open = this.openGroups();
+    open.add(ROUTE_MODULE[activeRoute]?.key); // keep the active module open
+
+    // Build hierarchical nav for permitted modules/items.
+    const groups = MODULES.map((m) => {
+      const items = m.items.filter((it) => this.can(it.permission));
+      if (!items.length) return '';
+      const isOpen = open.has(m.key);
+      const links = items.map((it) => `
+        <a href="#/${it.route}" class="nav-item ${it.route === activeRoute ? 'active' : ''}" title="${UI.esc(t(it.label))}">
+          ${svg(it.icon)}<span class="lbl">${UI.esc(t(it.label))}</span>
+        </a>`).join('');
+      return `
+        <div class="nav-group ${isOpen ? 'open' : ''}" data-key="${m.key}">
+          <button class="nav-group-head" title="${UI.esc(t(m.label))}">
+            ${svg(m.icon)}<span class="lbl">${UI.esc(t(m.label))}</span>${svg('chevron-right', 'chev')}
+          </button>
+          <div class="nav-group-body">${links}</div>
+        </div>`;
+    }).join('');
+
+    // Breadcrumbs: Home / Module / Page.
+    const mod = ROUTE_MODULE[activeRoute];
+    const crumbs = [`<a href="#/${this.can('dashboard') ? 'dashboard' : (this.defaultRoute() || '')}" class="crumb">${t('Home')}</a>`];
+    if (mod) crumbs.push(`<span class="crumb muted">${UI.esc(t(mod.label))}</span>`);
+    crumbs.push(`<span class="crumb current">${UI.esc(t(title))}</span>`);
+
+    const initials = (this.user.name || '?').split(/\s+/).map((s) => s[0]).slice(0, 2).join('').toUpperCase();
 
     document.getElementById('app').innerHTML = `
-      <div class="layout">
+      <div class="layout ${this.isCollapsed() ? 'nav-collapsed' : ''}" id="layout">
         <aside class="sidebar" id="sidebar">
-          <div class="brand">📦 WMS</div>
-          <nav>${items.join('')}</nav>
+          <div class="brand">
+            <span class="brand-mark">▦</span><span class="brand-name">WMS</span>
+            <button class="rail-toggle" id="rail-toggle" title="${t('Collapse')}">${svg('panel-left')}</button>
+          </div>
+          <button class="nav-search" id="nav-search">${svg('search')}<span class="lbl">${t('Search')}…</span><kbd>/</kbd></button>
+          <nav class="nav-tree">${groups}</nav>
         </aside>
         <div class="main">
           <header class="topbar">
             <div class="left">
-              <button class="menu-toggle" id="menu-toggle" aria-label="Toggle menu">☰</button>
-              <span class="page-title">${UI.esc(t(title))}</span>
+              <button class="icon-btn menu-toggle" id="menu-toggle" aria-label="Menu">${svg('menu')}</button>
+              <nav class="breadcrumbs" aria-label="Breadcrumb">${crumbs.join(`<span class="sep">${svg('chevron-right')}</span>`)}</nav>
             </div>
-            <div class="user-box">
-              <div class="pref-controls">
-                <select id="lang-select" title="${UI.esc(t('Language'))}">
-                  <option value="en" ${Lang.current === 'en' ? 'selected' : ''}>EN</option>
-                  <option value="ar" ${Lang.current === 'ar' ? 'selected' : ''}>عربي</option>
-                  <option value="fr" ${Lang.current === 'fr' ? 'selected' : ''}>FR</option>
-                </select>
-                <button class="theme-btn" id="theme-toggle" title="${UI.esc(t('Theme'))}">${Theme.current === 'dark' ? '☀️' : '🌙'}</button>
+            <div class="right">
+              <button class="icon-btn" id="topbar-search" aria-label="${t('Search')}">${svg('search')}</button>
+              ${this.can('notifications') ? `<a class="icon-btn" id="topbar-bell" href="#/notifications" aria-label="${t('Notifications')}">${svg('bell')}</a>` : ''}
+              <button class="icon-btn" id="theme-toggle" aria-label="${t('Theme')}">${svg(Theme.current === 'dark' ? 'sun' : 'moon')}</button>
+              <select id="lang-select" class="lang-select" title="${UI.esc(t('Language'))}">
+                <option value="en" ${Lang.current === 'en' ? 'selected' : ''}>EN</option>
+                <option value="ar" ${Lang.current === 'ar' ? 'selected' : ''}>عربي</option>
+                <option value="fr" ${Lang.current === 'fr' ? 'selected' : ''}>FR</option>
+              </select>
+              <div class="user-menu">
+                <button class="user-trigger" id="user-trigger">
+                  <span class="avatar">${UI.esc(initials)}</span>
+                  <span class="user-meta"><span class="user-name">${UI.esc(this.user.name)}</span><span class="user-role">${UI.esc(this.user.role)}</span></span>
+                </button>
+                <div class="user-dropdown" id="user-dropdown" hidden>
+                  <div class="ud-head"><span class="avatar lg">${UI.esc(initials)}</span><div><div class="user-name">${UI.esc(this.user.name)}</div><div class="user-role">${UI.esc(this.user.email || this.user.role)}</div></div></div>
+                  <button class="ud-item" id="menu-change-pw">${svg('key')}<span>${t('Change password')}</span></button>
+                  <button class="ud-item danger" id="menu-logout">${svg('log-out')}<span>${t('Sign out')}</span></button>
+                </div>
               </div>
-              <div>
-                <div class="user-name">${UI.esc(this.user.name)}</div>
-                <div class="user-role">${UI.esc(this.user.role)}</div>
-              </div>
-              <button class="btn secondary sm" id="logout-btn">${UI.esc(t('Logout'))}</button>
             </div>
           </header>
-          <main class="content" id="page-content">
-            <div class="loading">Loading…</div>
-          </main>
+          <main class="content"><div id="page-content"><div class="loading">Loading…</div></div></main>
         </div>
       </div>`;
 
-    document.getElementById('logout-btn').addEventListener('click', () => this.logout());
-    document.getElementById('lang-select').addEventListener('change', (e) => Lang.set(e.target.value));
-    document.getElementById('theme-toggle').addEventListener('click', () => Theme.toggle());
+    this.wireLayout(activeRoute);
+  },
 
-    // Mobile/tablet sidebar toggle with backdrop.
+  wireLayout(activeRoute) {
+    const layout = document.getElementById('layout');
     const sidebar = document.getElementById('sidebar');
-    document.getElementById('menu-toggle').addEventListener('click', () => {
-      sidebar.classList.toggle('open');
-      if (sidebar.classList.contains('open')) {
-        const backdrop = document.createElement('div');
-        backdrop.className = 'sidebar-backdrop';
-        backdrop.addEventListener('click', () => { sidebar.classList.remove('open'); backdrop.remove(); });
-        document.querySelector('.layout').appendChild(backdrop);
-      } else {
-        document.querySelector('.sidebar-backdrop')?.remove();
-      }
+
+    // Rail collapse (desktop) — persisted.
+    document.getElementById('rail-toggle').addEventListener('click', () => {
+      const collapsed = layout.classList.toggle('nav-collapsed');
+      localStorage.setItem(LS.collapsed, collapsed ? '1' : '0');
     });
-    sidebar.querySelectorAll('nav a').forEach((a) => a.addEventListener('click', () => {
-      sidebar.classList.remove('open');
-      document.querySelector('.sidebar-backdrop')?.remove();
-    }));
+
+    // Collapsible groups — persisted.
+    sidebar.querySelectorAll('.nav-group-head').forEach((head) => {
+      head.addEventListener('click', () => {
+        if (layout.classList.contains('nav-collapsed')) return; // groups always shown when collapsed
+        const group = head.closest('.nav-group');
+        group.classList.toggle('open');
+        const set = new Set([...sidebar.querySelectorAll('.nav-group.open')].map((g) => g.dataset.key));
+        this.saveOpenGroups(set);
+      });
+    });
+
+    // Mobile drawer.
+    const closeDrawer = () => { layout.classList.remove('nav-open'); document.querySelector('.scrim')?.remove(); };
+    document.getElementById('menu-toggle').addEventListener('click', () => {
+      layout.classList.add('nav-open');
+      const scrim = document.createElement('div');
+      scrim.className = 'scrim';
+      scrim.addEventListener('click', closeDrawer);
+      layout.appendChild(scrim);
+    });
+    sidebar.querySelectorAll('.nav-item').forEach((a) => a.addEventListener('click', closeDrawer));
+
+    // Topbar controls.
+    document.getElementById('theme-toggle').addEventListener('click', () => Theme.toggle());
+    document.getElementById('lang-select').addEventListener('change', (e) => Lang.set(e.target.value));
+    document.getElementById('nav-search').addEventListener('click', () => this.openSearch());
+    document.getElementById('topbar-search').addEventListener('click', () => this.openSearch());
+
+    // User menu dropdown.
+    const trigger = document.getElementById('user-trigger');
+    const dropdown = document.getElementById('user-dropdown');
+    trigger.addEventListener('click', (e) => { e.stopPropagation(); dropdown.hidden = !dropdown.hidden; });
+    document.addEventListener('click', (e) => { if (!dropdown.hidden && !dropdown.contains(e.target) && e.target !== trigger) dropdown.hidden = true; });
+    document.getElementById('menu-logout').addEventListener('click', () => this.logout());
+    document.getElementById('menu-change-pw').addEventListener('click', () => { dropdown.hidden = true; this.openChangePassword(); });
+
+    // Global shortcuts: "/" or Ctrl/Cmd+K opens search.
+    if (!this._shortcuts) {
+      this._shortcuts = true;
+      document.addEventListener('keydown', (e) => {
+        const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '');
+        if ((e.key === '/' && !typing) || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k')) {
+          e.preventDefault(); this.openSearch();
+        }
+      });
+    }
+  },
+
+  // --- Global command-palette search ---------------------------------------
+  openSearch() {
+    let overlay = document.getElementById('cmd-overlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'cmd-overlay';
+      overlay.className = 'cmd-overlay';
+      overlay.innerHTML = `
+        <div class="cmd-panel" role="dialog" aria-modal="true">
+          <div class="cmd-input-row">${svg('search')}<input id="cmd-input" type="text" placeholder="${t('Jump to…')}" autocomplete="off"></div>
+          <div class="cmd-results" id="cmd-results"></div>
+        </div>`;
+      overlay.addEventListener('click', (e) => { if (e.target === overlay) this.closeSearch(); });
+      document.body.appendChild(overlay);
+    }
+    overlay.classList.add('show');
+    const input = document.getElementById('cmd-input');
+    input.value = '';
+    this._cmdActive = 0;
+    this.renderSearch('');
+    input.focus();
+    input.oninput = () => { this._cmdActive = 0; this.renderSearch(input.value); };
+    input.onkeydown = (e) => {
+      const rows = [...document.querySelectorAll('#cmd-results .cmd-row')];
+      if (e.key === 'Escape') return this.closeSearch();
+      if (e.key === 'ArrowDown') { e.preventDefault(); this._cmdActive = Math.min(this._cmdActive + 1, rows.length - 1); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); this._cmdActive = Math.max(this._cmdActive - 1, 0); }
+      else if (e.key === 'Enter') { rows[this._cmdActive]?.click(); return; }
+      rows.forEach((r, i) => r.classList.toggle('active', i === this._cmdActive));
+      rows[this._cmdActive]?.scrollIntoView({ block: 'nearest' });
+    };
+  },
+  closeSearch() { document.getElementById('cmd-overlay')?.classList.remove('show'); },
+  renderSearch(q) {
+    const query = q.trim().toLowerCase();
+    const results = NAV_ITEMS
+      .filter((it) => this.can(it.permission))
+      .filter((it) => !query || t(it.label).toLowerCase().includes(query) || t(it.module.label).toLowerCase().includes(query))
+      .slice(0, 12);
+    const box = document.getElementById('cmd-results');
+    if (!results.length) { box.innerHTML = `<div class="cmd-empty">${t('No matches')}</div>`; return; }
+    box.innerHTML = results.map((it, i) => `
+      <a href="#/${it.route}" class="cmd-row ${i === 0 ? 'active' : ''}">
+        ${svg(it.icon)}<span class="cmd-label">${UI.esc(t(it.label))}</span>
+        <span class="cmd-module">${UI.esc(t(it.module.label))}</span>
+      </a>`).join('');
+    box.querySelectorAll('.cmd-row').forEach((row) => row.addEventListener('click', () => this.closeSearch()));
+  },
+
+  // --- Change my password (reuses UI.modal) --------------------------------
+  openChangePassword() {
+    UI.modal({
+      title: t('Change password'),
+      submitLabel: t('Update password'),
+      bodyHtml: `
+        <div class="form-group"><label>${t('Current password')}</label><input type="password" id="cp-current"></div>
+        <div class="form-group"><label>${t('New password')}</label><input type="password" id="cp-new"><div class="hint">${t('At least 8 characters.')}</div></div>
+        <div class="form-group"><label>${t('Confirm new password')}</label><input type="password" id="cp-confirm"></div>`,
+      onSubmit: async (overlay, close) => {
+        const cur = overlay.querySelector('#cp-current').value;
+        const nw = overlay.querySelector('#cp-new').value;
+        const cf = overlay.querySelector('#cp-confirm').value;
+        if (!cur || !nw) return UI.toast(t('Fill in all fields.'), 'error');
+        if (nw.length < 8) return UI.toast(t('At least 8 characters.'), 'error');
+        if (nw !== cf) return UI.toast(t('Passwords do not match.'), 'error');
+        try {
+          await Api.patch('/api/auth/password', { current_password: cur, new_password: nw });
+          UI.toast(t('Password changed.'));
+          close();
+        } catch (err) { UI.toast(err.message, 'error'); }
+      },
+    });
   },
 };
 
