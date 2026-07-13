@@ -10,6 +10,10 @@ const { isId, isNonEmptyString } = require('../utils/validate');
 
 const router = express.Router();
 
+// Express 4 doesn't forward async-handler rejections to the error middleware;
+// this wrapper does, so a thrown bcrypt/DB error returns 500 rather than hanging.
+const asyncHandler = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+
 router.use(authenticate, requirePermission('users_management'));
 
 const USER_STATUSES = ['pending', 'active', 'rejected', 'disabled'];
@@ -77,20 +81,20 @@ router.patch('/:id/role', (req, res) => {
 });
 
 /** PATCH /api/users/:id/password — admin resets a user's password. */
-router.patch('/:id/password', (req, res) => {
+router.patch('/:id/password', asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { new_password } = req.body || {};
   if (!isId(id)) return res.status(400).json({ error: 'Invalid user id.' });
   if (!isNonEmptyString(new_password) || new_password.length < 8) {
     return res.status(400).json({ error: 'New password must be at least 8 characters.' });
   }
-  const hash = bcrypt.hashSync(new_password, 10);
+  const hash = await bcrypt.hash(new_password, 10);
   const result = db.prepare(
     "UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?"
   ).run(hash, id);
   if (result.changes === 0) return res.status(404).json({ error: 'User not found.' });
   res.json({ message: 'Password reset.' });
-});
+}));
 
 /**
  * GET /api/users/:id/permissions

@@ -131,12 +131,25 @@ app.use((err, req, res, next) => {
 // Background scheduler: reminder/escalation sweep for unaccepted picking tasks
 // and release of timed-out stock reservations. Runs every 60s; both are also
 // exposed as on-demand endpoints for deterministic testing.
-const { sweepReminders } = require('./routes/picking');
-const { sweepReservations } = require('./services/requests');
-setInterval(() => {
-  try { sweepReminders(); } catch (err) { console.error('Reminder sweep error:', err); }
-  try { sweepReservations(); } catch (err) { console.error('Reservation sweep error:', err); }
-}, 60 * 1000).unref();
+//
+// Set SCHEDULER_ENABLED=0 to turn the in-process scheduler off entirely (e.g.
+// when a dedicated worker owns it). When several app processes are live (PM2
+// cluster, overlapping deploy), a DB lease keyed per job ensures only ONE of
+// them runs each tick — otherwise every process would double-process the same
+// rows every minute.
+if (process.env.SCHEDULER_ENABLED !== '0') {
+  const { sweepReminders } = require('./routes/picking');
+  const { sweepReservations } = require('./services/requests');
+  const { acquireTick } = require('./services/scheduler');
+  setInterval(() => {
+    try {
+      if (acquireTick('reminders')) sweepReminders();
+    } catch (err) { console.error('Reminder sweep error:', err); }
+    try {
+      if (acquireTick('reservations')) sweepReservations();
+    } catch (err) { console.error('Reservation sweep error:', err); }
+  }, 60 * 1000).unref();
+}
 
 // Optional automated daily database backup (enable by setting BACKUP_DIR).
 if (process.env.BACKUP_DIR) {

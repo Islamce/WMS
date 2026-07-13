@@ -1,0 +1,82 @@
+/**
+ * Versioned migration runner.
+ *
+ * The base schema (`migrate.js`) and the MRP/WMS schema (`migrate2.js`) are the
+ * idempotent *baseline*: they use CREATE TABLE IF NOT EXISTS and conditional
+ * ALTERs, so an existing install is always brought up to the baseline shape on
+ * boot. That baseline is what keeps zero-downtime, git-connected deploys safe.
+ *
+ * This runner layers ordered, *one-time* migrations on top of that baseline and
+ * records each in `schema_migrations`. Any schema change from here on should be
+ * added as a new numbered entry in MIGRATIONS rather than by expanding the
+ * idempotent baseline — that gives an auditable, ordered history of what has
+ * been applied to a database and a clean path to a server RDBMS (see
+ * docs/POSTGRES-MIGRATION.md), where CREATE IF NOT EXISTS is not a strategy.
+ *
+ * Each migration is { id, description, up(db) }. `up` runs once, inside a
+ * transaction, and only if `id` is not already recorded.
+ */
+const db = require('./connection');
+
+// Ordered list. The two baseline entries are recorded as applied because the
+// idempotent baseline exec (migrate.js + migrate2.js) already materialises them;
+// they exist so `schema_migrations` is a truthful record of what's in place.
+// Append new deltas below with the next number and a real `up`.
+const MIGRATIONS = [
+  {
+    id: '001_base_schema',
+    description: 'Base inventory schema (users, roles, permissions, materials, locations, stock).',
+    up() { /* applied by the idempotent baseline in migrate.js */ },
+  },
+  {
+    id: '002_mrp_wms_execution',
+    description: 'MRP / warehouse-execution schema (requests, batches, bins, picking, audit, notifications).',
+    up() { /* applied by the idempotent baseline in migrate2.js */ },
+  },
+  {
+    id: '003_audit_append_only',
+    description: 'Append-only triggers on audit_trail (block UPDATE/DELETE).',
+    up() { /* triggers created by the idempotent baseline in migrate2.js */ },
+  },
+  {
+    id: '004_scheduler_locks',
+    description: 'Cross-process scheduler lease table for single-runner background sweeps.',
+    up() { /* table created by the idempotent baseline in migrate2.js */ },
+  },
+];
+
+function ensureTable() {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      version     TEXT PRIMARY KEY,
+      description TEXT,
+      applied_at  TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+}
+
+function runMigrations() {
+  ensureTable();
+  const applied = new Set(
+    db.prepare('SELECT version FROM schema_migrations').all().map((r) => r.version)
+  );
+  const record = db.prepare(
+    'INSERT INTO schema_migrations (version, description) VALUES (?, ?)'
+  );
+  let count = 0;
+  for (const m of MIGRATIONS) {
+    if (applied.has(m.id)) continue;
+    db.transaction(() => {
+      m.up(db);
+      record.run(m.id, m.description || '');
+    })();
+    count += 1;
+    console.log(`Applied migration ${m.id} — ${m.description}`);
+  }
+  console.log(
+    count ? `Migrations: ${count} newly applied, ${MIGRATIONS.length} total.`
+          : `Migrations: up to date (${MIGRATIONS.length} recorded).`
+  );
+}
+
+module.exports = { runMigrations, MIGRATIONS };

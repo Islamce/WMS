@@ -146,15 +146,18 @@ DB_PATH=./data/wms.db
 ### Testing & CI
 
 ```bash
-npm test        # full end-to-end suite (159 checks) — needs Node 18+ and python3
+npm test        # full end-to-end suite (174 checks) — needs Node 18+ and python3
 ```
 
 The runner (`tests/run.sh`) rebuilds a fresh database, boots the server, and
-executes five suites: the 25-scenario workflow regression, UI-refinement
-checks, P0 regressions (reservation-leak, login rate-limit, JWT guard), P1
-regressions (self-approval block, dashboard→batches stock source,
-return-to-picker allocation restore, security headers, body limit), and the
-feature suite (AI analytics, PDF labels, mass upload, quality step).
+executes the workflow regression (25 scenarios), UI-refinement checks, P0
+regressions (reservation-leak, login rate-limit, JWT guard), P1 regressions
+(self-approval block, dashboard→batches stock source, return-to-picker
+allocation restore, security headers, body limit), the P0/P1 hardening suites
+(forced password change, reservation timeout, backup snapshot; async-bcrypt
+paths, audit append-only triggers, migration versioning, scheduler lease), and
+the feature suite (AI analytics, PDF labels, mass upload, quality step, CSV
+import).
 GitHub Actions (`.github/workflows/ci.yml`) runs the same command on every
 push to `main` and on every pull request.
 
@@ -175,12 +178,24 @@ correctly behind Hostinger's reverse proxy.
 - Security headers are set by `helmet` (CSP, `X-Content-Type-Options`, etc.);
   the CSP allows only same-origin scripts (no inline handlers).
 - Segregation of duties: a user can never approve or modify their own material
-  request, even if they hold the `approvals` permission.
+  request, even if they hold the `approvals` permission (admin is exempt so it
+  can drive tests).
 - Change the default admin password before going live.
 - The seeded admin must change its password on first login (forced).
+- Passwords are hashed asynchronously on the request path (login, signup,
+  change, admin reset); an unknown-email login still runs a dummy bcrypt
+  compare so response timing can't be used to enumerate accounts.
+- The `audit_trail` table is append-only at the database level — triggers
+  reject any `UPDATE`/`DELETE`, so history cannot be rewritten or erased.
+- Schema changes are tracked in `schema_migrations` (see
+  `server/db/migrations.js`); a plan for moving to PostgreSQL when you outgrow
+  a single file lives in [docs/POSTGRES-MIGRATION.md](docs/POSTGRES-MIGRATION.md).
 - API request logging to stdout (`LOG_REQUESTS`); enable automated daily
   SQLite backups with `BACKUP_DIR` (or `npm run backup`); stale stock
-  reservations auto-release after `RESERVATION_TTL_HOURS` (default 24h).
+  reservations auto-release after `RESERVATION_TTL_HOURS` (default 24h). The
+  background scheduler is safe to run on every instance — a per-job DB lease
+  makes each tick single-runner — or disable it per process with
+  `SCHEDULER_ENABLED=0`.
 
 
 ### Database migration & seeding
