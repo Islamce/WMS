@@ -162,7 +162,15 @@ paths, audit append-only triggers, migration versioning, scheduler lease), and
 the feature suite (AI analytics, PDF labels, mass upload, quality step, CSV
 import).
 GitHub Actions (`.github/workflows/ci.yml`) runs the same command on every
-push to `main` and on every pull request.
+push to `main` and on every pull request, plus ESLint (with
+`eslint-plugin-security`) and a production `npm audit`. `Dependabot`
+(`.github/dependabot.yml`) keeps dependencies and Actions patched.
+
+> **CodeQL (SAST):** enable it via GitHub's **default setup**
+> (repo *Settings ▸ Code security ▸ CodeQL analysis ▸ Set up ▸ Default*).
+> The default setup needs no workflow file and runs cleanly; a committed
+> advanced-setup workflow fails on repositories without GitHub Advanced
+> Security, so this repo intentionally does not ship one.
 
 ### Deploying to Hostinger
 
