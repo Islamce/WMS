@@ -1,14 +1,19 @@
 name: Build WMS Mobile APK
 
-# Builds the Flutter Android APKs on GitHub's runners (unrestricted network) and
-# uploads them as downloadable artifacts. Trigger manually from the Actions tab
-# or on any push that touches the app.
+# Builds the Flutter Android APKs on GitHub's runners (unrestricted network),
+# uploads them as workflow artifacts, and — on pushes to main — publishes the
+# universal + per-ABI APKs to a GitHub Release so they have a permanent,
+# one-click download link. Trigger manually from the Actions tab or on any push
+# that touches the app.
 on:
   push:
     paths:
       - "wms flutter application/**"
       - ".github/workflows/flutter-apk.yml"
   workflow_dispatch:
+
+permissions:
+  contents: write   # needed to create/update the Release
 
 jobs:
   build-apk:
@@ -41,9 +46,37 @@ jobs:
           flutter build apk --release --split-per-abi
           flutter build apk --release
 
-      - name: Upload APKs
+      - name: Read app version
+        id: ver
+        run: |
+          raw=$(grep '^version:' pubspec.yaml | awk '{print $2}')
+          echo "version=$raw" >> "$GITHUB_OUTPUT"
+          echo "tagver=$(echo "$raw" | tr '+' '-')" >> "$GITHUB_OUTPUT"
+
+      - name: Upload APKs (workflow artifact)
         uses: actions/upload-artifact@v4
         with:
           name: wms-mobile-apk
           path: "wms flutter application/build/app/outputs/flutter-apk/*.apk"
           if-no-files-found: error
+
+      # On main, publish the APKs to a GitHub Release so there's a stable,
+      # one-click download link (Releases -> Latest). Paths are from the repo
+      # root (working-directory does not apply to action inputs).
+      - name: Publish APK to a GitHub Release
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: mobile-v${{ steps.ver.outputs.tagver }}-${{ github.run_number }}
+          name: WMS Mobile v${{ steps.ver.outputs.version }}
+          make_latest: true
+          body: |
+            WMS Mobile Android build v${{ steps.ver.outputs.version }}.
+
+            Install **app-release.apk** on any device (enable "Install unknown apps"
+            first), or use the matching per-ABI file for a smaller download.
+          files: |
+            wms flutter application/build/app/outputs/flutter-apk/app-release.apk
+            wms flutter application/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+            wms flutter application/build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
+            wms flutter application/build/app/outputs/flutter-apk/app-x86_64-release.apk
