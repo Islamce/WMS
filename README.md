@@ -146,9 +146,10 @@ DB_PATH=./data/wms.db
 ### Testing & CI
 
 ```bash
-npm test        # full end-to-end suite (205 checks) — needs Node 18+ and python3
-npm run lint    # ESLint (0 errors)
-npm run test:smoke  # Playwright browser smoke (login + shell, no console errors)
+npm test        # full end-to-end suite (211 checks) — needs Node 18+ and python3
+npm run lint    # ESLint + eslint-plugin-security (0 errors)
+npm audit --omit=dev --audit-level=high   # production dependency audit
+npm run test:smoke  # Playwright smoke: login + shell + axe a11y gate, no console errors
 ```
 
 The runner (`tests/run.sh`) rebuilds a fresh database, boots the server, and

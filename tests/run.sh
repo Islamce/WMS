@@ -52,6 +52,7 @@ run_suite password_test.py
 run_suite reports_test.py
 run_suite p0_hardening_test.py
 run_suite p1_hardening_test.py
+run_suite quickwins_test.py
 stop_server
 
 echo ""

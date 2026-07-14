@@ -10,12 +10,16 @@ Pages.batches = {
       <div class="toolbar"><h3 class="mb-0">Batch Tracking</h3><div class="spacer"></div>
         <input type="text" class="search-input" id="bt-search" placeholder="Search batch / material / warehouse…">
         <span id="bt-export"></span></div>
-      <div class="table-wrap" id="bt-table"><div class="loading">Loading…</div></div></div>`;
-    el.querySelector('#bt-search').addEventListener('input', UI.debounce((e) => this.load(e.target.value), 300));
-    await this.load('');
+      <div class="table-wrap" id="bt-table"><div class="loading">Loading…</div></div>
+      <div class="pagination" id="bt-pager"></div></div>`;
+    el.querySelector('#bt-search').addEventListener('input', UI.debounce((e) => { this.q = e.target.value; this.load(this.q, 1); }, 300));
+    this.q = '';
+    await this.load('', 1);
   },
-  async load(q) {
-    const { batches } = await Api.get(`/api/master/batches?search=${encodeURIComponent(q || '')}`);
+  async load(q, page = 1) {
+    this.q = q || '';
+    const { batches, total, page: pg, limit } = await Api.get(
+      `/api/master/batches?search=${encodeURIComponent(this.q)}&page=${page}`);
     const slot = this.el.querySelector('#bt-export');
     slot.innerHTML = '';
     slot.appendChild(UI.exportControl({
@@ -42,6 +46,8 @@ Pages.batches = {
           <td>${b.alert_level && b.alert_level !== 'OK' ? `<span class="badge ${ALERT_BADGE[b.alert_level]}">${b.alert_level}</span>` : '—'}</td>
         </tr>`).join('') || '<tr><td colspan="9" class="muted">No batches</td></tr>'}
       </tbody></table>`;
+    const pager = this.el.querySelector('#bt-pager');
+    if (pager) UI.pagination(pager, { total, page: pg, limit }, (p) => this.load(this.q, p));
   },
 };
 

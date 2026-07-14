@@ -8,6 +8,7 @@ const express = require('express');
 const db = require('./../db/connection');
 const { authenticate, requirePermission } = require('./../middleware/auth');
 const { isNonEmptyString } = require('./../utils/validate');
+const { sendError } = require('./../utils/errors');
 const audit = require('./../services/audit');
 const notify = require('./../services/notify');
 const erp = require('./../services/erp');
@@ -247,7 +248,7 @@ router.post('/:id/return-to-picker', (req, res) => {
       action: 'RETURN_TO_PICKER', newValue: { reopened_allocations: allocs.length },
       reason: req.body.reason, user: req.user, sourceScreen: 'GI Posting' });
   });
-  try { returnToPicker(); } catch (err) { return res.status(err.status || 500).json({ error: err.message }); }
+  try { returnToPicker(); } catch (err) { return sendError(res, err); }
   if (task) notify.send({ requestNumber: header.request_number, taskId: task.id, recipientUserId: task.assigned_picker_id,
     notificationType: 'RETURNED_TO_PICKER', title: `Request ${header.request_number} returned for re-pick`, message: req.body.reason || '' });
   res.json({ message: 'Returned to picker.' });

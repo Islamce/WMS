@@ -7,6 +7,7 @@ const express = require('express');
 const db = require('./../db/connection');
 const { authenticate, requirePermission } = require('./../middleware/auth');
 const { isNonEmptyString, isPositiveNumber, isId, parsePagination } = require('./../utils/validate');
+const { sendError } = require('./../utils/errors');
 const audit = require('./../services/audit');
 const notify = require('./../services/notify');
 const { nextRequestNumber, setHeaderStatus, refreshRollups, getHeaderOr404, releaseOpenAllocations } = require('./../services/requests');
@@ -134,7 +135,7 @@ router.post('/', requirePermission('create_request'), (req, res) => {
 
   let id;
   try { id = create(); } catch (err) {
-    return res.status(err.status || 500).json({ error: err.message || 'Failed to create request.' });
+    return sendError(res, err, 'Failed to create request.');
   }
   res.status(201).json({ message: 'Request created as draft.', id, request_number: requestNumber });
 });

@@ -79,7 +79,10 @@ function check(name, cond, detail) {
     await waitForHealth();
     const executablePath = findChromiumExecutable();
     const browser = await chromium.launch(executablePath ? { executablePath } : {});
-    const page = await browser.newPage();
+    // bypassCSP lets the test inject axe-core; the app's strict CSP still applies
+    // to the app's own code — we only relax it for the test harness.
+    const context = await browser.newContext({ bypassCSP: true });
+    const page = await context.newPage();
     const consoleErrors = [];
     page.on('console', (m) => { if (m.type() === 'error') consoleErrors.push(m.text()); });
     page.on('pageerror', (e) => consoleErrors.push(String(e)));
@@ -87,6 +90,13 @@ function check(name, cond, detail) {
     await page.goto(BASE_URL, { waitUntil: 'networkidle' });
     check('login form renders', await page.locator('#login-form').count() > 0);
     check('login email field present', await page.locator('#li-email').count() > 0);
+
+    // Accessibility gate: no serious/critical WCAG 2.0 A/AA violations on the login page.
+    await page.addScriptTag({ path: require.resolve('axe-core') });
+    const axeResult = await page.evaluate(() => window.axe.run(document, { runOnly: ['wcag2a', 'wcag2aa'] }));
+    const blocking = axeResult.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical');
+    check('no serious/critical a11y violations on login', blocking.length === 0,
+      blocking.map((v) => `${v.impact}:${v.id}`).join(', '));
 
     // Sign in as the seeded admin (the login form is the second form on the page).
     await page.locator('#li-email').fill('admin@example.com');

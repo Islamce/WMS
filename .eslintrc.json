@@ -2,12 +2,15 @@
   "root": true,
   "env": { "node": true, "es2021": true },
   "parserOptions": { "ecmaVersion": 2022, "sourceType": "script" },
-  "extends": "eslint:recommended",
+  "extends": ["eslint:recommended", "plugin:security/recommended"],
+  "plugins": ["security"],
   "rules": {
     "no-unused-vars": ["warn", { "args": "none", "varsIgnorePattern": "^_" }],
     "no-empty": ["error", { "allowEmptyCatch": true }],
     "no-console": "off",
-    "no-constant-condition": ["error", { "checkLoops": false }]
+    "no-constant-condition": ["error", { "checkLoops": false }],
+    "security/detect-object-injection": "off",
+    "security/detect-non-literal-fs-filename": "off"
   },
   "overrides": [
     {
@@ -19,7 +22,7 @@
     },
     {
       "files": ["tests/**/*.js", "scripts/**/*.js"],
-      "env": { "node": true }
+      "env": { "node": true, "browser": true }
     }
   ]
 }
