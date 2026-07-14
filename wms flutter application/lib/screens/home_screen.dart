@@ -14,6 +14,7 @@ import 'receiving_screen.dart';
 import 'quality_screen.dart';
 import 'batches_screen.dart';
 import 'expiry_screen.dart';
+import 'cycle_count_screen.dart';
 import 'materials_screen.dart';
 import 'users_screen.dart';
 import 'audit_screen.dart';
@@ -52,6 +53,7 @@ const List<Object> _menu = [
   NavDest('Quality Inspection', Icons.science_outlined, 'quality', QualityScreen.new),
   NavDest('Batch Tracking', Icons.inventory_2_outlined, 'batch_tracking', BatchesScreen.new),
   NavDest('Expiry Alerts', Icons.schedule_outlined, 'expiry_alerts', ExpiryScreen.new),
+  NavDest('Cycle Counting', Icons.checklist_outlined, 'cycle_count', CycleCountScreen.new),
   'Master Data & Admin',
   NavDest('Materials', Icons.category_outlined, 'materials', MaterialsScreen.new),
   NavDest('Users', Icons.group_outlined, 'users_management', UsersScreen.new),
