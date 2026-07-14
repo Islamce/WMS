@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
 import '../core/format.dart';
+import '../core/session.dart';
 import '../main.dart';
 import '../widgets/common.dart';
 
@@ -72,14 +73,17 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
               (res['requests'] ?? []).map((e) => Map<String, dynamic>.from(e)));
         },
         builder: (context, rows, refresh) {
-          if (rows.isEmpty) {
-            return ListView(children: const [
-              SizedBox(height: 80),
-              Center(child: Text('No requests awaiting approval.', style: TextStyle(color: Colors.grey))),
-            ]);
-          }
           return ListView(
-            children: rows.map((r) {
+            children: [
+              _MatrixBanner(session: session),
+              if (rows.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.only(top: 60),
+                  child: Center(
+                      child: Text('No requests awaiting approval.',
+                          style: TextStyle(color: Colors.grey))),
+                ),
+              ...rows.map((r) {
               final id = r['id'] as int;
               return Card(
                 margin: const EdgeInsets.fromLTRB(12, 6, 12, 6),
@@ -128,7 +132,8 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
                   ),
                 ),
               );
-            }).toList(),
+            }),
+          ],
           );
         },
       ),
@@ -137,5 +142,58 @@ class _ApprovalsScreenState extends State<ApprovalsScreen> {
           child: ColoredBox(color: Color(0x33000000), child: Center(child: CircularProgressIndicator())),
         ),
     ]);
+  }
+}
+
+/// Read-only banner showing the value-based approval authority matrix, so an
+/// approver knows up front which requests need a higher authority. Mirrors
+/// GET /api/approvals/matrix. Renders nothing if there are no thresholds.
+class _MatrixBanner extends StatelessWidget {
+  const _MatrixBanner({required this.session});
+  final Session session;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: () async {
+        try {
+          final res = await session.api.get('/api/approvals/matrix');
+          return List<Map<String, dynamic>>.from(
+              (res['thresholds'] ?? []).map((e) => Map<String, dynamic>.from(e)));
+        } catch (_) {
+          return <Map<String, dynamic>>[];
+        }
+      }(),
+      builder: (context, snap) {
+        final rows = snap.data ?? [];
+        if (rows.isEmpty) return const SizedBox.shrink();
+        return Card(
+          margin: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+          color: const Color(0xFFFFF7E6),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Row(children: [
+                  Icon(Icons.gavel_outlined, size: 18, color: Color(0xFF9a6a00)),
+                  SizedBox(width: 6),
+                  Text('Approval authority',
+                      style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF9a6a00))),
+                ]),
+                const SizedBox(height: 6),
+                ...rows.map((t) => Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Text(
+                        '≥ ${t['min_amount']} ${t['currency'] ?? ''} → needs "${t['required_permission']}"',
+                        style: const TextStyle(fontSize: 13, color: Color(0xFF6b5200)),
+                      ),
+                    )),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 }
