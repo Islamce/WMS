@@ -54,7 +54,7 @@ jobs:
           echo "tagver=$(echo "$raw" | tr '+' '-')" >> "$GITHUB_OUTPUT"
 
       - name: Upload APKs (workflow artifact)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: wms-mobile-apk
           path: "wms flutter application/build/app/outputs/flutter-apk/*.apk"
