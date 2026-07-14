@@ -34,12 +34,23 @@ function setHeaderStatus(header, toStatus, { user, reason, comments, sourceScree
     step: workflowStep || toStatus,
     uid: user ? user.id : null,
     id: header.id,
+    from: header.request_status,
   };
   Object.entries(set).forEach(([k, v], i) => {
     cols.push(`${k} = @c${i}`);
     params[`c${i}`] = v;
   });
-  db.prepare(`UPDATE material_request_headers SET ${cols.join(', ')} WHERE id = @id`).run(params);
+  // Optimistic concurrency guard: only transition if the row is still in the
+  // status we read. If another actor moved it first, no row matches — fail loud
+  // with 409 rather than silently clobbering their change (lost update).
+  const result = db.prepare(
+    `UPDATE material_request_headers SET ${cols.join(', ')} WHERE id = @id AND request_status = @from`
+  ).run(params);
+  if (result.changes === 0) {
+    const err = new Error('This request was changed by someone else. Reload and try again.');
+    err.status = 409;
+    throw err;
+  }
 
   audit.record({
     entityType: 'MaterialRequestHeader',

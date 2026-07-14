@@ -20,8 +20,18 @@ if (process.env.SKIP_AUTO_SEED !== '1') {
     const db = require('./db/connection');
     const { n } = db.prepare('SELECT COUNT(*) AS n FROM users').get();
     if (n === 0) {
-      console.log('Empty database detected — running first-run seed…');
-      require('./db/seed').seed();
+      // Guardrail: in production an empty database usually means the persistent
+      // volume for DB_PATH is not mounted — auto-seeding would silently write a
+      // *demo* dataset over the void and mask real data loss. Refuse unless the
+      // operator explicitly opts in for a genuine first deploy.
+      if (process.env.NODE_ENV === 'production' && process.env.ALLOW_AUTO_SEED !== '1') {
+        console.warn('[WARN] Empty database detected in production and ALLOW_AUTO_SEED is not set — '
+          + 'refusing to auto-seed. If this is a fresh install, set ALLOW_AUTO_SEED=1. '
+          + 'Otherwise your persistent storage for DB_PATH is likely not mounted — do NOT ignore this.');
+      } else {
+        console.log('Empty database detected — running first-run seed…');
+        require('./db/seed').seed();
+      }
     }
   } catch (err) {
     console.error('First-run seed check failed:', err.message);

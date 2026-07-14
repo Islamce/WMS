@@ -4,10 +4,11 @@
  */
 window.Pages = window.Pages || {};
 Pages.cycleCount = {
-  async render(el) {
+  async render(el, page = 1) {
+    this.el = el;
     el.innerHTML = `<div class="loading">${t('Loading…')}</div>`;
     let data;
-    try { data = await Api.get('/api/cycle-count'); }
+    try { data = await Api.get(`/api/cycle-count?page=${page}`); }
     catch (err) { el.innerHTML = `<div class="error-box">${UI.esc(err.message)}</div>`; return; }
 
     el.innerHTML = `
@@ -38,8 +39,12 @@ Pages.cycleCount = {
               </tr>`).join('') || `<tr><td colspan="7" class="muted">${t('No cycle counts yet.')}</td></tr>`}
           </tbody>
         </table></div>
-      </div>`;
+      </div>
+      <div class="pagination" id="cc-pager"></div>`;
 
+    const pager = el.querySelector('#cc-pager');
+    if (pager) UI.pagination(pager, { total: data.total || 0, page: data.page || 1, limit: data.limit || 100 },
+      (p) => this.render(el, p));
     el.querySelector('#cc-new').addEventListener('click', () => this.openNew(el));
     el.querySelectorAll('[data-count]').forEach((b) => b.addEventListener('click', () => this.enter(el, b.dataset.count)));
     el.querySelectorAll('[data-post]').forEach((b) => b.addEventListener('click', () => this.post(el, b.dataset.post)));

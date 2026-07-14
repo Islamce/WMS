@@ -82,6 +82,8 @@ a { color: var(--primary); text-decoration: none; }
 .auth-card .logo { text-align: center; margin-bottom: 6px; font-size: 26px; font-weight: 700; color: var(--primary); }
 .auth-card .subtitle { text-align: center; color: var(--text-muted); margin-bottom: 22px; }
 .auth-card .switch { text-align: center; margin-top: 16px; color: var(--text-muted); }
+/* Links inside body text must be distinguishable by more than colour (WCAG 1.4.1). */
+.auth-card .switch a, .hint a, p a { text-decoration: underline; }
 
 /* --- Layout (enterprise shell) ------------------------------------------- */
 .layout { display: flex; min-height: 100vh; }

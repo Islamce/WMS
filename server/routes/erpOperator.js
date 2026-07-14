@@ -8,6 +8,7 @@ const express = require('express');
 const db = require('./../db/connection');
 const { authenticate, requirePermission } = require('./../middleware/auth');
 const { isNonEmptyString } = require('./../utils/validate');
+const { sendError } = require('./../utils/errors');
 const audit = require('./../services/audit');
 const notify = require('./../services/notify');
 const erp = require('./../services/erp');
@@ -148,7 +149,7 @@ router.post('/:id/send-to-warehouse', (req, res) => {
     setHeaderStatus(header, HEADER_STATUS.WAREHOUSE_ASSIGNED, { user: req.user, sourceScreen: 'ERP Operator' });
     setHeaderStatus(header, HEADER_STATUS.PENDING_BIN_ASSIGNMENT, { user: req.user, sourceScreen: 'ERP Operator' });
   });
-  try { send(); } catch (err) { return res.status(err.status || 500).json({ error: err.message }); }
+  try { send(); } catch (err) { return sendError(res, err); }
 
   notify.notifyPermission('bin_batch_assignment', { requestNumber: header.request_number,
     notificationType: 'WAREHOUSE_QUEUE', title: `Request ${header.request_number} routed to ${header.issue_warehouse_code}`,

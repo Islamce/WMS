@@ -134,11 +134,16 @@ router.get('/batches', requirePermission(['batch_tracking', 'bin_batch_assignmen
   if (q) { filters.push('(batch_number LIKE ? OR material_code LIKE ? OR warehouse_code LIKE ?)'); params.push(like, like, like); }
   if (req.query.quality) { filters.push('quality_status = ?'); params.push(req.query.quality); }
   const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+  const { page, limit, offset } = parsePagination(req.query, { page: 1, limit: 100 });
+  const total = db.prepare(`SELECT COUNT(*) AS n FROM batches ${where}`).get(...params).n;
   const rows = db.prepare(`
     SELECT *, (remaining_quantity - reserved_quantity) AS available_quantity
-    FROM batches ${where} ORDER BY material_code, fefo_date, fifo_date LIMIT 200
-  `).all(...params);
-  res.json({ batches: rows.map((b) => ({ ...b, alert_level: alertLevel(b.expiry_date), days_to_expiry: daysUntil(b.expiry_date) })) });
+    FROM batches ${where} ORDER BY material_code, fefo_date, fifo_date LIMIT ? OFFSET ?
+  `).all(...params, limit, offset);
+  res.json({
+    batches: rows.map((b) => ({ ...b, alert_level: alertLevel(b.expiry_date), days_to_expiry: daysUntil(b.expiry_date) })),
+    total, page, limit,
+  });
 });
 
 /** POST /api/master/batches/:id/quality — quality user sets batch quality status. */

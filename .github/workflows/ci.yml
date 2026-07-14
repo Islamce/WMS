@@ -23,8 +23,11 @@ jobs:
       - name: Syntax check
         run: find server public/js index.js -name '*.js' -print0 | xargs -0 -n1 node --check
 
-      - name: Lint (ESLint)
+      - name: Lint (ESLint + security plugin)
         run: npm run lint
+
+      - name: Dependency vulnerability audit (production deps)
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Run end-to-end test suites
         run: npm test

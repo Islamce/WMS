@@ -235,9 +235,9 @@ const App = {
       <div class="auth-wrap"><div class="auth-card">
         <div class="logo">🔒 ${t('Set a new password')}</div>
         <p class="subtitle">${t('For security, please change the default password before continuing.')}</p>
-        <div class="form-group"><label>${t('Current password')}</label><input type="password" id="fp-cur"></div>
-        <div class="form-group"><label>${t('New password')}</label><input type="password" id="fp-new"><div class="hint">${t('At least 8 characters.')}</div></div>
-        <div class="form-group"><label>${t('Confirm new password')}</label><input type="password" id="fp-cf"></div>
+        <div class="form-group"><label for="fp-cur">${t('Current password')}</label><input type="password" id="fp-cur" autocomplete="current-password"></div>
+        <div class="form-group"><label for="fp-new">${t('New password')}</label><input type="password" id="fp-new" autocomplete="new-password"><div class="hint">${t('At least 8 characters.')}</div></div>
+        <div class="form-group"><label for="fp-cf">${t('Confirm new password')}</label><input type="password" id="fp-cf" autocomplete="new-password"></div>
         <button class="btn block" id="fp-save">${t('Update password')}</button>
         <p class="switch"><a href="#" id="fp-logout">${t('Sign out')}</a></p>
       </div></div>`;

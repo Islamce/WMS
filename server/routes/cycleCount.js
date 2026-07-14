@@ -9,7 +9,7 @@
 const express = require('express');
 const db = require('./../db/connection');
 const { authenticate, requirePermission } = require('./../middleware/auth');
-const { isId, isNonNegativeNumber, isNonEmptyString } = require('./../utils/validate');
+const { isId, isNonNegativeNumber, parsePagination } = require('./../utils/validate');
 const audit = require('./../services/audit');
 const { recordMovement } = require('./../services/ledger');
 
@@ -22,15 +22,17 @@ function nextCountNumber() {
   return `CC-${year}-${String(n + 1).padStart(6, '0')}`;
 }
 
-/** GET /api/cycle-count — list counts (optional ?status=). */
+/** GET /api/cycle-count — list counts (optional ?status=, paginated). */
 router.get('/', (req, res) => {
   const { status } = req.query;
   const valid = ['OPEN', 'COUNTED', 'POSTED', 'CANCELLED'];
-  let sql = 'SELECT * FROM cycle_counts';
-  const params = [];
-  if (status && valid.includes(status)) { sql += ' WHERE status=?'; params.push(status); }
-  sql += ' ORDER BY id DESC LIMIT 500';
-  res.json({ counts: db.prepare(sql).all(...params) });
+  const where = status && valid.includes(status) ? 'WHERE status=?' : '';
+  const params = where ? [status] : [];
+  const { page, limit, offset } = parsePagination(req.query, { page: 1, limit: 100 });
+  const total = db.prepare(`SELECT COUNT(*) AS n FROM cycle_counts ${where}`).get(...params).n;
+  const counts = db.prepare(`SELECT * FROM cycle_counts ${where} ORDER BY id DESC LIMIT ? OFFSET ?`)
+    .all(...params, limit, offset);
+  res.json({ counts, total, page, limit });
 });
 
 /** POST /api/cycle-count — open a count for a batch. body { batch_id } */

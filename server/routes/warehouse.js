@@ -7,6 +7,7 @@ const express = require('express');
 const db = require('./../db/connection');
 const { authenticate, requirePermission } = require('./../middleware/auth');
 const { isId, isPositiveNumber } = require('./../utils/validate');
+const { sendError } = require('./../utils/errors');
 const audit = require('./../services/audit');
 const notify = require('./../services/notify');
 const allocation = require('./../services/allocation');
@@ -117,7 +118,7 @@ router.post('/:id/allocate', requirePermission('bin_batch_assignment'), (req, re
     setHeaderStatus(header, HEADER_STATUS.BATCH_ASSIGNED, { user: req.user, sourceScreen: 'Bin & Batch Assignment' });
     setHeaderStatus(header, HEADER_STATUS.PENDING_PICKER_ASSIGNMENT, { user: req.user, sourceScreen: 'Bin & Batch Assignment' });
   });
-  try { run(); } catch (err) { return res.status(err.status || 500).json({ error: err.message }); }
+  try { run(); } catch (err) { return sendError(res, err); }
 
   notify.notifyPermission('picker_assignment', { requestNumber: header.request_number,
     notificationType: 'PICKER_ASSIGNMENT_NEEDED', title: `Request ${header.request_number} ready for picker assignment`,
