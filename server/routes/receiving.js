@@ -23,6 +23,7 @@ const qrService = require('./../services/qr');
 const { calcExpiry } = require('./../services/expiry');
 const { streamLabelsPdf } = require('./../services/labels');
 const { recordMovement } = require('./../services/ledger');
+const { activeFreeze, freezeMessage } = require('./../services/freeze');
 
 const router = express.Router();
 router.use(authenticate);
@@ -57,6 +58,8 @@ router.post('/', requirePermission('goods_receipt'), (req, res) => {
   if (!material) return res.status(404).json({ error: 'Material not found.' });
   const wh = db.prepare('SELECT * FROM warehouses WHERE warehouse_code=?').get(b.warehouse_code);
   if (!wh) return res.status(404).json({ error: 'Warehouse not found.' });
+  const freeze = activeFreeze(wh.warehouse_code);
+  if (freeze) return res.status(400).json({ error: freezeMessage(freeze, wh.warehouse_code) });
 
   // Expiry resolution (three shelf-life options).
   let expiry = b.expiry_date || null;

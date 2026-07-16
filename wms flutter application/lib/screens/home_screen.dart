@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../core/i18n.dart';
 import '../core/session.dart';
 import '../main.dart';
+import '../widgets/common.dart';
 import 'dashboard_screen.dart';
 import 'requests_screen.dart';
 import 'create_request_screen.dart';
@@ -16,6 +20,9 @@ import 'quality_screen.dart';
 import 'batches_screen.dart';
 import 'expiry_screen.dart';
 import 'cycle_count_screen.dart';
+import 'inventory_screen.dart';
+import 'reallocation_screen.dart';
+import 'shipping_screen.dart';
 import 'materials_screen.dart';
 import 'users_screen.dart';
 import 'audit_screen.dart';
@@ -38,6 +45,7 @@ const Map<String, Color> _sectionAccent = {
   'General': Color(0xFF2a78d6),
   'Material Requests': Color(0xFF7c3aed),
   'Warehouse Execution': Color(0xFF1baf7a),
+  'Shipping & Outbound': Color(0xFFd6552a),
   'Receiving & Quality': Color(0xFFeda100),
   'Master Data & Admin': Color(0xFF5b6b86),
 };
@@ -61,12 +69,16 @@ const List<Object> _menu = [
   NavDest('Picker Assignment', Icons.person_add_alt_1_outlined, 'picker_assignment', _pickerAssign),
   NavDest('My Picking Tasks', Icons.qr_code_scanner, 'picking', PickingScreen.new),
   NavDest('Goods Issue Posting', Icons.local_shipping_outlined, 'gi_posting', GiScreen.new),
+  NavDest('Stock Reallocation', Icons.swap_horiz_outlined, ['reallocation', 'bin_batch_assignment'], ReallocationScreen.new),
+  'Shipping & Outbound',
+  NavDest('Delivery & Dispatch', Icons.local_shipping, ['shipping', 'gi_posting'], ShippingScreen.new),
   'Receiving & Quality',
   NavDest('Goods Receipt', Icons.download_outlined, 'goods_receipt', ReceivingScreen.new),
   NavDest('Quality Inspection', Icons.science_outlined, 'quality', QualityScreen.new),
   NavDest('Batch Tracking', Icons.inventory_2_outlined, 'batch_tracking', BatchesScreen.new),
   NavDest('Expiry Alerts', Icons.schedule_outlined, 'expiry_alerts', ExpiryScreen.new),
   NavDest('Cycle Counting', Icons.checklist_outlined, 'cycle_count', CycleCountScreen.new),
+  NavDest('Physical Inventory', Icons.inventory_outlined, ['inventory_count', 'cycle_count'], InventoryScreen.new),
   'Master Data & Admin',
   NavDest('Materials', Icons.category_outlined, 'materials', MaterialsScreen.new),
   NavDest('Users', Icons.group_outlined, 'users_management', UsersScreen.new),
@@ -86,7 +98,37 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
   int _index = 0;
+  int _unread = 0;
+  Timer? _bellTimer;
+  DateTime? _lastBackPress;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _refreshUnread();
+      _bellTimer = Timer.periodic(const Duration(seconds: 60), (_) => _refreshUnread());
+    });
+  }
+
+  @override
+  void dispose() {
+    _bellTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _refreshUnread() async {
+    if (!mounted) return;
+    final session = SessionScope.of(context);
+    if (!session.isAuthenticated || !session.can('notifications')) return;
+    try {
+      final res = await session.api.get('/api/notifications/unread-count');
+      final n = (res['unread'] ?? 0) as num;
+      if (mounted && n.toInt() != _unread) setState(() => _unread = n.toInt());
+    } catch (_) {/* offline — keep the last badge */}
+  }
 
   List<NavDest> _visible(Session s) {
     final out = <NavDest>[];
@@ -94,6 +136,26 @@ class _HomeScreenState extends State<HomeScreen> {
       if (e is NavDest && s.can(e.permission)) out.add(e);
     }
     return out;
+  }
+
+  /// System back: close the drawer, step back to the launchpad, and only exit
+  /// the app on a double press from the launchpad itself.
+  void _handleBack() {
+    if (_scaffoldKey.currentState?.isDrawerOpen ?? false) {
+      Navigator.of(context).pop(); // just closes the drawer
+      return;
+    }
+    if (_index != 0) {
+      setState(() => _index = 0);
+      return;
+    }
+    final now = DateTime.now();
+    if (_lastBackPress != null && now.difference(_lastBackPress!) < const Duration(seconds: 2)) {
+      SystemNavigator.pop();
+    } else {
+      _lastBackPress = now;
+      showSnack(context, t('Press back again to exit'));
+    }
   }
 
   @override
@@ -111,20 +173,44 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_index >= dests.length) _index = 0;
     final current = dests[_index];
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(t(current.label)),
-        actions: [
-          IconButton(
-            tooltip: 'Settings',
-            icon: const Icon(Icons.settings_outlined),
-            onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const SettingsScreen())),
-          ),
-        ],
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _handleBack();
+      },
+      child: Scaffold(
+        key: _scaffoldKey,
+        appBar: AppBar(
+          title: Text(t(current.label)),
+          actions: [
+            if (session.can('notifications'))
+              IconButton(
+                tooltip: t('Notifications'),
+                icon: Badge(
+                  isLabelVisible: _unread > 0,
+                  label: Text(_unread > 99 ? '99+' : '$_unread'),
+                  child: const Icon(Icons.notifications_outlined),
+                ),
+                onPressed: () async {
+                  await Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => Scaffold(
+                            appBar: AppBar(title: Text(t('Notifications'))),
+                            body: const NotificationsScreen(),
+                          )));
+                  _refreshUnread();
+                },
+              ),
+            IconButton(
+              tooltip: 'Settings',
+              icon: const Icon(Icons.settings_outlined),
+              onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const SettingsScreen())),
+            ),
+          ],
+        ),
+        drawer: _buildDrawer(session, dests),
+        body: _index == 0 ? _buildLaunchpad(session, dests) : current.builder(),
       ),
-      drawer: _buildDrawer(session, dests),
-      body: _index == 0 ? _buildLaunchpad(session, dests) : current.builder(),
     );
   }
 

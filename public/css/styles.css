@@ -590,3 +590,25 @@ tr.row-link:hover td { background: var(--hover-tint); }
 .mini-kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; box-shadow: var(--shadow); }
 .mini-kpi .v { font-size: 20px; font-weight: 700; }
 .mini-kpi .l { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+/* --- Requester context block (shown on every workflow step) ----------------- */
+.req-ctx { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px 16px;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; margin: 8px 0 12px; }
+.req-ctx-item { display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.req-ctx-item .muted { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+
+/* --- Sortable table headers -------------------------------------------------- */
+th.sortable, table thead th { cursor: pointer; user-select: none; }
+table[data-nosort] thead th { cursor: default; }
+
+/* --- ABC-XYZ matrix ----------------------------------------------------------- */
+.abc-matrix { display: grid; grid-template-columns: auto repeat(3, 1fr); gap: 6px; max-width: 560px; }
+.abc-matrix .hd { font-weight: 700; font-size: 12px; color: var(--text-muted); align-self: center; justify-self: center; }
+.abc-cell { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 10px; text-align: center; }
+.abc-cell .n { font-size: 20px; font-weight: 700; }
+.abc-cell .items { font-size: 11px; color: var(--text-muted); margin-top: 2px; word-break: break-word; }
+
+/* --- Shipment status stepper -------------------------------------------------- */
+.ship-steps { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
+.ship-step { font-size: 12px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-muted); }
+.ship-step.done { background: color-mix(in srgb, var(--primary) 12%, transparent); color: var(--primary); border-color: var(--primary); }

@@ -42,25 +42,59 @@ router.get('/search', requirePermission(['materials', 'stock_in', 'stock_out', '
   res.json({ materials });
 });
 
-/** GET /api/materials — paginated list with search. */
+/**
+ * GET /api/materials — paginated list with search, filters and sorting.
+ * Stock figures are computed live from batches (the WMS execution stock,
+ * moved by GR / GI / counts / reallocation) plus the basic location stock, so
+ * the master always reflects reality without any manual refresh.
+ * Query: search, group, type, stock=in|out|low, sort=<column>, dir=asc|desc.
+ */
+const SORTABLE = {
+  item_code: 'm.item_code', description: 'm.description', plant: 'm.plant',
+  material_group: 'm.material_group', material_type: 'm.material_type',
+  unit: 'm.unit', price: 'm.price', total_stock: 'total_stock',
+  available_stock: 'available_stock',
+};
+
 router.get('/', requirePermission('materials'), (req, res) => {
   const { page, limit, offset } = parsePagination(req.query);
+  const clauses = [];
+  const params = [];
   const q = (req.query.search || '').trim();
-  const like = `%${q}%`;
-  const where = q
-    ? 'WHERE item_code LIKE ? OR description LIKE ? OR material_group LIKE ? OR plant LIKE ?'
-    : '';
-  const params = q ? [like, like, like, like] : [];
+  if (q) {
+    const like = `%${q}%`;
+    clauses.push('(item_code LIKE ? OR description LIKE ? OR material_group LIKE ? OR plant LIKE ?)');
+    params.push(like, like, like, like);
+  }
+  if ((req.query.group || '').trim()) { clauses.push('material_group = ?'); params.push(req.query.group.trim()); }
+  if ((req.query.type || '').trim()) { clauses.push('material_type = ?'); params.push(req.query.type.trim()); }
+  const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
 
-  const { total } = db.prepare(`SELECT COUNT(*) AS total FROM materials ${where}`).get(...params);
-  const materials = db.prepare(`
-    SELECT m.*,
-      COALESCE((SELECT SUM(quantity) FROM material_location_stock WHERE material_id = m.id), 0) AS total_stock
+  const stockExpr = `(
+    COALESCE((SELECT SUM(remaining_quantity) FROM batches WHERE material_id = m.id), 0)
+    + COALESCE((SELECT SUM(quantity) FROM material_location_stock WHERE material_id = m.id), 0))`;
+  const reservedExpr = 'COALESCE((SELECT SUM(reserved_quantity) FROM batches WHERE material_id = m.id), 0)';
+
+  // Stock filter runs over the computed figure (HAVING, after the subqueries).
+  const stockFilter = { in: `HAVING total_stock > 0`, out: `HAVING total_stock <= 0`, low: `HAVING total_stock > 0 AND available_stock <= 0` }[req.query.stock] || '';
+
+  const orderCol = SORTABLE[req.query.sort] || 'm.item_code';
+  const orderDir = req.query.dir === 'desc' ? 'DESC' : 'ASC';
+
+  const base = `
+    SELECT m.*, ${stockExpr} AS total_stock, ${reservedExpr} AS reserved_stock,
+      (${stockExpr} - ${reservedExpr}) AS available_stock
     FROM materials m ${where}
-    ORDER BY m.item_code LIMIT ? OFFSET ?
-  `).all(...params, limit, offset);
+    GROUP BY m.id ${stockFilter}`;
+  const total = db.prepare(`SELECT COUNT(*) AS n FROM (${base})`).get(...params).n;
+  const materials = db.prepare(`${base} ORDER BY ${orderCol} ${orderDir}, m.item_code LIMIT ? OFFSET ?`)
+    .all(...params, limit, offset);
 
-  res.json({ materials, total, page, limit });
+  // Distinct filter values so the UI can build its dropdowns.
+  const groups = db.prepare("SELECT DISTINCT material_group AS v FROM materials WHERE material_group != '' ORDER BY v").all().map((r) => r.v);
+  const types = db.prepare("SELECT DISTINCT material_type AS v FROM materials WHERE material_type != '' ORDER BY v").all().map((r) => r.v);
+
+  res.json({ materials, total, page, limit, filters: { groups, types } });
 });
 
 /**

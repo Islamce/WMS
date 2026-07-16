@@ -76,6 +76,10 @@ const MODULES = [
     { route: 'picker-assign', label: 'Picker Assignment', icon: 'user-plus', permission: 'picker_assignment' },
     { route: 'picking', label: 'My Picking Tasks', icon: 'smartphone', permission: 'picking' },
     { route: 'gi-posting', label: 'Goods Issue Posting', icon: 'send', permission: 'gi_posting' },
+    { route: 'reallocation', label: 'Stock Reallocation', icon: 'shuffle', permission: ['reallocation', 'bin_batch_assignment'] },
+  ] },
+  { key: 'outbound', label: 'Shipping & Outbound', icon: 'truck', items: [
+    { route: 'shipping', label: 'Delivery & Dispatch', icon: 'truck', permission: ['shipping', 'gi_posting'] },
   ] },
   { key: 'receiving', label: 'Receiving & Quality', icon: 'download', items: [
     { route: 'receiving', label: 'Goods Receipt & QR', icon: 'download', permission: ['goods_receipt', 'erp_operator', 'picking'] },
@@ -86,6 +90,7 @@ const MODULES = [
     { route: 'quality', label: 'Quality', icon: 'shield', permission: 'quality' },
   ] },
   { key: 'inventory', label: 'Inventory', icon: 'map', items: [
+    { route: 'physical-inventory', label: 'Physical Inventory', icon: 'clipboard', permission: ['inventory_count', 'cycle_count'] },
     { route: 'all-locations', label: 'All Locations', icon: 'map', permission: 'all_locations' },
     { route: 'empty-locations', label: 'Empty Locations', icon: 'square', permission: 'empty_locations' },
   ] },
@@ -126,6 +131,9 @@ const ROUTE_PAGES = {
   'picker-assign': { title: 'Picker Assignment', page: 'pickerAssign', permission: 'picker_assignment' },
   'picking': { title: 'My Picking Tasks', page: 'picking', permission: 'picking' },
   'gi-posting': { title: 'Goods Issue Posting', page: 'giPosting', permission: 'gi_posting' },
+  'reallocation': { title: 'Stock Reallocation', page: 'reallocation', permission: ['reallocation', 'bin_batch_assignment'] },
+  'shipping': { title: 'Shipping & Outbound', page: 'shipping', permission: ['shipping', 'gi_posting'] },
+  'physical-inventory': { title: 'Physical Inventory', page: 'inventory', permission: ['inventory_count', 'cycle_count'] },
   'receiving': { title: 'Goods Receipt & QR', page: 'receiving', permission: ['goods_receipt', 'erp_operator', 'picking'] },
   'qr-printing': { title: 'QR Label Printing', page: 'qrPrinting', permission: ['qr_printing', 'goods_receipt'] },
   'batches': { title: 'Batch Tracking', page: 'batches', permission: 'batch_tracking' },
@@ -160,6 +168,7 @@ const App = {
   },
 
   async init() {
+    UI.initTableSorting(); // click-to-sort on every data table
     window.addEventListener('hashchange', () => this.route());
     if (Api.token) {
       try {

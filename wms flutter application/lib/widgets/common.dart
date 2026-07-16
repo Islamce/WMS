@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/format.dart';
+import '../core/i18n.dart';
 
 /// Small coloured pill for a workflow status.
 class StatusChip extends StatelessWidget {
@@ -97,6 +98,55 @@ void showSnack(BuildContext context, String message, {bool error = false}) {
       content: Text(message),
       backgroundColor: error ? const Color(0xFFe34948) : null,
     ));
+}
+
+/// Requester / request context block — shown on every workflow step (ERP,
+/// picking, GI, warehouse) so operators always see the full request details,
+/// not just the request number. Accepts a request header map (or task row
+/// carrying the same field names).
+class RequestInfoCard extends StatelessWidget {
+  const RequestInfoCard(this.r, {super.key});
+  final Map<String, dynamic> r;
+
+  String _v(String key) {
+    final v = r[key] ?? (key == 'project' ? r['wbs_element'] : null);
+    final s = (v ?? '').toString();
+    return s.isEmpty ? '—' : s;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    Widget item(String label, String value) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(t(label).toUpperCase(),
+                style: const TextStyle(fontSize: 10, color: Colors.grey, letterSpacing: 0.5)),
+            Text(value, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          ],
+        );
+    return Container(
+      margin: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Theme.of(context).dividerColor),
+      ),
+      child: Wrap(
+        spacing: 20,
+        runSpacing: 10,
+        children: [
+          item('Requester', _v('requester_name')),
+          item('Department', _v('department')),
+          item('Project', _v('project')),
+          item('Cost Center', _v('cost_center')),
+          item('Priority', _v('priority')),
+          item('Required date', _v('required_date')),
+          if ((r['purpose'] ?? '').toString().isNotEmpty) item('Purpose', _v('purpose')),
+        ],
+      ),
+    );
+  }
 }
 
 /// A titled card used to group KPIs / sections.

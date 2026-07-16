@@ -146,7 +146,7 @@ DB_PATH=./data/wms.db
 ### Testing & CI
 
 ```bash
-npm test        # full end-to-end suite (240 checks) — needs Node 18+ and python3
+npm test        # full end-to-end suite (282 checks) — needs Node 18+ and python3
 npm run lint    # ESLint + eslint-plugin-security (0 errors)
 npm audit --omit=dev --audit-level=high   # production dependency audit
 npm run test:smoke  # Playwright smoke: login + shell + axe a11y gate, no console errors

@@ -11,6 +11,7 @@ const { sendError } = require('./../utils/errors');
 const audit = require('./../services/audit');
 const notify = require('./../services/notify');
 const allocation = require('./../services/allocation');
+const { activeFreeze, freezeMessage } = require('./../services/freeze');
 const { setHeaderStatus, getHeaderOr404, releaseOpenAllocations, sweepReservations } = require('./../services/requests');
 const { HEADER_STATUS, LINE_STATUS, TASK_STATUS } = require('./../workflow/states');
 
@@ -26,7 +27,8 @@ router.get('/queue', requirePermission(['warehouse_dashboard', 'bin_batch_assign
     HEADER_STATUS.PICKING_IN_PROGRESS, HEADER_STATUS.PICKING_COMPLETED, HEADER_STATUS.PARTIALLY_PICKED,
   ];
   const rows = db.prepare(`
-    SELECT id, request_number, requester_name, priority, request_status, issue_warehouse_code,
+    SELECT id, request_number, requester_name, department, wbs_element AS project, cost_center, required_date,
+           priority, request_status, issue_warehouse_code,
            movement_type, total_lines, created_at
     FROM material_request_headers
     WHERE request_status IN (${stages.map(() => '?').join(',')})
@@ -49,6 +51,8 @@ router.post('/:id/allocate', requirePermission('bin_batch_assignment'), (req, re
   if (!allowed.includes(header.request_status)) {
     return res.status(400).json({ error: `Request is not ready for allocation (status '${header.request_status}').` });
   }
+  const freeze = activeFreeze(header.issue_warehouse_code);
+  if (freeze) return res.status(400).json({ error: freezeMessage(freeze, header.issue_warehouse_code) });
 
   const lines = db.prepare(
     "SELECT * FROM material_request_lines WHERE request_id=? AND line_status NOT IN ('Rejected','Cancelled')"

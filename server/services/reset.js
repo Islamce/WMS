@@ -21,6 +21,7 @@ const audit = require('./audit');
 // picking_tasks; lines reference qr_codes/batches; qr_codes reference batches).
 const TRANSACTIONAL = [
   'notification_log', 'erp_integration_log',
+  'shipments', 'stock_reallocations', 'inventory_count_lines', 'inventory_sessions',
   'picking_allocations', 'picking_tasks', 'request_attachments',
   'material_request_lines', 'material_request_headers',
   'qr_codes', 'cycle_counts', 'batches',

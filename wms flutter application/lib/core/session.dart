@@ -15,7 +15,11 @@ class Session extends ChangeNotifier {
   static const _kLang = 'wms_lang';
   static const _kTheme = 'wms_theme';
 
-  String baseUrl = 'http://10.0.2.2:3000';
+  /// Production server — baked in so the app works out of the box; it can
+  /// still be changed under Settings (e.g. for a dev/test server).
+  static const defaultBaseUrl = 'https://wms.kynox.io';
+
+  String baseUrl = defaultBaseUrl;
   String? token;
   Map<String, dynamic>? user;
   bool loading = true;
@@ -51,6 +55,9 @@ class Session extends ChangeNotifier {
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
     baseUrl = prefs.getString(_kBaseUrl) ?? baseUrl;
+    // Older builds defaulted to the Android-emulator loopback; migrate those
+    // installs to the production server automatically.
+    if (baseUrl == 'http://10.0.2.2:3000') baseUrl = defaultBaseUrl;
     lang = prefs.getString(_kLang) ?? 'en';
     I18n.current = lang;
     final themeName = prefs.getString(_kTheme) ?? 'system';

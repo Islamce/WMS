@@ -160,6 +160,11 @@ class _WarehouseScreenState extends State<WarehouseScreen> {
                         StatusChip('${r['request_status']}'),
                       ]),
                       const SizedBox(height: 4),
+                      Text('${r['requester_name'] ?? ''}'
+                          '${(r['department'] ?? '').toString().isNotEmpty ? ' · ${r['department']}' : ''}'
+                          '${(r['project'] ?? '').toString().isNotEmpty ? ' · ${r['project']}' : ''}'
+                          '${(r['required_date'] ?? '').toString().isNotEmpty ? ' · req. ${r['required_date']}' : ''}',
+                          style: const TextStyle(fontSize: 13)),
                       Text('WH ${r['issue_warehouse_code'] ?? ''} · MvT ${r['movement_type'] ?? ''} · '
                           '${r['total_lines'] ?? 0} line(s) · ${r['priority'] ?? ''}'),
                       const SizedBox(height: 10),
