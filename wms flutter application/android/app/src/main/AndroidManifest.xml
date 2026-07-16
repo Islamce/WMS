@@ -4,6 +4,8 @@
     <!-- Camera for barcode / QR scanning in picking and receiving. -->
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
+    <!-- Real push notifications (Firebase Cloud Messaging), Android 13+. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
         android:label="WMS Mobile"
         android:name="${applicationName}"
@@ -12,6 +14,11 @@
         <!-- usesCleartextTraffic allows plain-HTTP to a LAN dev server
              (e.g. http://10.0.2.2:3000 or http://192.168.x.x:3000). Production
              deployments should use HTTPS. -->
+        <!-- Default notification channel FCM uses when a "notification" payload
+             is delivered while the app is backgrounded/terminated. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="wms_default"/>
 
         <activity
             android:name=".MainActivity"

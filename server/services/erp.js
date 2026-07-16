@@ -68,6 +68,14 @@ const manual = {
     return { ok: true, response };
   },
 
+  /** Cancel/release a reservation that was never consumed by a goods issue (used by the reverse-workflow action). */
+  cancelReservation({ requestNumber, reservationNumber, referenceNumber, user }) {
+    const response = { cancelled: reservationNumber || referenceNumber, cancelledAt: new Date().toISOString() };
+    log({ requestNumber, transactionType: 'RESERVATION_CANCEL', payload: { reservationNumber, referenceNumber },
+      response, status: 'SUCCESS', user });
+    return { ok: true, response };
+  },
+
   reverseGoodsIssue({ requestNumber, payload, originalGiDocument, reversalMovementType, user }) {
     const response = {
       reversalDocumentNumber: `REV-${originalGiDocument || requestNumber}`,

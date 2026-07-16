@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
+import '../core/i18n.dart';
 import '../main.dart';
 import '../widgets/common.dart';
 
@@ -138,10 +139,56 @@ class _ErpFormState extends State<_ErpForm> {
     }
   }
 
+  Future<void> _reverse() async {
+    final ctrl = TextEditingController();
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(t('Reverse one step')),
+        content: TextField(
+          controller: ctrl, autofocus: true, maxLines: 2,
+          decoration: InputDecoration(
+              labelText: t('Reason (releases any reservation, allocation or picking task this stage holds)'),
+              border: const OutlineInputBorder()),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: Text(t('Cancel'))),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, ctrl.text.trim()),
+            child: Text(t('Reverse one step')),
+          ),
+        ],
+      ),
+    );
+    if (reason == null) return;
+    setState(() => _busy = true);
+    try {
+      final res = await SessionScope.of(context).api
+          .post('/api/requests/${widget.requestId}/reverse', {'reason': reason});
+      if (mounted) {
+        showSnack(context, '${res['message'] ?? t('Request reversed.')}');
+        Navigator.of(context).pop();
+      }
+    } on ApiException catch (e) {
+      if (mounted) showSnack(context, e.message, error: true);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('ERP · ${widget.requestNumber}')),
+      appBar: AppBar(
+        title: Text('ERP · ${widget.requestNumber}'),
+        actions: [
+          IconButton(
+            tooltip: t('Reverse one step'),
+            icon: const Icon(Icons.keyboard_return_outlined),
+            onPressed: _busy ? null : _reverse,
+          ),
+        ],
+      ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : ListView(

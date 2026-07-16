@@ -5,6 +5,8 @@
 const express = require('express');
 const db = require('./../db/connection');
 const { authenticate } = require('./../middleware/auth');
+const { isNonEmptyString } = require('./../utils/validate');
+const push = require('./../services/push');
 
 const router = express.Router();
 router.use(authenticate);
@@ -36,6 +38,25 @@ router.post('/read-all', (req, res) => {
   db.prepare("UPDATE notification_log SET status='READ', read_at=datetime('now') WHERE recipient_user_id=? AND status='SENT'")
     .run(req.user.id);
   res.json({ message: 'All notifications marked as read.' });
+});
+
+/**
+ * POST /api/notifications/register-device — register this device's FCM token
+ * for real push notifications (mobile app, called after sign-in).
+ * body: { token, platform? }
+ */
+router.post('/register-device', (req, res) => {
+  const { token, platform } = req.body || {};
+  if (!isNonEmptyString(token)) return res.status(400).json({ error: 'Device token is required.' });
+  push.registerDevice({ userId: req.user.id, token: token.trim(), platform });
+  res.json({ message: 'Device registered for push notifications.' });
+});
+
+/** POST /api/notifications/unregister-device — stop pushing to this device (sign-out). */
+router.post('/unregister-device', (req, res) => {
+  const { token } = req.body || {};
+  if (isNonEmptyString(token)) push.unregisterDevice(token.trim());
+  res.json({ message: 'Device unregistered.' });
 });
 
 module.exports = router;

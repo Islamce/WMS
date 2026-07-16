@@ -4,9 +4,23 @@ import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
 import '../core/format.dart';
+import '../core/i18n.dart';
 import '../core/session.dart';
 import '../main.dart';
 import '../widgets/common.dart';
+
+// Statuses eligible for the generic "reverse one step" action — mirrors
+// REVERSE_TARGET in server/workflow/states.js. The server is the actual
+// authority on both eligibility and per-stage permission; this list only
+// decides whether to show the button.
+const _kReversibleStatuses = [
+  'Pending Manager Approval', 'Under Review',
+  'Approved - Pending ERP Processing', 'Pending ERP Reservation', 'ERP Reservation Created', 'Movement Type Assigned',
+  'Warehouse Assigned', 'Pending Warehouse Action', 'Pending Bin Location Assignment', 'Location Assigned', 'Batch Assigned',
+  'Pending Picker Assignment', 'Assigned to Picker', 'Pending Picker Acceptance', 'Reminder Sent',
+  'Escalated to Supervisor', 'Accepted by Picker', 'Picking in Progress',
+  'Pending ERP GI', 'ERP Error',
+];
 
 class RequestDetailScreen extends StatefulWidget {
   const RequestDetailScreen({super.key, required this.requestId});
@@ -57,8 +71,9 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
           final canSubmit = status == 'Draft' || status == 'Returned to Requester';
           final canCancel = !['Completed', 'Cancelled', 'Rejected', 'Closed with Shortage', 'Partially Completed']
               .contains(status);
-          final canReverse = ['Completed', 'Partially Completed', 'Closed with Shortage'].contains(status)
+          final canReverseGi = ['Completed', 'Partially Completed', 'Closed with Shortage'].contains(status)
               && session.can('gi_posting');
+          final canReverseStep = _kReversibleStatuses.contains(status);
           final canAttach = session.can(['material_requests', 'create_request', 'approvals']);
 
           return ListView(
@@ -118,14 +133,24 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
                 ),
               ),
               if (canAttach) _AttachmentsCard(requestId: widget.requestId, session: session),
-              if (canReverse)
+              if (canReverseGi)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
                   child: OutlinedButton.icon(
                     icon: const Icon(Icons.undo_rounded),
                     label: const Text('Reverse Goods Issue'),
                     style: OutlinedButton.styleFrom(foregroundColor: const Color(0xFFeda100)),
-                    onPressed: _busy ? null : () => _reverse(),
+                    onPressed: _busy ? null : () => _reverseGi(),
+                  ),
+                ),
+              if (canReverseStep)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.keyboard_return_outlined),
+                    label: Text(t('Reverse one step')),
+                    style: OutlinedButton.styleFrom(foregroundColor: const Color(0xFFeda100)),
+                    onPressed: _busy ? null : () => _reverseStep(),
                   ),
                 ),
               if (isOwner && (canSubmit || canCancel))
@@ -170,12 +195,31 @@ class _RequestDetailScreenState extends State<RequestDetailScreen> {
         body: {'reason': reason}, ok: 'Request cancelled.');
   }
 
-  Future<void> _reverse() async {
+  Future<void> _reverseGi() async {
     final reason = await _askReason(context, 'Reverse Goods Issue',
         'Reason (stock returns to its batches)');
     if (reason == null) return;
     await _action('/api/gi/${widget.requestId}/reverse',
         body: {'reason': reason}, ok: 'Goods issue reversed.');
+  }
+
+  Future<void> _reverseStep() async {
+    final reason = await _askReason(context, t('Reverse one step'),
+        t('Reason (releases any reservation, allocation or picking task this stage holds)'));
+    if (reason == null) return;
+    final session = SessionScope.of(context);
+    setState(() => _busy = true);
+    try {
+      final res = await session.api.post('/api/requests/${widget.requestId}/reverse', {'reason': reason});
+      if (mounted) {
+        showSnack(context, '${res['message'] ?? t('Request reversed.')}');
+        setState(() => _reloadKey++);
+      }
+    } on ApiException catch (e) {
+      if (mounted) showSnack(context, e.message, error: true);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Widget _kv(String k, dynamic v) {

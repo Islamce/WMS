@@ -56,6 +56,7 @@ Pages.erpOperator = {
         <div class="actions" style="justify-content:flex-start">
           <button class="btn secondary" id="eo-save">Save ERP details</button>
           <button class="btn success" id="eo-send">Send to Warehouse →</button>
+          <button class="btn warn" id="eo-reverse" title="${t('Send this request back one step, undoing what the current stage did')}">↩ ${t('Reverse one step')}</button>
         </div>
         <p class="muted" style="margin-top:8px">Movement type, reservation/reference, plant, storage location and issue warehouse are all mandatory before routing to the warehouse.</p>
       </div>`;
@@ -78,6 +79,17 @@ Pages.erpOperator = {
         await Api.post(`/api/erp-operator/${id}/send-to-warehouse`);
         UI.toast('Sent to warehouse.'); box.innerHTML = ''; this.loadQueue();
       } catch (err) { UI.toast(err.message, 'error'); }
+    });
+    box.querySelector('#eo-reverse').addEventListener('click', () => {
+      UI.modal({ title: t('Reverse one step'), submitLabel: t('Reverse'),
+        bodyHtml: `<p class="hint">${t('Sends this request back to the previous stage, undoing what the current stage did (releases any reservation, allocation or picking task it holds).')}</p>`
+          + `<div class="form-group"><label>${t('Reason')}</label><input type="text" id="eo-rv-reason" /></div>`,
+        onSubmit: async (ov, close) => {
+          try {
+            const r = await Api.post(`/api/requests/${id}/reverse`, { reason: ov.querySelector('#eo-rv-reason').value });
+            UI.toast(r.message); close(); box.innerHTML = ''; this.loadQueue();
+          } catch (err) { UI.toast(err.message, 'error'); }
+        } });
     });
   },
 };

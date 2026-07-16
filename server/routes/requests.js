@@ -11,6 +11,7 @@ const { sendError } = require('./../utils/errors');
 const audit = require('./../services/audit');
 const notify = require('./../services/notify');
 const { nextRequestNumber, setHeaderStatus, refreshRollups, getHeaderOr404, releaseOpenAllocations } = require('./../services/requests');
+const { reverseOneStep } = require('./../services/reverseWorkflow');
 const { HEADER_STATUS, LINE_STATUS } = require('./../workflow/states');
 
 const router = express.Router();
@@ -195,6 +196,21 @@ router.post('/:id/cancel', requirePermission('material_requests'), (req, res) =>
   });
   const released = cancel();
   res.json({ message: `Request cancelled.${released ? ` Released ${released} stock reservation(s).` : ''}` });
+});
+
+/**
+ * POST /api/requests/:id/reverse — send the request back one step (to the
+ * previous queue), undoing that stage's own effects (ERP reservation, batch
+ * allocation, picking task). body: { reason? }. Distinct from
+ * POST /api/gi/:id/reverse, which fully reverses a *posted* goods issue.
+ */
+router.post('/:id/reverse', (req, res) => {
+  const header = getHeaderOr404(res, req.params.id);
+  if (!header) return;
+  try {
+    const result = reverseOneStep(header, { user: req.user, reason: (req.body || {}).reason });
+    res.json(result);
+  } catch (err) { sendError(res, err); }
 });
 
 module.exports = router;

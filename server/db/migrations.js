@@ -58,6 +58,11 @@ const MIGRATIONS = [
     description: 'Stock reallocations, physical inventory sessions, outbound shipments, batches.project.',
     up() { /* tables/column created by the idempotent baseline in migrate2.js */ },
   },
+  {
+    id: '008_device_tokens',
+    description: 'device_tokens table for real push notifications (Firebase Cloud Messaging).',
+    up() { /* table created by the idempotent baseline in migrate2.js */ },
+  },
 ];
 
 function ensureTable() {

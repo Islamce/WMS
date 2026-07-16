@@ -1,6 +1,19 @@
 /** Request Detail — full header, lines, allocations, task, and audit timeline. */
 window.Pages = window.Pages || {};
 
+// Statuses eligible for the generic "reverse one step" action — mirrors
+// REVERSE_TARGET in server/workflow/states.js. The server is the actual
+// authority on both eligibility and per-stage permission; this list only
+// decides whether to show the button.
+const REVERSIBLE_STATUSES = [
+  'Pending Manager Approval', 'Under Review',
+  'Approved - Pending ERP Processing', 'Pending ERP Reservation', 'ERP Reservation Created', 'Movement Type Assigned',
+  'Warehouse Assigned', 'Pending Warehouse Action', 'Pending Bin Location Assignment', 'Location Assigned', 'Batch Assigned',
+  'Pending Picker Assignment', 'Assigned to Picker', 'Pending Picker Acceptance', 'Reminder Sent',
+  'Escalated to Supervisor', 'Accepted by Picker', 'Picking in Progress',
+  'Pending ERP GI', 'ERP Error',
+];
+
 Pages.requestDetail = {
   async render(el, id) {
     if (!id) { el.innerHTML = '<div class="inline-alert error">No request id.</div>'; return; }
@@ -25,7 +38,9 @@ Pages.requestDetail = {
           ${!['Completed', 'Cancelled', 'GI Posted', 'Rejected'].includes(r.request_status)
             ? `<button class="btn danger sm" id="rd-cancel">Cancel</button>` : ''}
           ${['Completed', 'Partially Completed', 'Closed with Shortage'].includes(r.request_status) && App.can('gi_posting')
-            ? `<button class="btn warn sm" id="rd-reverse">Reverse GI</button>` : ''}
+            ? `<button class="btn warn sm" id="rd-reverse-gi">Reverse GI</button>` : ''}
+          ${REVERSIBLE_STATUSES.includes(r.request_status)
+            ? `<button class="btn warn sm" id="rd-reverse-step" title="${t('Send this request back one step, undoing what that stage did')}">↩ ${t('Reverse one step')}</button>` : ''}
         </div>
       </div>
 
@@ -107,8 +122,8 @@ Pages.requestDetail = {
           catch (err) { UI.toast(err.message, 'error'); }
         } });
     });
-    const reverseBtn = el.querySelector('#rd-reverse');
-    if (reverseBtn) reverseBtn.addEventListener('click', () => {
+    const reverseGiBtn = el.querySelector('#rd-reverse-gi');
+    if (reverseGiBtn) reverseGiBtn.addEventListener('click', () => {
       UI.modal({ title: 'Reverse Goods Issue', submitLabel: 'Reverse GI',
         bodyHtml: '<p class="hint">This returns the issued stock to its batches and closes the request as Reversed.</p>'
           + '<div class="form-group"><label>Reason</label><input type="text" id="rv-reason" /></div>',
@@ -116,6 +131,18 @@ Pages.requestDetail = {
           try { await Api.post(`/api/gi/${id}/reverse`, { reason: ov.querySelector('#rv-reason').value });
             UI.toast('Goods issue reversed.'); close(); this.render(el, id); }
           catch (err) { UI.toast(err.message, 'error'); }
+        } });
+    });
+    const reverseStepBtn = el.querySelector('#rd-reverse-step');
+    if (reverseStepBtn) reverseStepBtn.addEventListener('click', () => {
+      UI.modal({ title: t('Reverse one step'), submitLabel: t('Reverse'),
+        bodyHtml: `<p class="hint">${t('Sends this request back to the previous stage, undoing what the current stage did (releases any reservation, allocation or picking task it holds).')}</p>`
+          + `<div class="form-group"><label>${t('Reason')}</label><input type="text" id="rv-step-reason" /></div>`,
+        onSubmit: async (ov, close) => {
+          try {
+            const r2 = await Api.post(`/api/requests/${id}/reverse`, { reason: ov.querySelector('#rv-step-reason').value });
+            UI.toast(r2.message); close(); this.render(el, id);
+          } catch (err) { UI.toast(err.message, 'error'); }
         } });
     });
 
