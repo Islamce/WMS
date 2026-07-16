@@ -72,10 +72,12 @@ check('batch leaves pending-GR after set', all(b['id'] != bid for b in pg2['batc
 # pending-bin lists it; assign bin via dropdown value (full_bin_location)
 c, pb = call('GET', '/api/receiving/pending-bin', supervisor)
 check('batch appears in pending-bin', any(b['id'] == bid for b in pb['batches']))
-# get a valid bin for WH01
+# get a valid bin for WH01 — sending the FULL code must still work, but the
+# system stores/displays the compact bin code (UAT: bins use the compact code)
 c, binmeta = call('GET', '/api/meta/warehouses/WH01/bins', supervisor)
-binval = binmeta['bins'][0]['full_bin_location']
-c, r = call('PATCH', f'/api/receiving/batches/{bid}/bin', picker, {'bin_location': binval})
+binval = binmeta['bins'][0]['bin_code']
+c, r = call('PATCH', f'/api/receiving/batches/{bid}/bin', picker,
+            {'bin_location': binmeta['bins'][0]['full_bin_location']})
 check('picker assigns bin from dropdown', c == 200, r)
 # invalid bin rejected
 c, r = call('PATCH', f'/api/receiving/batches/{bid}/bin', picker, {'bin_location': 'NOPE-999'})

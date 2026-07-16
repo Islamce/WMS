@@ -536,6 +536,9 @@ const MATERIAL_COLUMNS = [
   ['alert_before_expiry_days', 'INTEGER DEFAULT 30'],
   ['block_after_expiry', 'INTEGER NOT NULL DEFAULT 1'],
   ['fefo_required', 'INTEGER NOT NULL DEFAULT 0'],
+  // Non-stock items (services, consumables bought ad hoc) are requestable but
+  // must never receive an ERP stock reservation or warehouse allocation.
+  ['is_stock_item', 'INTEGER NOT NULL DEFAULT 1'],
 ];
 
 function addMissingColumns() {

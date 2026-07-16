@@ -48,6 +48,11 @@ const MIGRATIONS = [
     description: 'Approval matrix, request attachments, and cycle-count tables (P2/P3).',
     up() { /* tables created by the idempotent baseline in migrate2.js */ },
   },
+  {
+    id: '006_non_stock_items',
+    description: 'materials.is_stock_item flag — non-stock items cannot be reserved/allocated.',
+    up() { /* column added by the idempotent baseline in migrate2.js */ },
+  },
 ];
 
 function ensureTable() {

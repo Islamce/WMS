@@ -13,8 +13,11 @@ Pages.batches = {
       <div class="table-wrap" id="bt-table"><div class="loading">Loading…</div></div>
       <div class="pagination" id="bt-pager"></div></div>`;
     el.querySelector('#bt-search').addEventListener('input', UI.debounce((e) => { this.q = e.target.value; this.load(this.q, 1); }, 300));
-    this.q = '';
-    await this.load('', 1);
+    // A drill-through from another report (e.g. Expiry Alerts) presets the search.
+    this.q = this.preset || '';
+    this.preset = null;
+    if (this.q) el.querySelector('#bt-search').value = this.q;
+    await this.load(this.q, 1);
   },
   async load(q, page = 1) {
     this.q = q || '';
@@ -65,12 +68,18 @@ Pages.expiry = {
       <div class="card"><div class="toolbar"><h3 class="mb-0">Expiry Alerts</h3><div class="spacer"></div><span id="ex-export"></span></div><div class="table-wrap"><table>
         <thead><tr><th>Batch</th><th>Material</th><th>WH / Bin</th><th class="text-right">Qty</th><th>Expiry</th><th>Days</th><th>Level</th></tr></thead>
         <tbody>${alerts.map((a) => `
-          <tr><td><strong>${UI.esc(a.batch_number)}</strong></td><td>${UI.esc(a.material_code)}</td>
+          <tr class="row-link" data-batch="${UI.esc(a.batch_number)}" title="Open in Batch Tracking">
+            <td><strong>${UI.esc(a.batch_number)}</strong></td><td>${UI.esc(a.material_code)}</td>
             <td>${UI.esc(a.warehouse_code || '')} / ${UI.esc(a.bin_location || '—')}</td>
             <td class="text-right">${UI.fmtQty(a.remaining_quantity)}</td><td>${a.expiry_date}</td>
             <td>${a.days_to_expiry}</td><td><span class="badge ${ALERT_BADGE[a.alert_level]}">${a.alert_level}</span></td></tr>`).join('')
           || '<tr><td colspan="7" class="muted">No expiry alerts 🎉</td></tr>'}</tbody>
       </table></div></div>`;
+    // Drill through to the source batch record.
+    el.querySelectorAll('tr[data-batch]').forEach((tr) => tr.addEventListener('click', () => {
+      Pages.batches.preset = tr.dataset.batch;
+      location.hash = '#/batches';
+    }));
     const slot = el.querySelector('#ex-export');
     if (slot) slot.appendChild(UI.exportControl({
       filename: 'expiry-alerts', title: 'Expiry Alerts', rows: alerts,
@@ -215,10 +224,14 @@ Pages.binsMaster = {
   },
   async load() {
     const { bins } = await Api.get('/api/master/bins');
+    // The bin CODE is the compact code only; warehouse / zone / rack live in
+    // their own columns rather than being embedded in a long combined code.
     this.el.querySelector('#bm-table').innerHTML = `
-      <table><thead><tr><th>WH</th><th>Zone</th><th>Rack</th><th>Compact</th><th>Full</th><th class="text-right">Capacity</th></tr></thead>
-      <tbody>${bins.map((b) => `<tr><td>${UI.esc(b.warehouse_code)}</td><td>${UI.esc(b.zone || '')}</td><td>${UI.esc(b.rack || '')}</td>
-        <td><strong>${UI.esc(b.bin_code)}</strong></td><td>${UI.esc(b.full_bin_location)}</td><td class="text-right">${UI.fmtQty(b.capacity)}</td></tr>`).join('')}</tbody></table>`;
+      <table><thead><tr><th>Bin Code</th><th>Warehouse</th><th>Zone</th><th>Rack</th><th>Level</th><th>Column</th><th class="text-right">Capacity</th></tr></thead>
+      <tbody>${bins.map((b) => `<tr><td><strong>${UI.esc(b.bin_code)}</strong></td>
+        <td>${UI.esc(b.warehouse_code)}</td><td>${UI.esc(b.zone || '—')}</td><td>${UI.esc(b.rack || '—')}</td>
+        <td>${UI.esc(b.level || '—')}</td><td>${UI.esc(b.column_number || '—')}</td>
+        <td class="text-right">${UI.fmtQty(b.capacity)}</td></tr>`).join('')}</tbody></table>`;
   },
   form() {
     UI.modal({ title: 'Add bin location', submitLabel: 'Create',
@@ -228,12 +241,15 @@ Pages.binsMaster = {
         <div class="form-group"><label>Rack</label><input id="b-rack" value="R01"></div></div>
         <div class="form-row"><div class="form-group"><label>Line/Aisle</label><input id="b-line" value="01"></div>
         <div class="form-group"><label>Level</label><input id="b-level" value="01"></div></div>
-        <div class="form-group"><label>Column</label><input id="b-col" value="01"></div>`,
+        <div class="form-group"><label>Column</label><input id="b-col" value="01"></div>
+        <div class="form-group"><label>Bin code (optional — used exactly as typed; otherwise composed from the fields above)</label>
+          <input id="b-code" placeholder="e.g. R-03-02-23"></div>`,
       onSubmit: async (ov, close) => {
         try { await Api.post('/api/master/bins', { warehouse_code: ov.querySelector('#b-wh').value,
           zone: ov.querySelector('#b-zone').value, rack: ov.querySelector('#b-rack').value,
           line_or_aisle: ov.querySelector('#b-line').value, level: ov.querySelector('#b-level').value,
-          column_number: ov.querySelector('#b-col').value });
+          column_number: ov.querySelector('#b-col').value,
+          bin_code: ov.querySelector('#b-code').value.trim() || undefined });
           UI.toast('Bin created.'); close(); this.load(); }
         catch (err) { UI.toast(err.message, 'error'); }
       } });

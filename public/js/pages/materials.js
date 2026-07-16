@@ -67,7 +67,7 @@ Pages.materials = {
             ${data.materials.map((m) => `
               <tr>
                 <td>${UI.esc(m.plant)}</td>
-                <td><strong>${UI.esc(m.item_code)}</strong></td>
+                <td><strong>${UI.esc(m.item_code)}</strong>${m.is_stock_item === 0 ? ' <span class="badge OUT" title="Non-stock item — no reservations/allocations">non-stock</span>' : ''}</td>
                 <td class="wrap">${UI.esc(m.description)}</td>
                 <td>${UI.esc(m.unit)}</td>
                 <td class="text-right">${Number(m.price).toFixed(2)}</td>
@@ -125,7 +125,9 @@ Pages.materials = {
           <div class="form-group"><label>Currency</label><input type="text" id="f-currency" value="${UI.esc(m.currency || 'USD')}" /></div>
           <div class="form-group"><label>Material Type</label><input type="text" id="f-type" value="${UI.esc(m.material_type || '')}" /></div>
         </div>
-        <div class="form-group"><label>Material Group</label><input type="text" id="f-group" value="${UI.esc(m.material_group || '')}" /></div>`,
+        <div class="form-group"><label>Material Group</label><input type="text" id="f-group" value="${UI.esc(m.material_group || '')}" /></div>
+        <label class="perm-item"><input type="checkbox" id="f-stock" ${m.is_stock_item === 0 ? '' : 'checked'}>
+          <span>Stock item — <span class="muted">untick for non-stock items (services / direct purchases): they can be requested but never receive an ERP reservation or warehouse allocation</span></span></label>`,
       onSubmit: async (overlay, close) => {
         const payload = {
           plant: overlay.querySelector('#f-plant').value,
@@ -136,6 +138,7 @@ Pages.materials = {
           currency: overlay.querySelector('#f-currency').value,
           material_type: overlay.querySelector('#f-type').value,
           material_group: overlay.querySelector('#f-group').value,
+          is_stock_item: overlay.querySelector('#f-stock').checked ? 1 : 0,
         };
         try {
           const { message } = material

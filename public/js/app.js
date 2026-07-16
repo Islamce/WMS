@@ -79,7 +79,7 @@ const MODULES = [
   ] },
   { key: 'receiving', label: 'Receiving & Quality', icon: 'download', items: [
     { route: 'receiving', label: 'Goods Receipt & QR', icon: 'download', permission: ['goods_receipt', 'erp_operator', 'picking'] },
-    { route: 'qr-printing', label: 'QR Label Printing', icon: 'printer', permission: 'qr_printing' },
+    { route: 'qr-printing', label: 'QR Label Printing', icon: 'printer', permission: ['qr_printing', 'goods_receipt'] },
     { route: 'batches', label: 'Batch Tracking', icon: 'layers', permission: 'batch_tracking' },
     { route: 'expiry', label: 'Expiry Alerts', icon: 'clock', permission: 'expiry_alerts' },
     { route: 'cycle-count', label: 'Cycle Counting', icon: 'clipboard', permission: 'cycle_count' },
@@ -127,7 +127,7 @@ const ROUTE_PAGES = {
   'picking': { title: 'My Picking Tasks', page: 'picking', permission: 'picking' },
   'gi-posting': { title: 'Goods Issue Posting', page: 'giPosting', permission: 'gi_posting' },
   'receiving': { title: 'Goods Receipt & QR', page: 'receiving', permission: ['goods_receipt', 'erp_operator', 'picking'] },
-  'qr-printing': { title: 'QR Label Printing', page: 'qrPrinting', permission: 'qr_printing' },
+  'qr-printing': { title: 'QR Label Printing', page: 'qrPrinting', permission: ['qr_printing', 'goods_receipt'] },
   'batches': { title: 'Batch Tracking', page: 'batches', permission: 'batch_tracking' },
   'expiry': { title: 'Expiry Alerts', page: 'expiry', permission: 'expiry_alerts' },
   'cycle-count': { title: 'Cycle Counting', page: 'cycleCount', permission: 'cycle_count' },

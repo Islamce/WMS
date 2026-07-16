@@ -48,8 +48,12 @@ Pages.receiving = {
             <div class="form-group"><label>PO Number * (mandatory)</label><input type="text" id="gr-po"></div>
             <div class="form-group"><label>Received Quantity *</label><input type="number" id="gr-qty" min="0" step="any"></div>
           </div>
-          <div class="form-group"><label>Warehouse *</label>
-            <select id="gr-wh">${this.meta.warehouses.map((w) => `<option value="${w.warehouse_code}">${w.warehouse_code} — ${UI.esc(w.warehouse_name)}</option>`).join('')}</select></div>
+          <div class="form-row">
+            <div class="form-group"><label>Warehouse *</label>
+              <select id="gr-wh">${this.meta.warehouses.map((w) => `<option value="${w.warehouse_code}">${w.warehouse_code} — ${UI.esc(w.warehouse_name)}</option>`).join('')}</select></div>
+            <div class="form-group"><label>Bin Location (optional — can be assigned later)</label>
+              <select id="gr-bin"><option value="">— assign later —</option></select></div>
+          </div>
           <div class="form-row">
             <div class="form-group"><label>Supplier Code</label><input type="text" id="gr-supcode"></div>
             <div class="form-group"><label>Supplier Name</label><input type="text" id="gr-supname"></div>
@@ -75,6 +79,20 @@ Pages.receiving = {
     this.selected = null;
     UI.materialAutocomplete(box.querySelector('#gr-material'), (m) => { this.selected = m; });
     box.querySelector('#gr-form').addEventListener('submit', (e) => { e.preventDefault(); this.receive(); });
+
+    // Bin dropdown follows the selected warehouse (compact codes only).
+    const whSel = box.querySelector('#gr-wh');
+    const binSel = box.querySelector('#gr-bin');
+    const loadBins = async () => {
+      binSel.innerHTML = '<option value="">— assign later —</option>';
+      try {
+        const { bins } = await Api.get(`/api/meta/warehouses/${encodeURIComponent(whSel.value)}/bins`);
+        binSel.innerHTML += bins.map((x) =>
+          `<option value="${UI.esc(x.bin_code)}">${UI.esc(x.bin_code)}${x.zone ? ` · ${UI.esc(x.zone)}` : ''}</option>`).join('');
+      } catch { /* bins are optional here */ }
+    };
+    whSel.addEventListener('change', loadBins);
+    loadBins();
   },
 
   async receive() {
@@ -87,11 +105,20 @@ Pages.receiving = {
       supplier_name: box.querySelector('#gr-supname').value, manufacturing_date: box.querySelector('#gr-mfg').value || null,
       expiry_date: box.querySelector('#gr-exp').value || null, shelf_life_period: box.querySelector('#gr-slp').value || null,
       shelf_life_unit: box.querySelector('#gr-slu').value,
+      bin_location: box.querySelector('#gr-bin').value || null,
     };
     try {
-      const { qr, batch_number } = await Api.post('/api/receiving', payload);
+      const { qr, batch_number, warehouse_code, bin_location } = await Api.post('/api/receiving', payload);
       UI.toast(`Received. Batch ${batch_number} + QR generated.`);
-      box.querySelector('#gr-result').innerHTML = `<div class="card"><h3>Batch ${UI.esc(batch_number)}</h3>${Pages.qrPrinting.qrCard(qr)}</div>`;
+      box.querySelector('#gr-result').innerHTML = `<div class="card">
+        <h3>Batch ${UI.esc(batch_number)}</h3>
+        <div class="details-list">
+          <div class="item"><div class="k">Warehouse</div><div class="v">${UI.esc(warehouse_code || '')}</div></div>
+          <div class="item"><div class="k">Bin Location</div><div class="v">${bin_location
+            ? `<strong>${UI.esc(bin_location)}</strong>`
+            : '<span class="badge OUT">not assigned — use step 3 · Assign Bin</span>'}</div></div>
+        </div>
+        ${Pages.qrPrinting.qrCard(qr)}</div>`;
       const btn = box.querySelector('#gr-result [data-print]');
       if (btn) btn.addEventListener('click', () => Pages.qrPrinting.print(btn.dataset.print));
       box.querySelector('#gr-form').reset();
@@ -146,7 +173,7 @@ Pages.receiving = {
             <td><div style="display:flex;gap:6px">
               <select class="bin-sel" data-id="${b.id}">
                 <option value="">Select bin…</option>
-                ${(binsByWh[b.warehouse_code] || []).map((x) => `<option value="${UI.esc(x.full_bin_location)}">${UI.esc(x.bin_code)} (${UI.esc(x.full_bin_location)})</option>`).join('')}
+                ${(binsByWh[b.warehouse_code] || []).map((x) => `<option value="${UI.esc(x.bin_code)}">${UI.esc(x.bin_code)}${x.zone ? ` · ${UI.esc(x.zone)}` : ''}</option>`).join('')}
               </select>
               <button class="btn sm" data-savebin="${b.id}">Save</button></div></td></tr>`).join('')
           || '<tr><td colspan="5" class="muted">Nothing awaiting a bin 🎉</td></tr>'}
