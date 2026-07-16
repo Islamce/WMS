@@ -38,10 +38,14 @@ class _ErpOperatorScreenState extends State<ErpOperatorScreen> {
           separatorBuilder: (_, __) => const Divider(height: 1),
           itemBuilder: (context, i) {
             final r = rows[i];
+            final dept = (r['department'] ?? '').toString();
+            final proj = (r['project'] ?? '').toString();
             return ListTile(
               title: Text('${r['request_number']}', style: const TextStyle(fontWeight: FontWeight.w600)),
+              isThreeLine: dept.isNotEmpty || proj.isNotEmpty,
               subtitle: Text('${r['requester_name'] ?? ''} · ${r['priority'] ?? ''}'
-                  '${(r['movement_type'] ?? '').toString().isNotEmpty ? ' · MvT ${r['movement_type']}' : ''}'),
+                  '${(r['movement_type'] ?? '').toString().isNotEmpty ? ' · MvT ${r['movement_type']}' : ''}'
+                  '${dept.isNotEmpty || proj.isNotEmpty ? '\n${[if (dept.isNotEmpty) dept, if (proj.isNotEmpty) proj, if ((r['cost_center'] ?? '').toString().isNotEmpty) r['cost_center'], if ((r['required_date'] ?? '').toString().isNotEmpty) 'req. ${r['required_date']}'].join(' · ')}' : ''}'),
               trailing: SizedBox(
                 width: 120,
                 child: Align(alignment: Alignment.centerRight, child: StatusChip('${r['request_status']}')),
@@ -74,6 +78,7 @@ class _ErpFormState extends State<_ErpForm> {
   String? _plant;
   String? _warehouse;
   Map<String, dynamic>? _meta;
+  Map<String, dynamic> _header = {};
   bool _loading = true;
   bool _busy = false;
 
@@ -91,6 +96,7 @@ class _ErpFormState extends State<_ErpForm> {
       final h = Map<String, dynamic>.from(detail['request'] ?? {});
       setState(() {
         _meta = meta;
+        _header = h;
         _reservation.text = '${h['erp_reservation_number'] ?? ''}';
         _storageLoc.text = '${h['storage_location'] ?? ''}';
         _movementType = (h['movement_type'] ?? '').toString().isEmpty ? null : '${h['movement_type']}';
@@ -140,6 +146,7 @@ class _ErpFormState extends State<_ErpForm> {
           ? const Center(child: CircularProgressIndicator())
           : ListView(
               children: [
+                RequestInfoCard(_header),
                 SectionCard(
                   title: 'ERP details (all mandatory before routing)',
                   child: Column(

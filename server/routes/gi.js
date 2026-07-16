@@ -25,7 +25,8 @@ const GI_STAGES = [HEADER_STATUS.PENDING_ERP_GI, HEADER_STATUS.ERP_ERROR];
 /** GET /api/gi — GI posting queue. */
 router.get('/', (req, res) => {
   const rows = db.prepare(`
-    SELECT id, request_number, requester_name, issue_warehouse_code, movement_type,
+    SELECT id, request_number, requester_name, department, wbs_element AS project, cost_center, required_date,
+           priority, issue_warehouse_code, movement_type,
            erp_reservation_number, erp_reference_number, request_status,
            total_lines, shortage_lines, erp_error_message
     FROM material_request_headers

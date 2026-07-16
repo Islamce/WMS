@@ -13,14 +13,16 @@ Pages.giPosting = {
   async loadQueue() {
     const t = this.el.querySelector('#gi-table');
     const { requests } = await Api.get('/api/gi');
-    t.innerHTML = `<table><thead><tr><th>Request #</th><th>Warehouse</th><th>Movement</th><th>Reservation</th><th>Status</th><th></th></tr></thead>
+    t.innerHTML = `<table><thead><tr><th>Request #</th><th>Requester</th><th>Department</th><th>Project</th><th>Warehouse</th><th>Movement</th><th>Reservation</th><th>Status</th><th></th></tr></thead>
       <tbody>${requests.map((r) => `
         <tr data-id="${r.id}">
-          <td><strong>${UI.esc(r.request_number)}</strong></td><td>${UI.esc(r.issue_warehouse_code || '')}</td>
+          <td><strong>${UI.esc(r.request_number)}</strong></td>
+          <td>${UI.esc(r.requester_name || '')}</td><td>${UI.esc(r.department || '—')}</td><td>${UI.esc(r.project || '—')}</td>
+          <td>${UI.esc(r.issue_warehouse_code || '')}</td>
           <td>${UI.esc(r.movement_type || '')}</td><td>${UI.esc(r.erp_reservation_number || r.erp_reference_number || '')}</td>
           <td><span class="badge ${statusClass(r.request_status)}">${UI.esc(r.request_status)}</span></td>
           <td><button class="btn sm" data-open="${r.id}">Review</button></td>
-        </tr>`).join('') || '<tr><td colspan="6" class="muted">Queue is empty</td></tr>'}
+        </tr>`).join('') || '<tr><td colspan="9" class="muted">Queue is empty</td></tr>'}
       </tbody></table>`;
     t.querySelectorAll('[data-open]').forEach((b) => b.addEventListener('click', () => this.openDetail(b.dataset.open)));
   },
@@ -31,6 +33,7 @@ Pages.giPosting = {
     box.innerHTML = `
       <div class="card">
         <h3>${UI.esc(r.request_number)} — Goods Issue</h3>
+        ${UI.requesterCard(r)}
         ${r.erp_error_message ? `<div class="inline-alert error">Previous ERP error: ${UI.esc(r.erp_error_message)}</div>` : ''}
         <div class="table-wrap"><table>
           <thead><tr><th>#</th><th>Item</th><th class="text-right">Approved</th><th class="text-right">Picked</th>
@@ -80,14 +83,16 @@ Pages.warehouse = {
       <div class="table-wrap" id="wd-table"><div class="loading">Loading…</div></div></div>`;
     const { requests } = await Api.get('/api/warehouse/queue');
     el.querySelector('#wd-table').innerHTML = `
-      <table><thead><tr><th>Request #</th><th>Warehouse</th><th>Priority</th><th>Movement</th><th>Status</th><th>Lines</th></tr></thead>
+      <table><thead><tr><th>Request #</th><th>Requester</th><th>Department</th><th>Project</th><th>Warehouse</th><th>Priority</th><th>Movement</th><th>Status</th><th>Lines</th></tr></thead>
       <tbody>${requests.map((r) => `
         <tr style="cursor:pointer" data-id="${r.id}">
-          <td><strong>${UI.esc(r.request_number)}</strong></td><td>${UI.esc(r.issue_warehouse_code || '')}</td>
+          <td><strong>${UI.esc(r.request_number)}</strong></td>
+          <td>${UI.esc(r.requester_name || '')}</td><td>${UI.esc(r.department || '—')}</td><td>${UI.esc(r.project || '—')}</td>
+          <td>${UI.esc(r.issue_warehouse_code || '')}</td>
           <td><span class="badge ${r.priority === 'URGENT' || r.priority === 'HIGH' ? 'pending' : 'role'}">${r.priority}</span></td>
           <td>${UI.esc(r.movement_type || '')}</td>
           <td><span class="badge ${statusClass(r.request_status)}">${UI.esc(r.request_status)}</span></td>
-          <td>${r.total_lines}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">No active warehouse requests</td></tr>'}
+          <td>${r.total_lines}</td></tr>`).join('') || '<tr><td colspan="9" class="muted">No active warehouse requests</td></tr>'}
       </tbody></table>`;
     el.querySelectorAll('tr[data-id]').forEach((tr) => tr.addEventListener('click', () => { location.hash = `#/request-detail/${tr.dataset.id}`; }));
   },

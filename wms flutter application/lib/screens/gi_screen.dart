@@ -125,6 +125,11 @@ class _GiScreenState extends State<GiScreen> {
                         StatusChip('${r['request_status']}'),
                       ]),
                       const SizedBox(height: 4),
+                      Text('${r['requester_name'] ?? ''}'
+                          '${(r['department'] ?? '').toString().isNotEmpty ? ' · ${r['department']}' : ''}'
+                          '${(r['project'] ?? '').toString().isNotEmpty ? ' · ${r['project']}' : ''}'
+                          '${(r['cost_center'] ?? '').toString().isNotEmpty ? ' · ${r['cost_center']}' : ''}',
+                          style: const TextStyle(fontSize: 13)),
                       Text('WH ${r['issue_warehouse_code'] ?? ''} · MvT ${r['movement_type'] ?? ''} · '
                           '${r['total_lines'] ?? 0} line(s)'),
                       if ((r['erp_reservation_number'] ?? '').toString().isNotEmpty)

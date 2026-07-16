@@ -27,10 +27,12 @@ Pages.pickerAssign = {
     // Show only requests awaiting a picker (plus escalated ones needing
     // reassignment). Once assigned they move to acceptance and disappear here.
     const assignable = requests.filter((r) => ['Pending Picker Assignment', 'Escalated to Supervisor'].includes(r.request_status));
-    t.innerHTML = `<table><thead><tr><th>Request #</th><th>Warehouse</th><th>Priority</th><th>Status</th><th>Picker</th><th></th></tr></thead>
+    t.innerHTML = `<table><thead><tr><th>Request #</th><th>Requester</th><th>Department</th><th>Project</th><th>Warehouse</th><th>Priority</th><th>Status</th><th>Picker</th><th></th></tr></thead>
       <tbody>${assignable.map((r) => `
         <tr data-id="${r.id}">
-          <td><strong>${UI.esc(r.request_number)}</strong></td><td>${UI.esc(r.issue_warehouse_code || '')}</td>
+          <td><strong>${UI.esc(r.request_number)}</strong></td>
+          <td>${UI.esc(r.requester_name || '')}</td><td>${UI.esc(r.department || '—')}</td><td>${UI.esc(r.project || '—')}</td>
+          <td>${UI.esc(r.issue_warehouse_code || '')}</td>
           <td><span class="badge ${r.priority === 'URGENT' || r.priority === 'HIGH' ? 'pending' : 'role'}">${r.priority}</span></td>
           <td><span class="badge ${statusClass(r.request_status)}">${UI.esc(r.request_status)}</span></td>
           <td>
@@ -40,7 +42,7 @@ Pages.pickerAssign = {
             </select>
           </td>
           <td><button class="btn sm" data-assign="${r.id}">Assign</button></td>
-        </tr>`).join('') || '<tr><td colspan="6" class="muted">Nothing to assign</td></tr>'}
+        </tr>`).join('') || '<tr><td colspan="9" class="muted">Nothing to assign</td></tr>'}
       </tbody></table>`;
     t.querySelectorAll('[data-assign]').forEach((b) => b.addEventListener('click', async () => {
       const sel = t.querySelector(`.pa-picker[data-id="${b.dataset.assign}"]`);

@@ -2,13 +2,15 @@ import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
 import '../core/format.dart';
+import '../core/i18n.dart';
 import '../main.dart';
 import '../widgets/common.dart';
+import 'scan_screen.dart';
 
 /// Picker task detail: accept → start → scan QR per allocation → confirm each
 /// line (shortage reason mandatory on partial) → complete. Mirrors the web
-/// picking flow; QR values are entered manually (or via a scanner app that
-/// pastes into the field).
+/// picking flow; QR values come from the built-in camera scanner or manual
+/// entry, and both batch QR and bin-location QR labels are accepted.
 class PickingTaskScreen extends StatefulWidget {
   const PickingTaskScreen({super.key, required this.taskId});
   final int taskId;
@@ -47,6 +49,7 @@ class _PickingTaskScreenState extends State<PickingTaskScreen> {
           load: _load,
           builder: (context, data, refresh) {
             final task = Map<String, dynamic>.from(data['task'] ?? {});
+            final request = Map<String, dynamic>.from(data['request'] ?? {});
             final lines = List<Map<String, dynamic>>.from(
                 (data['lines'] ?? []).map((e) => Map<String, dynamic>.from(e)));
             final allocations = List<Map<String, dynamic>>.from(
@@ -55,6 +58,7 @@ class _PickingTaskScreenState extends State<PickingTaskScreen> {
 
             return ListView(
               children: [
+                RequestInfoCard(request),
                 SectionCard(
                   title: '${task['request_number']}',
                   trailing: StatusChip(status),
@@ -196,8 +200,8 @@ class _LineCard extends StatelessWidget {
     final ctrl = TextEditingController(text: '${alloc['scanned_qr_value'] ?? ''}');
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Scan / enter QR'),
+      builder: (dialogContext) => AlertDialog(
+        title: Text(t('Scan / enter QR')),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -205,26 +209,41 @@ class _LineCard extends StatelessWidget {
             Text('Batch ${alloc['batch_number'] ?? ''} · Bin ${alloc['bin_location'] ?? ''}',
                 style: const TextStyle(fontSize: 12, color: Colors.grey)),
             const SizedBox(height: 10),
+            SizedBox(
+              width: double.maxFinite,
+              child: FilledButton.icon(
+                icon: const Icon(Icons.qr_code_scanner),
+                label: Text(t('Scan with camera')),
+                onPressed: () async {
+                  final value = await Navigator.of(dialogContext).push<String>(
+                      MaterialPageRoute(builder: (_) => const ScanScreen()));
+                  if (value != null && value.isNotEmpty && dialogContext.mounted) {
+                    Navigator.pop(dialogContext);
+                    onScan(alloc, value);
+                  }
+                },
+              ),
+            ),
+            const SizedBox(height: 12),
             TextField(
               controller: ctrl,
-              autofocus: true,
-              decoration: const InputDecoration(
-                labelText: 'QR value',
-                helperText: 'Paste from a scanner app or type it',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: t('QR value'),
+                helperText: t('Batch QR or bin-location QR — both are accepted'),
+                border: const OutlineInputBorder(),
               ),
             ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: Text(t('Cancel'))),
           FilledButton(
             onPressed: () {
               if (ctrl.text.trim().isEmpty) return;
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
               onScan(alloc, ctrl.text.trim());
             },
-            child: const Text('Validate'),
+            child: Text(t('Validate')),
           ),
         ],
       ),

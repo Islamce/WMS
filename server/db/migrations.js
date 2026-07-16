@@ -53,6 +53,11 @@ const MIGRATIONS = [
     description: 'materials.is_stock_item flag — non-stock items cannot be reserved/allocated.',
     up() { /* column added by the idempotent baseline in migrate2.js */ },
   },
+  {
+    id: '007_realloc_inventory_shipping',
+    description: 'Stock reallocations, physical inventory sessions, outbound shipments, batches.project.',
+    up() { /* tables/column created by the idempotent baseline in migrate2.js */ },
+  },
 ];
 
 function ensureTable() {

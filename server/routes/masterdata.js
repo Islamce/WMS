@@ -131,7 +131,7 @@ router.get('/batches', requirePermission(['batch_tracking', 'bin_batch_assignmen
   const like = `%${q}%`;
   const filters = [];
   const params = [];
-  if (q) { filters.push('(batch_number LIKE ? OR material_code LIKE ? OR warehouse_code LIKE ?)'); params.push(like, like, like); }
+  if (q) { filters.push('(batch_number LIKE ? OR material_code LIKE ? OR warehouse_code LIKE ? OR po_number LIKE ?)'); params.push(like, like, like, like); }
   if (req.query.quality) { filters.push('quality_status = ?'); params.push(req.query.quality); }
   const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
   const { page, limit, offset } = parsePagination(req.query, { page: 1, limit: 100 });

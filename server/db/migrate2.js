@@ -479,6 +479,114 @@ CREATE TABLE IF NOT EXISTS reference_data (
   UNIQUE (category, code)
 );
 
+-- ---------------------------------------------------------------------------
+-- Stock reallocations — every warehouse/bin/project move of batch stock, with
+-- full movement history. Partial moves clone the batch into a new row.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS stock_reallocations (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  realloc_number TEXT NOT NULL UNIQUE,
+  batch_id       INTEGER NOT NULL REFERENCES batches(id),
+  new_batch_id   INTEGER REFERENCES batches(id),   -- set on partial (split) moves
+  material_id    INTEGER NOT NULL REFERENCES materials(id),
+  material_code  TEXT,
+  batch_number   TEXT,
+  quantity       REAL NOT NULL,
+  from_warehouse TEXT, from_bin TEXT, from_project TEXT,
+  to_warehouse   TEXT, to_bin TEXT, to_project TEXT,
+  reason         TEXT,
+  moved_by       INTEGER REFERENCES users(id),
+  moved_by_name  TEXT,
+  created_at     TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_realloc_batch ON stock_reallocations(batch_id);
+
+-- ---------------------------------------------------------------------------
+-- Physical inventory — annual / periodic counting sessions over a warehouse.
+-- A session snapshots every batch, supports blind counting, recounts and
+-- variance approval, and posts adjustments to batches + the movement ledger.
+-- While a freeze-enabled session is open the warehouse blocks receipts,
+-- allocations and reallocations.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS inventory_sessions (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_number  TEXT NOT NULL UNIQUE,
+  session_type    TEXT NOT NULL CHECK (session_type IN ('ANNUAL','PERIODIC','CYCLE')),
+  warehouse_code  TEXT NOT NULL,
+  status          TEXT NOT NULL DEFAULT 'COUNTING'
+                  CHECK (status IN ('COUNTING','REVIEW','POSTED','CANCELLED')),
+  blind           INTEGER NOT NULL DEFAULT 1,   -- hide system qty from counters
+  freeze_stock    INTEGER NOT NULL DEFAULT 1,   -- block movements while open
+  notes           TEXT,
+  created_by      INTEGER REFERENCES users(id),
+  created_by_name TEXT,
+  posted_by       INTEGER REFERENCES users(id),
+  posted_at       TEXT,
+  created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS inventory_count_lines (
+  id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id           INTEGER NOT NULL REFERENCES inventory_sessions(id) ON DELETE CASCADE,
+  batch_id             INTEGER NOT NULL REFERENCES batches(id),
+  batch_number         TEXT,
+  material_id          INTEGER,
+  material_code        TEXT,
+  material_description TEXT,
+  warehouse_code       TEXT,
+  bin_location         TEXT,
+  system_quantity      REAL NOT NULL DEFAULT 0,   -- snapshot at session creation
+  counted_quantity     REAL,
+  recount_quantity     REAL,
+  final_quantity       REAL,
+  variance             REAL,
+  status               TEXT NOT NULL DEFAULT 'PENDING'
+                       CHECK (status IN ('PENDING','COUNTED','RECOUNT','APPROVED','POSTED')),
+  counted_by           INTEGER,
+  counted_by_name      TEXT,
+  approved_by          INTEGER,
+  approved_by_name     TEXT,
+  created_at           TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at           TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_invlines_session ON inventory_count_lines(session_id);
+CREATE INDEX IF NOT EXISTS idx_invsess_wh       ON inventory_sessions(warehouse_code, status);
+
+-- ---------------------------------------------------------------------------
+-- Outbound shipping — delivery orders created from GI-posted requests, packed,
+-- loaded, dispatched and delivered (with proof of delivery). Each shipment
+-- carries its own scannable QR label.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS shipments (
+  id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+  shipment_number       TEXT NOT NULL UNIQUE,
+  request_id            INTEGER REFERENCES material_request_headers(id),
+  request_number        TEXT,
+  delivery_order_number TEXT,
+  ship_to               TEXT,
+  carrier               TEXT,
+  vehicle               TEXT,
+  driver                TEXT,
+  status                TEXT NOT NULL DEFAULT 'OPEN'
+                        CHECK (status IN ('OPEN','PACKED','LOADED','DISPATCHED','DELIVERED','CANCELLED')),
+  qr_code_value         TEXT,
+  packages              INTEGER NOT NULL DEFAULT 1,
+  weight_kg             REAL,
+  notes                 TEXT,
+  packed_at             TEXT,
+  loaded_at             TEXT,
+  dispatched_at         TEXT,
+  delivered_at          TEXT,
+  delivered_to          TEXT,
+  pod_note              TEXT,
+  created_by            INTEGER REFERENCES users(id),
+  created_by_name       TEXT,
+  created_at            TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at            TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_shipments_status  ON shipments(status);
+CREATE INDEX IF NOT EXISTS idx_shipments_request ON shipments(request_id);
+
 -- ===========================================================================
 -- Indexes
 -- ===========================================================================
@@ -548,6 +656,16 @@ function addMissingColumns() {
       db.exec(`ALTER TABLE materials ADD COLUMN ${name} ${def}`);
     }
   });
+  // Batch-level project assignment (set/changed by reallocation).
+  const batchCols = new Set(db.prepare('PRAGMA table_info(batches)').all().map((c) => c.name));
+  if (!batchCols.has('project')) {
+    db.exec('ALTER TABLE batches ADD COLUMN project TEXT');
+  }
+  // Posted final quantity on inventory count lines (installs created before it).
+  const invCols = new Set(db.prepare('PRAGMA table_info(inventory_count_lines)').all().map((c) => c.name));
+  if (!invCols.has('final_quantity')) {
+    db.exec('ALTER TABLE inventory_count_lines ADD COLUMN final_quantity REAL');
+  }
   // Force-a-password-change flag on users (idempotent).
   const userCols = new Set(db.prepare('PRAGMA table_info(users)').all().map((c) => c.name));
   if (!userCols.has('must_change_password')) {

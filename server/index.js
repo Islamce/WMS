@@ -121,6 +121,9 @@ app.use('/api/master', require('./routes/masterdata'));
 app.use('/api/import', require('./routes/import'));
 app.use('/api/export', require('./routes/export'));
 app.use('/api/cycle-count', require('./routes/cycleCount'));
+app.use('/api/reallocation', require('./routes/reallocation'));
+app.use('/api/inventory', require('./routes/inventory'));
+app.use('/api/shipping', require('./routes/shipping'));
 app.use('/api/admin', require('./routes/admin'));
 // Attachment routes live under /api (paths: /requests/:id/attachments, /attachments/:aid/...).
 app.use('/api', require('./routes/attachments'));

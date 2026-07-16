@@ -50,6 +50,21 @@ Pages.ai = {
         <div class="chart-box"><canvas id="ai-top"></canvas></div></div>
 
       <div class="card">
+        <h3>ABC-XYZ matrix</h3>
+        <p class="muted">ABC = share of consumption value (A ≈ top 80%). XYZ = demand stability (X = stable, Z = erratic). A-X items suit automatic replenishment; A-Z items need manual attention.</p>
+        <div class="abc-matrix">
+          <span class="hd"></span><span class="hd">X · stable</span><span class="hd">Y · variable</span><span class="hd">Z · erratic</span>
+          ${['A', 'B', 'C'].map((a) => `
+            <span class="hd">${a}</span>
+            ${['X', 'Y', 'Z'].map((x) => {
+              const cell = data.abc_xyz_matrix[`${a}${x}`] || { count: 0, items: [] };
+              return `<div class="abc-cell"><div class="n">${cell.count}</div>
+                <div class="items">${cell.items.slice(0, 4).map(UI.esc).join(', ')}${cell.count > 4 ? '…' : ''}</div></div>`;
+            }).join('')}`).join('')}
+        </div>
+      </div>
+
+      <div class="card">
         <h3>Reorder alerts &amp; safety stock</h3>
         <div class="table-wrap"><table>
           <thead><tr><th>Item</th><th>Class</th><th class="text-right">Stock</th><th class="text-right">Avg daily demand</th>
@@ -85,16 +100,18 @@ Pages.ai = {
       <div class="card">
         <h3>Full analysis (${data.items.length} materials)</h3>
         <div class="table-wrap" style="max-height:420px;overflow-y:auto"><table>
-          <thead><tr><th>Item</th><th>Class</th><th class="text-right">Stock</th><th class="text-right">Issued (${data.parameters.window_days}d)</th>
-            <th class="text-right">Events</th><th class="text-right">Reorder pt</th><th class="text-right">Value</th></tr></thead>
+          <thead><tr><th>Item</th><th>Class</th><th>ABC</th><th>XYZ</th><th>FSN</th><th class="text-right">Stock</th><th class="text-right">Issued (${data.parameters.window_days}d)</th>
+            <th class="text-right">Reorder pt</th><th class="text-right">EOQ</th><th class="text-right">Value</th><th>Flags</th></tr></thead>
           <tbody>${data.items.map((i) => `
             <tr><td><strong>${UI.esc(i.item_code)}</strong></td>
               <td><span class="badge ${clsBadge[i.classification] || 'role'}">${i.classification}</span></td>
+              <td>${i.abc_class || '—'}</td><td>${i.xyz_class || '—'}</td><td>${i.fsn_class || '—'}</td>
               <td class="text-right">${UI.fmtQty(i.current_stock)}</td>
               <td class="text-right">${UI.fmtQty(i.out_qty_window)}</td>
-              <td class="text-right">${i.out_events_window}</td>
               <td class="text-right">${i.reorder_point}</td>
+              <td class="text-right">${i.eoq ?? '—'}</td>
               <td class="text-right">${UI.fmtQty(i.stock_value)}</td>
+              <td>${i.overstock ? '<span class="badge pending">overstock</span>' : ''}${i.below_reorder ? '<span class="badge OUT">understock</span>' : ''}</td>
             </tr>`).join('')}</tbody>
         </table></div>
       </div>`;

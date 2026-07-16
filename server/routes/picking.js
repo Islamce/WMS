@@ -23,7 +23,8 @@ router.use(authenticate);
 router.get('/tasks', requirePermission('picking'), (req, res) => {
   const own = req.user.role === 'admin' ? '' : 'AND assigned_picker_id = @uid';
   const tasks = db.prepare(`
-    SELECT t.*, h.request_status, h.issue_warehouse_code, h.movement_type, h.priority AS req_priority
+    SELECT t.*, h.request_status, h.issue_warehouse_code, h.movement_type, h.priority AS req_priority,
+           h.requester_name, h.department, h.wbs_element AS project, h.cost_center, h.required_date
     FROM picking_tasks t JOIN material_request_headers h ON h.id = t.request_id
     WHERE t.task_status NOT IN ('Picking Completed','Cancelled','Reassigned') ${own}
     ORDER BY CASE t.priority WHEN 'URGENT' THEN 0 WHEN 'HIGH' THEN 1 WHEN 'NORMAL' THEN 2 ELSE 3 END, t.assigned_at

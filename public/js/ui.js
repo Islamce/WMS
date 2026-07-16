@@ -196,6 +196,54 @@ const UI = {
     return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
   },
 
+  /**
+   * Global click-to-sort on every rendered data table. Delegated once at
+   * startup: clicking a header sorts the loaded rows by that column
+   * (numeric-aware, toggles asc/desc). Headers that drive their own
+   * server-side sorting (th[data-sort]) and action columns are skipped, and a
+   * table can opt out entirely with data-nosort.
+   */
+  initTableSorting() {
+    if (this._sortInit) return;
+    this._sortInit = true;
+    document.addEventListener('click', (e) => {
+      const th = e.target.closest('th');
+      if (!th || th.dataset.sort || !th.textContent.trim()) return;
+      const table = th.closest('table');
+      if (!table || table.hasAttribute('data-nosort')) return;
+      const tbody = table.querySelector('tbody');
+      if (!tbody || tbody.rows.length < 2) return;
+      // Single full-width "empty" rows are not sortable data.
+      const rows = [...tbody.rows].filter((r) => r.cells.length > 1);
+      if (rows.length < 2) return;
+
+      const idx = [...th.parentNode.children].indexOf(th);
+      const dir = table.dataset.sortCol === String(idx) && table.dataset.sortDir === 'asc' ? 'desc' : 'asc';
+      table.dataset.sortCol = String(idx);
+      table.dataset.sortDir = dir;
+
+      const cellVal = (r) => (r.cells[idx] ? r.cells[idx].textContent.trim() : '');
+      const num = (v) => parseFloat(v.replace(/[,%\s]/g, ''));
+      const allNumeric = rows.every((r) => cellVal(r) === '' || !isNaN(num(cellVal(r))));
+      rows.sort((a, b) => {
+        const va = cellVal(a), vb = cellVal(b);
+        const cmp = allNumeric
+          ? (isNaN(num(va)) ? -Infinity : num(va)) - (isNaN(num(vb)) ? -Infinity : num(vb))
+          : va.localeCompare(vb, undefined, { sensitivity: 'base' });
+        return dir === 'asc' ? cmp : -cmp;
+      });
+      rows.forEach((r) => tbody.appendChild(r));
+
+      // Refresh the header arrows.
+      th.parentNode.querySelectorAll('th').forEach((h) => {
+        h.textContent = h.textContent.replace(/\s*[▲▼]$/, '');
+        h.removeAttribute('aria-sort');
+      });
+      th.textContent += dir === 'asc' ? ' ▲' : ' ▼';
+      th.setAttribute('aria-sort', dir === 'asc' ? 'ascending' : 'descending');
+    });
+  },
+
   _download(blob, filename) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -259,6 +307,25 @@ const UI = {
       } catch (err) { UI.toast(err.message, 'error'); }
     }));
     return wrap;
+  },
+
+  /**
+   * Requester context block — shown on every workflow step (ERP, allocation,
+   * picking, GI) so operators always see who asked for the material and why.
+   * `r` is a request header (or any object carrying the same field names).
+   */
+  requesterCard(r) {
+    const item = (label, value) => `
+      <div class="req-ctx-item"><span class="muted">${UI.esc(label)}</span><strong>${UI.esc(value || '—')}</strong></div>`;
+    return `
+      <div class="req-ctx" role="group" aria-label="Requester details">
+        ${item('Requester', r.requester_name)}
+        ${item('Department', r.department)}
+        ${item('Project / WBS', r.project || r.wbs_element)}
+        ${item('Cost Center', r.cost_center)}
+        ${item('Priority', r.priority)}
+        ${item('Required date', r.required_date)}
+      </div>`;
   },
 
   /**

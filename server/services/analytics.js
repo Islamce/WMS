@@ -21,6 +21,9 @@ const SERVICE_Z = 1.65;          // ~95% service level
 const FAST_EVENTS = 8;           // >= events in window -> FAST
 const SLOW_EVENTS = 3;           // <= events in window -> SLOW
 const DEAD_DAYS = 90;            // no issue in this many days + stock on hand -> DEAD
+const ORDER_COST = 100;          // EOQ: fixed cost per replenishment order
+const HOLDING_RATE = 0.2;        // EOQ: annual holding cost as a share of unit price
+const OVERSTOCK_DAYS = 180;      // days of cover beyond this -> overstock
 
 function analyze() {
   const materials = db.prepare(`
@@ -80,21 +83,52 @@ function analyze() {
     }
 
     const daysOfCover = avgDaily > 0 ? Math.round(m.current_stock / avgDaily) : null;
+
+    // XYZ: demand variability (coefficient of variation of daily demand).
+    // X = stable (CV <= 0.5), Y = variable (<= 1.0), Z = erratic / no demand.
+    const cv = mean > 0 ? sigma / mean : null;
+    const xyzClass = cv === null ? 'Z' : cv <= 0.5 ? 'X' : cv <= 1.0 ? 'Y' : 'Z';
+
+    // FSN by issue frequency (Fast / Slow / Non-moving).
+    const fsnClass = events >= FAST_EVENTS ? 'F' : events > 0 ? 'S' : 'N';
+
+    // EOQ = sqrt(2 * annual demand * order cost / holding cost per unit).
+    const annualDemand = avgDaily * 365;
+    const holding = Math.max((m.price || 0) * HOLDING_RATE, 0.01);
+    const eoq = annualDemand > 0 ? Math.round(Math.sqrt((2 * annualDemand * ORDER_COST) / holding)) : null;
+
     return {
       material_id: m.id, item_code: m.item_code, description: m.description, unit: m.unit,
       material_group: m.material_group, price: m.price,
       current_stock: m.current_stock,
       stock_value: Math.round(m.current_stock * (m.price || 0) * 100) / 100,
       out_qty_window: totalOut, out_events_window: events,
+      consumption_value: Math.round(totalOut * (m.price || 0) * 100) / 100,
       avg_daily_demand: Math.round(avgDaily * 100) / 100,
       demand_sigma: Math.round(sigma * 100) / 100,
+      demand_cv: cv === null ? null : Math.round(cv * 100) / 100,
       safety_stock: safetyStock,
       reorder_point: reorderPoint,
+      eoq,
       below_reorder: avgDaily > 0 && m.current_stock <= reorderPoint,
+      overstock: daysOfCover !== null && daysOfCover > OVERSTOCK_DAYS,
+      understock: avgDaily > 0 && m.current_stock <= reorderPoint,
       days_of_cover: daysOfCover,
       days_since_last_issue: daysSinceLastOut,
       classification,
+      xyz_class: xyzClass,
+      fsn_class: fsnClass,
     };
+  });
+
+  // ABC by consumption value share (cumulative 80% = A, 95% = B, rest = C).
+  const totalValue = items.reduce((s, i) => s + i.consumption_value, 0);
+  let cumulative = 0;
+  [...items].sort((a, b) => b.consumption_value - a.consumption_value).forEach((i) => {
+    if (totalValue <= 0 || i.consumption_value <= 0) { i.abc_class = 'C'; return; }
+    const before = cumulative;
+    cumulative += i.consumption_value;
+    i.abc_class = before < totalValue * 0.8 ? 'A' : before < totalValue * 0.95 ? 'B' : 'C';
   });
 
   return items;
@@ -142,6 +176,25 @@ function buildInsights(items) {
       detail: `${fmtList(slow)} have very few issues in the last ${WINDOW_DAYS} days — review order quantities.` });
   }
 
+  const over = items.filter((i) => i.overstock);
+  if (over.length) {
+    const value = over.reduce((s, i) => s + i.stock_value, 0);
+    insights.push({ severity: 'warning', title: `${over.length} overstocked material(s) worth ${value.toFixed(2)}`,
+      detail: `${fmtList(over)} carry more than ${OVERSTOCK_DAYS} days of cover — capital is tied up; pause replenishment.` });
+  }
+
+  const az = items.filter((i) => i.abc_class === 'A' && i.xyz_class === 'Z');
+  if (az.length) {
+    insights.push({ severity: 'warning', title: `${az.length} high-value erratic item(s) (A-Z class)`,
+      detail: `${fmtList(az)} drive spend but have unpredictable demand — manage manually with safety stock and short review cycles.` });
+  }
+
+  const ax = items.filter((i) => i.abc_class === 'A' && i.xyz_class === 'X');
+  if (ax.length) {
+    insights.push({ severity: 'info', title: `${ax.length} item(s) suit automatic replenishment (A-X class)`,
+      detail: `${fmtList(ax)} are high-value with stable demand — ideal for auto reorder at the reorder point (EOQ lot size).` });
+  }
+
   const expiring = db.prepare(`
     SELECT COUNT(*) AS n, COALESCE(SUM(remaining_quantity), 0) AS qty FROM batches
     WHERE expiry_date IS NOT NULL AND remaining_quantity > 0
@@ -170,8 +223,17 @@ function fullReport() {
   const byClass = {};
   active.forEach((i) => { byClass[i.classification] = (byClass[i.classification] || 0) + 1; });
 
+  // 3x3 ABC-XYZ matrix (counts + item codes per cell).
+  const matrix = {};
+  ['A', 'B', 'C'].forEach((a) => ['X', 'Y', 'Z'].forEach((x) => { matrix[`${a}${x}`] = { count: 0, items: [] }; }));
+  active.forEach((i) => {
+    const cell = matrix[`${i.abc_class}${i.xyz_class}`];
+    if (cell) { cell.count += 1; if (cell.items.length < 10) cell.items.push(i.item_code); }
+  });
+
   return {
-    parameters: { window_days: WINDOW_DAYS, lead_time_days: LEAD_TIME_DAYS, service_level_z: SERVICE_Z },
+    parameters: { window_days: WINDOW_DAYS, lead_time_days: LEAD_TIME_DAYS, service_level_z: SERVICE_Z,
+      order_cost: ORDER_COST, holding_rate: HOLDING_RATE, overstock_days: OVERSTOCK_DAYS },
     summary: {
       materials_analyzed: active.length,
       total_stock_value: Math.round(active.reduce((s, i) => s + i.stock_value, 0) * 100) / 100,
@@ -180,8 +242,10 @@ function fullReport() {
       normal_count: byClass.NORMAL || 0,
       fast_count: byClass.FAST || 0,
       below_reorder_count: active.filter((i) => i.below_reorder).length,
+      overstock_count: active.filter((i) => i.overstock).length,
       dead_stock_value: Math.round(active.filter((i) => i.classification === 'DEAD').reduce((s, i) => s + i.stock_value, 0) * 100) / 100,
     },
+    abc_xyz_matrix: matrix,
     items: active,
     top_consumers: [...active].sort((a, b) => b.out_qty_window - a.out_qty_window).slice(0, 10),
     weekly_trend: weeklyTrend(),

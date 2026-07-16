@@ -15,14 +15,17 @@ Pages.erpOperator = {
   async loadQueue() {
     const t = this.el.querySelector('#eo-table');
     const { requests } = await Api.get('/api/erp-operator');
-    t.innerHTML = `<table><thead><tr><th>Request #</th><th>Requester</th><th>Status</th><th>Movement</th><th>Reservation</th><th>Warehouse</th></tr></thead>
+    t.innerHTML = `<table><thead><tr><th>Request #</th><th>Requester</th><th>Department</th><th>Project</th><th>Cost Center</th><th>Priority</th><th>Required</th><th>Status</th><th>Movement</th><th>Reservation</th><th>Warehouse</th></tr></thead>
       <tbody>${requests.map((r) => `
         <tr style="cursor:pointer" data-id="${r.id}">
           <td><strong>${UI.esc(r.request_number)}</strong></td><td>${UI.esc(r.requester_name || '')}</td>
+          <td>${UI.esc(r.department || '—')}</td><td>${UI.esc(r.project || '—')}</td>
+          <td>${UI.esc(r.cost_center || '—')}</td><td>${UI.esc(r.priority || '—')}</td>
+          <td>${UI.esc(r.required_date || '—')}</td>
           <td><span class="badge ${statusClass(r.request_status)}">${UI.esc(r.request_status)}</span></td>
           <td>${UI.esc(r.movement_type || '—')}</td><td>${UI.esc(r.erp_reservation_number || r.erp_reference_number || '—')}</td>
           <td>${UI.esc(r.issue_warehouse_code || '—')}</td>
-        </tr>`).join('') || '<tr><td colspan="6" class="muted">Queue is empty</td></tr>'}
+        </tr>`).join('') || '<tr><td colspan="11" class="muted">Queue is empty</td></tr>'}
       </tbody></table>`;
     t.querySelectorAll('tr[data-id]').forEach((tr) => tr.addEventListener('click', () => this.openDetail(tr.dataset.id)));
   },
@@ -33,6 +36,7 @@ Pages.erpOperator = {
     box.innerHTML = `
       <div class="card">
         <h3>${UI.esc(r.request_number)} — ERP Processing</h3>
+        ${UI.requesterCard(r)}
         <div class="form-row">
           <div class="form-group"><label>ERP Reservation Number</label><input type="text" id="eo-res" value="${UI.esc(r.erp_reservation_number || '')}"></div>
           <div class="form-group"><label>ERP Reference Number</label><input type="text" id="eo-ref" value="${UI.esc(r.erp_reference_number || '')}"></div>

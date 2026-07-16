@@ -70,6 +70,7 @@ start_server || exit 1
 run_suite p2_test.py
 run_suite p3_test.py
 run_suite uat_test.py
+run_suite r3_test.py
 run_suite uat2_test.py   # keep LAST — it factory-resets the database
 stop_server
 

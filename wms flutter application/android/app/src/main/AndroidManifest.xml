@@ -1,6 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- The app talks to the WMS REST API over the network. -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Camera for barcode / QR scanning in picking and receiving. -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-feature android:name="android.hardware.camera" android:required="false"/>
     <application
         android:label="WMS Mobile"
         android:name="${applicationName}"

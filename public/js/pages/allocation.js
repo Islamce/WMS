@@ -17,15 +17,17 @@ Pages.allocation = {
     // Show only requests still awaiting allocation; once allocated they move on
     // to picker assignment and disappear from this queue.
     const pending = requests.filter((r) => ['Pending Bin Location Assignment', 'Warehouse Assigned'].includes(r.request_status));
-    t.innerHTML = `<table><thead><tr><th>Request #</th><th>Warehouse</th><th>Movement</th><th>Status</th><th>Lines</th><th></th></tr></thead>
+    t.innerHTML = `<table><thead><tr><th>Request #</th><th>Requester</th><th>Department</th><th>Project</th><th>Warehouse</th><th>Movement</th><th>Status</th><th>Lines</th><th></th></tr></thead>
       <tbody>${pending.map((r) => `
         <tr data-id="${r.id}">
-          <td><strong>${UI.esc(r.request_number)}</strong></td><td>${UI.esc(r.issue_warehouse_code || '')}</td>
+          <td><strong>${UI.esc(r.request_number)}</strong></td>
+          <td>${UI.esc(r.requester_name || '')}</td><td>${UI.esc(r.department || '—')}</td><td>${UI.esc(r.project || '—')}</td>
+          <td>${UI.esc(r.issue_warehouse_code || '')}</td>
           <td>${UI.esc(r.movement_type || '')}</td><td><span class="badge ${statusClass(r.request_status)}">${UI.esc(r.request_status)}</span></td>
           <td>${r.total_lines}</td>
           <td><button class="btn sm" data-alloc="${r.id}">Allocate</button>
               <button class="btn secondary sm" data-view="${r.id}">View</button></td>
-        </tr>`).join('') || '<tr><td colspan="6" class="muted">Nothing awaiting allocation</td></tr>'}
+        </tr>`).join('') || '<tr><td colspan="9" class="muted">Nothing awaiting allocation</td></tr>'}
       </tbody></table>`;
     t.querySelectorAll('[data-alloc]').forEach((b) => b.addEventListener('click', () => this.allocate(b.dataset.alloc)));
     t.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => this.view(b.dataset.view)));
