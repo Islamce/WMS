@@ -8,8 +8,10 @@ import '../core/i18n.dart';
 /// WMS batch labels, bin labels and supplier packaging.
 ///
 /// Usage:
-///   final value = await Navigator.push<String>(context,
-///       MaterialPageRoute(builder: (_) => const ScanScreen()));
+/// ```dart
+/// final value = await Navigator.push<String>(context,
+///     MaterialPageRoute(builder: (_) => const ScanScreen()));
+/// ```
 class ScanScreen extends StatefulWidget {
   const ScanScreen({super.key, this.title});
   final String? title;
