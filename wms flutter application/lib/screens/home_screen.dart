@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/i18n.dart';
 import '../core/session.dart';
 import '../main.dart';
 import 'dashboard_screen.dart';
@@ -99,7 +100,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(current.label),
+        title: Text(t(current.label)),
         actions: [
           IconButton(
             tooltip: 'Settings',
@@ -128,7 +129,7 @@ class _HomeScreenState extends State<HomeScreen> {
         if (anyVisible) {
           rows.add(Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-            child: Text(e.toUpperCase(),
+            child: Text(t(e).toUpperCase(),
                 style: const TextStyle(
                     fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey)),
           ));
@@ -137,7 +138,7 @@ class _HomeScreenState extends State<HomeScreen> {
         final idx = dests.indexOf(e);
         rows.add(ListTile(
           leading: Icon(e.icon),
-          title: Text(e.label),
+          title: Text(t(e.label)),
           selected: idx == _index,
           onTap: () {
             setState(() => _index = idx);
@@ -170,7 +171,7 @@ class _HomeScreenState extends State<HomeScreen> {
             const Divider(height: 1),
             ListTile(
               leading: const Icon(Icons.logout),
-              title: const Text('Sign out'),
+              title: Text(t('Sign out')),
               onTap: () => session.signOut(),
             ),
           ],

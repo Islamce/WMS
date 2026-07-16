@@ -109,8 +109,8 @@ router.post('/', requirePermission('materials'), (req, res) => {
   if (exists) return res.status(409).json({ error: 'A material with this item code already exists.' });
 
   const result = db.prepare(`
-    INSERT INTO materials (plant, item_code, description, unit, price, currency, material_type, material_group)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO materials (plant, item_code, description, unit, price, currency, material_type, material_group, is_stock_item)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     (body.plant || '').trim(),
     body.item_code.trim(),
@@ -119,7 +119,8 @@ router.post('/', requirePermission('materials'), (req, res) => {
     Number(body.price) || 0,
     (body.currency || 'USD').trim(),
     (body.material_type || '').trim(),
-    (body.material_group || '').trim()
+    (body.material_group || '').trim(),
+    body.is_stock_item === 0 || body.is_stock_item === false ? 0 : 1
   );
 
   res.status(201).json({ message: 'Material created.', id: result.lastInsertRowid });
@@ -139,7 +140,7 @@ router.put('/:id', requirePermission('materials'), (req, res) => {
 
   const result = db.prepare(`
     UPDATE materials SET plant = ?, item_code = ?, description = ?, unit = ?,
-      price = ?, currency = ?, material_type = ?, material_group = ?, updated_at = datetime('now')
+      price = ?, currency = ?, material_type = ?, material_group = ?, is_stock_item = ?, updated_at = datetime('now')
     WHERE id = ?
   `).run(
     (body.plant || '').trim(),
@@ -150,6 +151,7 @@ router.put('/:id', requirePermission('materials'), (req, res) => {
     (body.currency || 'USD').trim(),
     (body.material_type || '').trim(),
     (body.material_group || '').trim(),
+    body.is_stock_item === 0 || body.is_stock_item === false ? 0 : 1,
     id
   );
   if (result.changes === 0) return res.status(404).json({ error: 'Material not found.' });

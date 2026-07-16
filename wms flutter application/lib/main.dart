@@ -32,20 +32,29 @@ class WmsApp extends StatelessWidget {
     const seed = Color(0xFF2a78d6);
     return SessionScope(
       session: session,
-      child: MaterialApp(
-        title: 'WMS Mobile',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: seed),
-          useMaterial3: true,
-          appBarTheme: const AppBarTheme(centerTitle: false),
+      // Rebuild MaterialApp when the session's theme/language change, so the
+      // settings take effect instantly (Arabic also flips the app to RTL).
+      child: ListenableBuilder(
+        listenable: session,
+        builder: (context, _) => MaterialApp(
+          title: 'WMS Mobile',
+          debugShowCheckedModeBanner: false,
+          theme: ThemeData(
+            colorScheme: ColorScheme.fromSeed(seedColor: seed),
+            useMaterial3: true,
+            appBarTheme: const AppBarTheme(centerTitle: false),
+          ),
+          darkTheme: ThemeData(
+            colorScheme: ColorScheme.fromSeed(seedColor: seed, brightness: Brightness.dark),
+            useMaterial3: true,
+          ),
+          themeMode: session.themeMode,
+          builder: (context, child) => Directionality(
+            textDirection: session.lang == 'ar' ? TextDirection.rtl : TextDirection.ltr,
+            child: child ?? const SizedBox.shrink(),
+          ),
+          home: const _Root(),
         ),
-        darkTheme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: seed, brightness: Brightness.dark),
-          useMaterial3: true,
-        ),
-        themeMode: ThemeMode.system,
-        home: const _Root(),
       ),
     );
   }

@@ -11,11 +11,6 @@ Pages.requestDetail = {
     catch (err) { el.innerHTML = `<div class="inline-alert error">${UI.esc(err.message)}</div>`; return; }
     const r = data.request;
 
-    let audit = [];
-    if (App.can('audit_trail')) {
-      try { ({ audit } = await Api.get(`/api/master/audit?request_number=${encodeURIComponent(r.request_number)}&limit=100`)); } catch {}
-    }
-
     el.innerHTML = `
       <div class="card">
         <div class="toolbar mb-0">
@@ -23,6 +18,8 @@ Pages.requestDetail = {
             <span class="badge ${statusClass(r.request_status)}">${UI.esc(r.request_status)}</span></h3>
           <div class="spacer"></div>
           <a href="#/requests" class="btn secondary sm">← Back</a>
+          ${App.can('audit_trail')
+            ? `<button class="btn secondary sm" id="rd-history" title="${t('Change history')}">ℹ ${t('History')}</button>` : ''}
           ${['Draft', 'Returned to Requester'].includes(r.request_status) && App.can('create_request')
             ? `<button class="btn sm" id="rd-submit">Submit</button>` : ''}
           ${!['Completed', 'Cancelled', 'GI Posted', 'Rejected'].includes(r.request_status)
@@ -84,23 +81,6 @@ Pages.requestDetail = {
         </div>
       </div>` : ''}
 
-      ${audit.length ? `
-      <div class="card">
-        <h3>Audit Trail</h3>
-        <div class="table-wrap"><table>
-          <thead><tr><th>When</th><th>Action</th><th>By</th><th>Role</th><th>Old → New</th><th>Reason</th></tr></thead>
-          <tbody>
-            ${audit.map((a) => `
-              <tr>
-                <td>${UI.fmtDate(a.changed_at)}</td><td>${UI.esc(a.action)}</td>
-                <td>${UI.esc(a.changed_by_name || '')}</td><td>${UI.esc(a.user_role || '')}</td>
-                <td class="wrap">${UI.esc([a.old_value, a.new_value].filter(Boolean).join(' → '))}</td>
-                <td class="wrap">${UI.esc(a.reason || '')}</td>
-              </tr>`).join('')}
-          </tbody>
-        </table></div>
-      </div>` : ''}
-
       <div class="card" id="rd-attachments">
         <h3>${t('Attachments')}</h3>
         <div class="attach-upload">
@@ -141,6 +121,33 @@ Pages.requestDetail = {
 
     const uploadBtn = el.querySelector('#rd-upload');
     if (uploadBtn) uploadBtn.addEventListener('click', () => this.upload(el, id));
+
+    const historyBtn = el.querySelector('#rd-history');
+    if (historyBtn) historyBtn.addEventListener('click', () => this.showHistory(r.request_number));
+  },
+
+  /** Change history in a wide modal — kept off the main page for a cleaner view. */
+  async showHistory(requestNumber) {
+    let audit = [];
+    try {
+      ({ audit } = await Api.get(`/api/master/audit?request_number=${encodeURIComponent(requestNumber)}&limit=200`));
+    } catch (err) { return UI.toast(err.message, 'error'); }
+    const rows = (audit || []).map((a) => `
+      <tr>
+        <td style="white-space:nowrap">${UI.fmtDate(a.changed_at)}</td>
+        <td><span class="badge">${UI.esc(String(a.action || '').replace(/_/g, ' '))}</span></td>
+        <td>${UI.esc(a.changed_by_name || '—')}<div class="muted sm">${UI.esc(a.user_role || '')}</div></td>
+        <td class="wrap">${UI.esc([a.old_value, a.new_value].filter(Boolean).join(' → ') || '—')}</td>
+        <td class="wrap">${UI.esc(a.reason || a.comments || '—')}</td>
+      </tr>`).join('');
+    UI.modal({
+      title: `${t('Change history')} — ${requestNumber}`, wide: true, submitLabel: t('Close'),
+      bodyHtml: rows
+        ? `<div class="table-wrap" style="max-height:60vh;overflow:auto"><table>
+            <thead><tr><th>${t('When')}</th><th>${t('Action')}</th><th>${t('By')}</th><th>${t('Change')}</th><th>${t('Reason')}</th></tr></thead>
+            <tbody>${rows}</tbody></table></div>`
+        : `<p class="muted">${t('No recorded changes for this request yet.')}</p>`,
+    });
   },
 
   async loadAttachments(el, id) {

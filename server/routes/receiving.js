@@ -72,6 +72,19 @@ router.post('/', requirePermission('goods_receipt'), (req, res) => {
     if (!expiry) return res.status(400).json({ error: 'Expiry date (or manufacturing date + shelf life) is required for this material.' });
   }
 
+  // Optional bin location at receive time (validated against the warehouse's
+  // bin master). If omitted, the bin is assigned later in step 3 as before.
+  let binLocation = null;
+  if (isNonEmptyString(b.bin_location)) {
+    const binRow = db.prepare(
+      'SELECT bin_code FROM bin_locations WHERE warehouse_code=? AND (bin_code=? OR full_bin_location=?)'
+    ).get(b.warehouse_code, b.bin_location.trim(), b.bin_location.trim());
+    if (!binRow) {
+      return res.status(400).json({ error: `Bin '${b.bin_location}' does not exist in warehouse ${b.warehouse_code}.` });
+    }
+    binLocation = binRow.bin_code; // store the compact code
+  }
+
   const receivingDate = b.receiving_date || new Date().toISOString().slice(0, 10);
   const qty = Number(b.received_quantity);
   // Auto batch number (retry on the rare collision).
@@ -93,7 +106,7 @@ router.post('/', requirePermission('goods_receipt'), (req, res) => {
       receivingDate, mfg, expiry, b.shelf_life_period || null, b.shelf_life_unit || null,
       // Every received batch starts on QUALITY_HOLD: only the quality step
       // (after receiving) may release it for issue.
-      qty, qty, b.warehouse_code, null, 'QUALITY_HOLD', receivingDate, expiry);
+      qty, qty, b.warehouse_code, binLocation, 'QUALITY_HOLD', receivingDate, expiry);
 
     const batch = db.prepare('SELECT * FROM batches WHERE id=?').get(info.lastInsertRowid);
     const qrId = qrService.generateForBatch(batch, { uom: material.unit });
@@ -119,6 +132,7 @@ router.post('/', requirePermission('goods_receipt'), (req, res) => {
   res.status(201).json({
     message: `Goods received. Batch ${batchNumber} created (quality hold) and QR generated.`,
     batch_id: batchId, batch_number: batchNumber, qr,
+    warehouse_code: b.warehouse_code, bin_location: binLocation,
   });
 });
 
@@ -180,7 +194,7 @@ router.patch('/batches/:id/bin', requirePermission(['goods_receipt', 'picking'])
  * GET /api/receiving/qr/pdf?ids=1,2,3 — printable PDF label sheet (one 4x6in
  * page per QR, with a real scannable QR image). Each label counts as a print.
  */
-router.get('/qr/pdf', requirePermission('qr_printing'), async (req, res) => {
+router.get('/qr/pdf', requirePermission(['qr_printing', 'goods_receipt']), async (req, res) => {
   const ids = String(req.query.ids || '').split(',').map((s) => Number(s)).filter((n) => Number.isInteger(n) && n > 0);
   if (!ids.length) return res.status(400).json({ error: 'Provide ids=1,2,3 of the QR labels to print.' });
   const qrs = ids.map((id) => db.prepare('SELECT * FROM qr_codes WHERE id=?').get(id)).filter(Boolean);
@@ -207,7 +221,7 @@ router.get('/qr/:id', requirePermission(['goods_receipt', 'qr_printing']), (req,
 });
 
 /** GET /api/receiving/qr — list QR codes for the printing screen. */
-router.get('/qr', requirePermission('qr_printing'), (req, res) => {
+router.get('/qr', requirePermission(['qr_printing', 'goods_receipt']), (req, res) => {
   const q = (req.query.search || '').trim();
   const like = `%${q}%`;
   const where = q ? 'WHERE material_code LIKE ? OR batch_number LIKE ? OR qr_code_value LIKE ?' : '';
@@ -217,7 +231,7 @@ router.get('/qr', requirePermission('qr_printing'), (req, res) => {
 });
 
 /** POST /api/receiving/qr/:id/print — record a print / reprint (audited). */
-router.post('/qr/:id/print', requirePermission('qr_printing'), (req, res) => {
+router.post('/qr/:id/print', requirePermission(['qr_printing', 'goods_receipt']), (req, res) => {
   const qr = db.prepare('SELECT * FROM qr_codes WHERE id=?').get(req.params.id);
   if (!qr) return res.status(404).json({ error: 'QR not found.' });
   qrService.markPrinted(qr.id);

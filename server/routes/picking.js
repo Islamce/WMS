@@ -97,11 +97,54 @@ router.post('/allocations/:allocId/scan', requirePermission('picking'), (req, re
   const alloc = db.prepare('SELECT * FROM picking_allocations WHERE id=?').get(req.params.allocId);
   if (!alloc) return res.status(404).json({ error: 'Allocation not found.' });
   const line = db.prepare('SELECT * FROM material_request_lines WHERE id=?').get(alloc.line_id);
-  const { qr_value, override, override_reason } = req.body || {};
+  const { qr_value, override, override_reason, skip } = req.body || {};
+
+  // Admin may skip the QR scan entirely (audited) — for tests, damaged labels,
+  // or materials without printed QRs.
+  if (skip === true) {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Only an administrator can skip the QR scan.' });
+    }
+    db.prepare("UPDATE picking_allocations SET status='SCANNED', scanned_qr_value='(skipped)', scan_result='SKIPPED_BY_ADMIN' WHERE id=?")
+      .run(alloc.id);
+    db.prepare('UPDATE material_request_lines SET line_status=? WHERE id=?').run(LINE_STATUS.QR_VERIFIED, line.id);
+    audit.record({ entityType: 'PickingAllocation', entityId: alloc.id, requestNumber: alloc.request_number,
+      lineNumber: alloc.line_number, action: 'QR_SCAN_SKIPPED', newValue: { by: req.user.name },
+      user: req.user, sourceScreen: 'QR Scan' });
+    return res.json({ ok: true, skipped: true, message: 'Scan skipped by administrator. You may confirm the pick.' });
+  }
+
   if (!isNonEmptyString(qr_value)) return res.status(400).json({ error: 'QR value is required.' });
 
+  // A scan of the BIN LOCATION label is accepted as an alternative to the batch
+  // QR: scanning the expected bin passes; scanning a different bin fails.
+  const scanned = qr_value.trim();
+  const binRow = db.prepare(
+    'SELECT bin_code, full_bin_location FROM bin_locations WHERE warehouse_code=? AND (bin_code=? OR full_bin_location=?)'
+  ).get(alloc.warehouse_code, scanned, scanned);
+  const isBinScan = !!binRow || scanned === (alloc.bin_location || '');
+  if (isBinScan) {
+    const matchesExpected = scanned === (alloc.bin_location || '')
+      || (binRow && (binRow.bin_code === alloc.bin_location || binRow.full_bin_location === alloc.bin_location));
+    if (!matchesExpected) {
+      audit.record({ entityType: 'PickingAllocation', entityId: alloc.id, requestNumber: alloc.request_number,
+        lineNumber: alloc.line_number, action: 'QR_SCAN_FAIL',
+        newValue: { qr: scanned, code: 'WRONG_BIN', message: 'Scanned bin does not match the proposed bin.' },
+        user: req.user, sourceScreen: 'QR Scan' });
+      return res.status(400).json({ ok: false, code: 'WRONG_BIN',
+        error: `Scanned bin ${scanned} does not match the proposed bin ${alloc.bin_location}.` });
+    }
+    db.prepare("UPDATE picking_allocations SET status='SCANNED', scanned_qr_value=?, scan_result='PASS:BIN' WHERE id=?")
+      .run(scanned, alloc.id);
+    db.prepare('UPDATE material_request_lines SET line_status=? WHERE id=?').run(LINE_STATUS.QR_VERIFIED, line.id);
+    audit.record({ entityType: 'PickingAllocation', entityId: alloc.id, requestNumber: alloc.request_number,
+      lineNumber: alloc.line_number, action: 'QR_SCAN_PASS', newValue: { qr: scanned, code: 'PASS_BIN' },
+      user: req.user, sourceScreen: 'QR Scan' });
+    return res.json({ ok: true, message: 'Bin location validated. You may confirm the pick.' });
+  }
+
   const result = qrService.validateScan({
-    qrValue: qr_value.trim(),
+    qrValue: scanned,
     expected: { materialCode: line.material_code, batchNumber: alloc.batch_number,
       warehouseCode: alloc.warehouse_code, binLocation: alloc.bin_location },
   });

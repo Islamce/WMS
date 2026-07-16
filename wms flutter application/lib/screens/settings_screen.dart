@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/i18n.dart';
 import '../main.dart';
 import '../widgets/common.dart';
 
@@ -22,11 +23,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     final session = SessionScope.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
+      appBar: AppBar(title: Text(t('Settings'))),
       body: ListView(
         children: [
           SectionCard(
-            title: 'Server',
+            title: t('Appearance'),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                DropdownButtonFormField<String>(
+                  initialValue: session.lang,
+                  decoration: InputDecoration(
+                      labelText: t('Language'), border: const OutlineInputBorder()),
+                  items: const [
+                    DropdownMenuItem(value: 'en', child: Text('English')),
+                    DropdownMenuItem(value: 'ar', child: Text('العربية')),
+                    DropdownMenuItem(value: 'fr', child: Text('Français')),
+                  ],
+                  onChanged: (v) { if (v != null) session.setLang(v); },
+                ),
+                const SizedBox(height: 14),
+                Text(t('Theme'), style: const TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 6),
+                SegmentedButton<ThemeMode>(
+                  segments: [
+                    ButtonSegment(value: ThemeMode.system,
+                        icon: const Icon(Icons.settings_suggest_outlined), label: Text(t('System'))),
+                    ButtonSegment(value: ThemeMode.light,
+                        icon: const Icon(Icons.light_mode_outlined), label: Text(t('Light'))),
+                    ButtonSegment(value: ThemeMode.dark,
+                        icon: const Icon(Icons.dark_mode_outlined), label: Text(t('Dark'))),
+                  ],
+                  selected: {session.themeMode},
+                  onSelectionChanged: (s) => session.setThemeMode(s.first),
+                ),
+              ],
+            ),
+          ),
+          SectionCard(
+            title: t('Server'),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -34,29 +69,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   controller: _server,
                   keyboardType: TextInputType.url,
                   autocorrect: false,
-                  decoration: const InputDecoration(
-                    labelText: 'Server URL', border: OutlineInputBorder()),
+                  decoration: InputDecoration(
+                    labelText: t('Server URL'), border: const OutlineInputBorder()),
                 ),
                 const SizedBox(height: 10),
                 FilledButton(
                   onPressed: () async {
                     await session.setBaseUrl(_server.text);
-                    if (context.mounted) showSnack(context, 'Server URL saved.');
+                    if (context.mounted) showSnack(context, t('Server URL saved.'));
                   },
-                  child: const Text('Save'),
+                  child: Text(t('Save')),
                 ),
               ],
             ),
           ),
           SectionCard(
-            title: 'Account',
+            title: t('Account'),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Name: ${session.userName}'),
-                Text('Role: ${session.userRole}'),
+                Text('${t('Name')}: ${session.userName}'),
+                Text('${t('Role')}: ${session.userRole}'),
                 const SizedBox(height: 6),
-                Text('Permissions (${session.permissions.length}):',
+                Text('${t('Permissions')} (${session.permissions.length}):',
                     style: const TextStyle(fontWeight: FontWeight.w600)),
                 const SizedBox(height: 4),
                 Wrap(
@@ -69,7 +104,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const SizedBox(height: 12),
                 OutlinedButton.icon(
                   icon: const Icon(Icons.logout),
-                  label: const Text('Sign out'),
+                  label: Text(t('Sign out')),
                   onPressed: () {
                     session.signOut();
                     Navigator.of(context).pop();

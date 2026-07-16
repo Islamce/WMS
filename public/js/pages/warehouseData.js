@@ -215,10 +215,14 @@ Pages.binsMaster = {
   },
   async load() {
     const { bins } = await Api.get('/api/master/bins');
+    // The bin CODE is the compact code only; warehouse / zone / rack live in
+    // their own columns rather than being embedded in a long combined code.
     this.el.querySelector('#bm-table').innerHTML = `
-      <table><thead><tr><th>WH</th><th>Zone</th><th>Rack</th><th>Compact</th><th>Full</th><th class="text-right">Capacity</th></tr></thead>
-      <tbody>${bins.map((b) => `<tr><td>${UI.esc(b.warehouse_code)}</td><td>${UI.esc(b.zone || '')}</td><td>${UI.esc(b.rack || '')}</td>
-        <td><strong>${UI.esc(b.bin_code)}</strong></td><td>${UI.esc(b.full_bin_location)}</td><td class="text-right">${UI.fmtQty(b.capacity)}</td></tr>`).join('')}</tbody></table>`;
+      <table><thead><tr><th>Bin Code</th><th>Warehouse</th><th>Zone</th><th>Rack</th><th>Level</th><th>Column</th><th class="text-right">Capacity</th></tr></thead>
+      <tbody>${bins.map((b) => `<tr><td><strong>${UI.esc(b.bin_code)}</strong></td>
+        <td>${UI.esc(b.warehouse_code)}</td><td>${UI.esc(b.zone || '—')}</td><td>${UI.esc(b.rack || '—')}</td>
+        <td>${UI.esc(b.level || '—')}</td><td>${UI.esc(b.column_number || '—')}</td>
+        <td class="text-right">${UI.fmtQty(b.capacity)}</td></tr>`).join('')}</tbody></table>`;
   },
   form() {
     UI.modal({ title: 'Add bin location', submitLabel: 'Create',
@@ -228,12 +232,15 @@ Pages.binsMaster = {
         <div class="form-group"><label>Rack</label><input id="b-rack" value="R01"></div></div>
         <div class="form-row"><div class="form-group"><label>Line/Aisle</label><input id="b-line" value="01"></div>
         <div class="form-group"><label>Level</label><input id="b-level" value="01"></div></div>
-        <div class="form-group"><label>Column</label><input id="b-col" value="01"></div>`,
+        <div class="form-group"><label>Column</label><input id="b-col" value="01"></div>
+        <div class="form-group"><label>Bin code (optional — used exactly as typed; otherwise composed from the fields above)</label>
+          <input id="b-code" placeholder="e.g. R-03-02-23"></div>`,
       onSubmit: async (ov, close) => {
         try { await Api.post('/api/master/bins', { warehouse_code: ov.querySelector('#b-wh').value,
           zone: ov.querySelector('#b-zone').value, rack: ov.querySelector('#b-rack').value,
           line_or_aisle: ov.querySelector('#b-line').value, level: ov.querySelector('#b-level').value,
-          column_number: ov.querySelector('#b-col').value });
+          column_number: ov.querySelector('#b-col').value,
+          bin_code: ov.querySelector('#b-code').value.trim() || undefined });
           UI.toast('Bin created.'); close(); this.load(); }
         catch (err) { UI.toast(err.message, 'error'); }
       } });

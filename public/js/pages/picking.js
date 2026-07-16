@@ -71,8 +71,20 @@ Pages.picking = {
 
     if (inProgress) {
       el.querySelectorAll('[data-scan]').forEach((b) => b.addEventListener('click', () => this.scan(b.dataset.scan, b.dataset.qr)));
+      el.querySelectorAll('[data-skip]').forEach((b) => b.addEventListener('click', () => this.skipScan(b.dataset.skip)));
       el.querySelectorAll('[data-confirm]').forEach((b) => b.addEventListener('click', () => this.confirmLine(b.dataset.confirm, Number(b.dataset.approved))));
     }
+  },
+
+  /** Admin-only: mark the allocation scanned without a QR (audited server-side). */
+  skipScan(allocId) {
+    UI.confirm(t('Skip the QR scan for this allocation? The skip is recorded in the audit trail.'), async () => {
+      try {
+        const r = await Api.post(`/api/picking/allocations/${allocId}/scan`, { skip: true });
+        UI.toast(r.message || 'Scan skipped.');
+        this.openTask(this.taskId);
+      } catch (err) { UI.toast(err.message, 'error'); }
+    });
   },
 
   lineCard(l, allocs, inProgress) {
@@ -96,7 +108,10 @@ Pages.picking = {
               <td>${UI.esc(a.batch_number || '')}</td><td>${UI.esc(a.bin_location || '')}</td>
               <td class="text-right">${UI.fmtQty(a.proposed_quantity)}</td><td>${UI.esc(a.allocation_method || '')}</td>
               <td>${a.status === 'SCANNED' || a.status === 'PICKED' ? '<span class="badge active">✓ scanned</span>'
-                : inProgress ? `<button class="btn secondary sm" data-scan="${a.id}" data-qr="${UI.esc(this.qrHint(a))}">Scan QR</button>` : '—'}</td>
+                : inProgress ? `<button class="btn secondary sm" data-scan="${a.id}" data-qr="${UI.esc(this.qrHint(a))}">Scan QR</button>`
+                  + (App.user && App.user.role === 'admin'
+                    ? ` <button class="btn warn sm" data-skip="${a.id}" title="${t('Skip QR scan (admin only, audited)')}">${t('Skip')}</button>` : '')
+                : '—'}</td>
             </tr>`).join('') || '<tr><td colspan="5" class="muted">No stock allocated (shortage)</td></tr>'}</tbody>
         </table></div>
         ${inProgress ? `
@@ -127,7 +142,8 @@ Pages.picking = {
     UI.modal({ title: 'Scan / enter QR code', submitLabel: 'Validate',
       bodyHtml: `
         <div class="form-group"><label>QR Code value</label>
-          <input type="text" id="sc-qr" placeholder="Scan or type QR value…" value="${UI.esc(qrHint || '')}"></div>
+          <input type="text" id="sc-qr" placeholder="Scan or type QR value…" value="${UI.esc(qrHint || '')}">
+          <div class="hint">${t('You can scan the batch QR label or the bin location QR — both are accepted.')}</div></div>
         <label class="perm-item"><input type="checkbox" id="sc-override"> <span>Supervisor override (requires reason &amp; authority)</span></label>
         <div class="form-group" style="margin-top:8px"><label>Override reason</label><input type="text" id="sc-reason"></div>`,
       onSubmit: async (ov, close) => {

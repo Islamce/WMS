@@ -61,6 +61,22 @@ router.patch('/:id', (req, res) => {
     if (!wh) return res.status(400).json({ error: `Unknown warehouse '${b.issue_warehouse_code}'.` });
   }
 
+  // Non-stock items (materials.is_stock_item = 0) must never receive a stock
+  // reservation — block before anything is recorded.
+  if (isNonEmptyString(b.erp_reservation_number) || isNonEmptyString(b.erp_reference_number)) {
+    const nonStock = db.prepare(`
+      SELECT DISTINCT l.material_code FROM material_request_lines l
+      JOIN materials m ON m.id = l.material_id
+      WHERE l.request_id=? AND l.line_status NOT IN ('Rejected','Cancelled') AND m.is_stock_item = 0
+    `).all(header.id).map((r) => r.material_code);
+    if (nonStock.length) {
+      return res.status(400).json({
+        error: `Reservations are not allowed for non-stock items: ${nonStock.join(', ')}. `
+          + 'Remove these lines (or mark the materials as stock items) before creating a reservation.',
+      });
+    }
+  }
+
   const fields = {
     erp_reservation_number: b.erp_reservation_number,
     erp_reference_number: b.erp_reference_number,

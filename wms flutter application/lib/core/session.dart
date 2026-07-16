@@ -1,7 +1,9 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' show ThemeMode;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api_client.dart';
+import 'i18n.dart';
 
 /// Holds the server URL, auth token and the signed-in user (with permissions),
 /// and exposes them app-wide via [ChangeNotifier]. Persists to
@@ -10,11 +12,17 @@ class Session extends ChangeNotifier {
   static const _kBaseUrl = 'wms_base_url';
   static const _kToken = 'wms_token';
   static const _kUser = 'wms_user_name';
+  static const _kLang = 'wms_lang';
+  static const _kTheme = 'wms_theme';
 
   String baseUrl = 'http://10.0.2.2:3000';
   String? token;
   Map<String, dynamic>? user;
   bool loading = true;
+
+  /// UI language ('en' | 'ar' | 'fr') and theme preference, persisted.
+  String lang = 'en';
+  ThemeMode themeMode = ThemeMode.system;
 
   bool get isAuthenticated => token != null && token!.isNotEmpty && user != null;
   String get userName => (user?['name'] ?? '').toString();
@@ -41,6 +49,10 @@ class Session extends ChangeNotifier {
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
     baseUrl = prefs.getString(_kBaseUrl) ?? baseUrl;
+    lang = prefs.getString(_kLang) ?? 'en';
+    I18n.current = lang;
+    final themeName = prefs.getString(_kTheme) ?? 'system';
+    themeMode = ThemeMode.values.firstWhere((m) => m.name == themeName, orElse: () => ThemeMode.system);
     token = prefs.getString(_kToken);
     final name = prefs.getString(_kUser);
     // Re-validate the token against /auth/me so permissions are always fresh.
@@ -62,6 +74,21 @@ class Session extends ChangeNotifier {
     baseUrl = url.trim();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kBaseUrl, baseUrl);
+    notifyListeners();
+  }
+
+  Future<void> setLang(String value) async {
+    lang = value;
+    I18n.current = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kLang, value);
+    notifyListeners();
+  }
+
+  Future<void> setThemeMode(ThemeMode mode) async {
+    themeMode = mode;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kTheme, mode.name);
     notifyListeners();
   }
 

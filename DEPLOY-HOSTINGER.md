@@ -15,6 +15,22 @@ your Hostinger plan:
 > schema, the default admin, roles/permissions, warehouses/bins and demo data —
 > so git-connected deploys (Path D) work with **no shell step**. Set
 > `SKIP_AUTO_SEED=1` to turn this off. `npm run seed` still works for manual setup.
+> In `NODE_ENV=production` the auto-seed additionally requires `ALLOW_AUTO_SEED=1`
+> (a guard against silently writing demo data over a missing data volume).
+
+> ⚠️ **If your users/passwords "disappear" after a redeploy**, your `DB_PATH`
+> points at ephemeral storage — the platform recreated the filesystem, and the
+> SQLite file (with every account in it) went with it. Fix the storage first:
+> put `DB_PATH` on a persistent disk/volume (e.g. `/var/lib/wms/wms.db` on a
+> VPS). Then recover access instantly:
+>
+> ```bash
+> npm run reset-admin                            # admin@example.com / Admin@123456
+> npm run reset-admin -- you@company.com NewPass1
+> ```
+>
+> This creates or force-resets an active admin (password change forced on first
+> login) and never touches other data.
 
 > **Native module note:** WMS uses `better-sqlite3`, a compiled addon. It
 > installs cleanly on a VPS. On shared Node.js hosting it usually works from
