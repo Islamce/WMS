@@ -178,11 +178,12 @@ router.patch('/batches/:id/bin', requirePermission(['goods_receipt', 'picking'])
   if (!batch) return res.status(404).json({ error: 'Batch not found.' });
   const { bin_location } = req.body || {};
   if (!isNonEmptyString(bin_location)) return res.status(400).json({ error: 'Bin location is required.' });
-  const bin = db.prepare('SELECT 1 FROM bin_locations WHERE warehouse_code=? AND (bin_code=? OR full_bin_location=?)')
+  const bin = db.prepare('SELECT bin_code FROM bin_locations WHERE warehouse_code=? AND (bin_code=? OR full_bin_location=?)')
     .get(batch.warehouse_code, bin_location.trim(), bin_location.trim());
   if (!bin) return res.status(400).json({ error: `Bin '${bin_location}' does not exist in warehouse ${batch.warehouse_code}.` });
-  db.prepare("UPDATE batches SET bin_location=?, updated_at=datetime('now') WHERE id=?").run(bin_location.trim(), batch.id);
-  batch.bin_location = bin_location.trim();
+  // Always store the compact bin code so displays and scans stay consistent.
+  db.prepare("UPDATE batches SET bin_location=?, updated_at=datetime('now') WHERE id=?").run(bin.bin_code, batch.id);
+  batch.bin_location = bin.bin_code;
   syncQr(batch);
   audit.record({ entityType: 'Batch', entityId: batch.id, action: 'BIN_ASSIGNED',
     newValue: bin_location.trim(), user: req.user, sourceScreen: 'Goods Receipt' });

@@ -35,7 +35,9 @@ class Session extends ChangeNotifier {
   }
 
   /// Mirrors the web app's `App.can()` — a string or list; admin has all.
+  /// A `null` permission means "any signed-in user" (the Home launchpad).
   bool can(dynamic permission) {
+    if (permission == null) return true;
     if (userRole == 'admin') return true;
     final perms = permissions;
     if (permission is List) {

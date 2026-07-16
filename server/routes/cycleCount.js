@@ -88,6 +88,17 @@ router.post('/:id/post', (req, res) => {
   const batch = db.prepare('SELECT * FROM batches WHERE id=?').get(cc.batch_id);
   if (!batch) return res.status(404).json({ error: 'Batch no longer exists.' });
 
+  // Reliability guard: never post a count that leaves on-hand below what is
+  // already reserved for open picking allocations — that would let the same
+  // stock be promised twice. Resolve the reservations (or recount) first.
+  const newQtyCheck = Math.max(0, cc.counted_quantity);
+  if (newQtyCheck < (batch.reserved_quantity || 0)) {
+    return res.status(400).json({
+      error: `Counted quantity (${newQtyCheck}) is below the quantity reserved for open picks `
+        + `(${batch.reserved_quantity}). Release or complete those picks before posting this count.`,
+    });
+  }
+
   const variance = cc.variance || 0;
   db.transaction(() => {
     // Set the batch on-hand to the counted quantity (never below zero).

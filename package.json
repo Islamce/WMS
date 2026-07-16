@@ -12,6 +12,7 @@
     "setup": "npm run migrate && npm run seed",
     "backup": "node scripts/backup.js",
     "reset-admin": "node scripts/reset-admin.js",
+    "fresh-start": "node scripts/fresh-start.js",
     "lint": "eslint . --ext .js",
     "lint:fix": "eslint . --ext .js --fix",
     "test": "bash tests/run.sh",

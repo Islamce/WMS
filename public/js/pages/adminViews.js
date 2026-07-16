@@ -97,15 +97,21 @@ Pages.audit = {
       rows: async () => (await Api.get(`/api/master/audit?${this.query({ page: 1, limit: 5000 })}`)).audit,
     }));
 
+    // Rows with a request number drill through to the source request.
     this.el.querySelector('#au-table').innerHTML = `
       <table><thead><tr><th>When</th><th>Process</th><th>Entity</th><th>Request</th><th>Ln</th><th>Action</th><th>User</th><th>Role</th><th>Old → New</th><th>Reason</th></tr></thead>
       <tbody>${data.audit.map((a) => `
-        <tr><td>${UI.fmtDate(a.changed_at)}</td><td>${UI.esc(a.source_screen || '')}</td><td>${UI.esc(a.entity_type)}</td>
-          <td>${UI.esc(a.request_number || '')}</td><td>${a.line_number || ''}</td><td><span class="badge role">${UI.esc(a.action)}</span></td>
+        <tr ${a.request_number ? `class="row-link" data-req="${UI.esc(a.request_number)}" title="Open request ${UI.esc(a.request_number)}"` : ''}>
+          <td>${UI.fmtDate(a.changed_at)}</td><td>${UI.esc(a.source_screen || '')}</td><td>${UI.esc(a.entity_type)}</td>
+          <td>${a.request_number ? `<strong>${UI.esc(a.request_number)}</strong>` : ''}</td><td>${a.line_number || ''}</td><td><span class="badge role">${UI.esc(a.action)}</span></td>
           <td>${UI.esc(a.changed_by_name || '')}</td><td>${UI.esc(a.user_role || '')}</td>
           <td class="wrap" style="max-width:260px">${UI.esc([a.old_value, a.new_value].filter(Boolean).join(' → '))}</td>
           <td class="wrap">${UI.esc(a.reason || '')}</td></tr>`).join('') || '<tr><td colspan="10" class="muted">No audit records match the filters</td></tr>'}
       </tbody></table>`;
+    this.el.querySelectorAll('tr[data-req]').forEach((tr) => tr.addEventListener('click', () => {
+      Pages.requests.state = { page: 1, search: tr.dataset.req, status: '' };
+      location.hash = '#/requests';
+    }));
     UI.pagination(this.el.querySelector('#au-pagination'), data, (p) => { this.state.page = p; this.load(); });
   },
 };
@@ -150,27 +156,42 @@ Pages.kpi = {
     try { data = await Api.get('/api/kpi'); }
     catch (err) { el.innerHTML = `<div class="inline-alert error">${UI.esc(err.message)}</div>`; return; }
     const k = data.kpis;
+    // Every tile drills through to its source data (requests list, audit
+    // trail filtered by action, expiry alerts, batch tracking).
+    const tile = (cls, label, value, drill, sub = '') => `
+      <div class="kpi ${cls} row-link" data-drill="${drill}" role="button" tabindex="0"
+        title="Open source data"><div class="label">${label}</div><div class="value">${value}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>`;
     el.innerHTML = `
       <div class="grid kpis">
-        <div class="kpi accent"><div class="label">Total Requests</div><div class="value">${k.total_requests}</div></div>
-        <div class="kpi green"><div class="label">Completed</div><div class="value">${k.completed}</div></div>
-        <div class="kpi amber"><div class="label">Partially Completed</div><div class="value">${k.partially_completed}</div></div>
-        <div class="kpi accent"><div class="label">Open</div><div class="value">${k.open}</div></div>
-        <div class="kpi red"><div class="label">ERP Error</div><div class="value">${k.erp_error}</div></div>
-        <div class="kpi red"><div class="label">Rejected / Cancelled</div><div class="value">${k.rejected + k.cancelled}</div></div>
-        <div class="kpi accent"><div class="label">Avg Approval (min)</div><div class="value">${k.avg_approval_minutes}</div></div>
-        <div class="kpi accent"><div class="label">Avg GI Posting (min)</div><div class="value">${k.avg_gi_posting_minutes}</div></div>
-        <div class="kpi amber"><div class="label">Shortage Lines</div><div class="value">${k.shortage_lines}</div><div class="sub">${k.shortage_percentage}% of lines</div></div>
-        <div class="kpi red"><div class="label">Expired Batches</div><div class="value">${k.expired_batches}</div></div>
-        <div class="kpi green"><div class="label">QR Scan Pass</div><div class="value">${k.qr_scan_pass}</div><div class="sub">${k.qr_scan_failure} failed</div></div>
-        <div class="kpi amber"><div class="label">Overrides</div><div class="value">${k.manual_override_count}</div></div>
-        <div class="kpi accent"><div class="label">FIFO / FEFO Allocations</div><div class="value">${k.fifo_allocations}/${k.fefo_allocations}</div></div>
-        <div class="kpi green"><div class="label">ERP Success Rate</div><div class="value">${k.erp_success_rate}%</div><div class="sub">${k.erp_posting_success} ok · ${k.erp_posting_failure} fail</div></div>
+        ${tile('accent', 'Total Requests', k.total_requests, 'requests:')}
+        ${tile('green', 'Completed', k.completed, 'requests:Completed')}
+        ${tile('amber', 'Partially Completed', k.partially_completed, 'requests:Partially Completed')}
+        ${tile('accent', 'Open', k.open, 'requests:')}
+        ${tile('red', 'ERP Error', k.erp_error, 'requests:ERP Error')}
+        ${tile('red', 'Rejected / Cancelled', k.rejected + k.cancelled, 'requests:Rejected')}
+        ${tile('accent', 'Avg Approval (min)', k.avg_approval_minutes, 'requests:')}
+        ${tile('accent', 'Avg GI Posting (min)', k.avg_gi_posting_minutes, 'requests:')}
+        ${tile('amber', 'Shortage Lines', k.shortage_lines, 'requests:', `${k.shortage_percentage}% of lines`)}
+        ${tile('red', 'Expired Batches', k.expired_batches, 'expiry:')}
+        ${tile('green', 'QR Scan Pass', k.qr_scan_pass, 'audit:QR_SCAN_PASS', `${k.qr_scan_failure} failed`)}
+        ${tile('amber', 'Overrides', k.manual_override_count, 'audit:SUPERVISOR_OVERRIDE')}
+        ${tile('accent', 'FIFO / FEFO Allocations', `${k.fifo_allocations}/${k.fefo_allocations}`, 'batches:')}
+        ${tile('green', 'ERP Success Rate', `${k.erp_success_rate}%`, 'audit:GI_POSTED', `${k.erp_posting_success} ok · ${k.erp_posting_failure} fail`)}
       </div>
       <div class="grid two">
         <div class="card"><h3>Requests by status</h3><div class="chart-box"><canvas id="kpi-status"></canvas></div></div>
         <div class="card"><h3>Requests by warehouse</h3><div class="chart-box"><canvas id="kpi-wh"></canvas></div></div>
       </div>`;
+    el.querySelectorAll('[data-drill]').forEach((n) => n.addEventListener('click', () => {
+      const [route, arg] = n.dataset.drill.split(':');
+      if (route === 'requests') {
+        Pages.requests.state = { page: 1, search: '', status: arg || '' };
+      } else if (route === 'audit') {
+        Pages.audit.state = { page: 1, source_screen: '', entity_type: '', action: arg || '',
+          changed_by_name: '', request_number: '', date_from: '', date_to: '' };
+      }
+      location.hash = `#/${route}`;
+    }));
     this.renderCharts(data);
   },
   destroy() { this.charts.forEach((c) => c.destroy()); this.charts = []; },

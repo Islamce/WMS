@@ -13,8 +13,11 @@ Pages.batches = {
       <div class="table-wrap" id="bt-table"><div class="loading">Loading…</div></div>
       <div class="pagination" id="bt-pager"></div></div>`;
     el.querySelector('#bt-search').addEventListener('input', UI.debounce((e) => { this.q = e.target.value; this.load(this.q, 1); }, 300));
-    this.q = '';
-    await this.load('', 1);
+    // A drill-through from another report (e.g. Expiry Alerts) presets the search.
+    this.q = this.preset || '';
+    this.preset = null;
+    if (this.q) el.querySelector('#bt-search').value = this.q;
+    await this.load(this.q, 1);
   },
   async load(q, page = 1) {
     this.q = q || '';
@@ -65,12 +68,18 @@ Pages.expiry = {
       <div class="card"><div class="toolbar"><h3 class="mb-0">Expiry Alerts</h3><div class="spacer"></div><span id="ex-export"></span></div><div class="table-wrap"><table>
         <thead><tr><th>Batch</th><th>Material</th><th>WH / Bin</th><th class="text-right">Qty</th><th>Expiry</th><th>Days</th><th>Level</th></tr></thead>
         <tbody>${alerts.map((a) => `
-          <tr><td><strong>${UI.esc(a.batch_number)}</strong></td><td>${UI.esc(a.material_code)}</td>
+          <tr class="row-link" data-batch="${UI.esc(a.batch_number)}" title="Open in Batch Tracking">
+            <td><strong>${UI.esc(a.batch_number)}</strong></td><td>${UI.esc(a.material_code)}</td>
             <td>${UI.esc(a.warehouse_code || '')} / ${UI.esc(a.bin_location || '—')}</td>
             <td class="text-right">${UI.fmtQty(a.remaining_quantity)}</td><td>${a.expiry_date}</td>
             <td>${a.days_to_expiry}</td><td><span class="badge ${ALERT_BADGE[a.alert_level]}">${a.alert_level}</span></td></tr>`).join('')
           || '<tr><td colspan="7" class="muted">No expiry alerts 🎉</td></tr>'}</tbody>
       </table></div></div>`;
+    // Drill through to the source batch record.
+    el.querySelectorAll('tr[data-batch]').forEach((tr) => tr.addEventListener('click', () => {
+      Pages.batches.preset = tr.dataset.batch;
+      location.hash = '#/batches';
+    }));
     const slot = el.querySelector('#ex-export');
     if (slot) slot.appendChild(UI.exportControl({
       filename: 'expiry-alerts', title: 'Expiry Alerts', rows: alerts,

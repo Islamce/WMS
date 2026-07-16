@@ -59,7 +59,17 @@ Pages.importCenter = {
         <div id="imp-preview"></div>
         <button class="btn" id="imp-run" disabled>Import</button>
       </div>
-      <div id="imp-result"></div>`;
+      <div id="imp-result"></div>
+      ${App.user && App.user.role === 'admin' ? `
+      <div class="card" style="border-color:var(--danger)">
+        <h3>Start fresh — clear the sample / test data</h3>
+        <p class="muted" style="margin:6px 0 12px">
+          Removes all demo and test data (requests, picking, batches, QR labels, stock movements,
+          and optionally the sample materials/warehouses/bins) so you can import your real
+          database above. <strong>Users, roles, permissions and movement-type configuration are kept.</strong>
+          This cannot be undone.</p>
+        <button class="btn danger" id="imp-reset">🗑 Clear data…</button>
+      </div>` : ''}`;
 
     this.rows = [];
     const entitySel = el.querySelector('#imp-entity');
@@ -72,6 +82,35 @@ Pages.importCenter = {
     el.querySelector('#imp-template').addEventListener('click', () => this.downloadTemplate(entitySel.value));
     el.querySelector('#imp-file').addEventListener('change', (e) => this.onFile(e.target.files[0]));
     el.querySelector('#imp-run').addEventListener('click', () => this.runImport(entitySel.value));
+    const resetBtn = el.querySelector('#imp-reset');
+    if (resetBtn) resetBtn.addEventListener('click', () => this.confirmReset());
+  },
+
+  /** Admin-only: clear demo/test data so the real database can be imported. */
+  confirmReset() {
+    UI.modal({
+      title: 'Clear all data and start fresh?', submitLabel: 'Clear data',
+      bodyHtml: `
+        <p>This permanently deletes every request, picking task, batch, QR label, stock movement
+        and the audit history of that test data. <strong>Users, roles, permissions and
+        movement-type configuration are kept.</strong></p>
+        <label class="perm-item"><input type="checkbox" id="rs-keep">
+          <span>Keep master data (materials, warehouses, bins, locations)</span></label>
+        <div class="form-group" style="margin-top:10px">
+          <label for="rs-confirm">Type <strong>RESET</strong> to confirm</label>
+          <input type="text" id="rs-confirm" autocomplete="off"></div>`,
+      onSubmit: async (ov, close) => {
+        try {
+          const r = await Api.post('/api/admin/factory-reset', {
+            confirm: ov.querySelector('#rs-confirm').value.trim(),
+            keep_master_data: ov.querySelector('#rs-keep').checked,
+          });
+          UI.toast(r.message);
+          close();
+          this.render(this.el);
+        } catch (err) { UI.toast(err.message, 'error'); }
+      },
+    });
   },
 
   resetFile() {

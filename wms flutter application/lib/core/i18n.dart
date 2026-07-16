@@ -10,6 +10,8 @@ class I18n {
   static const Map<String, Map<String, String>> _dict = {
     'ar': {
       // menu / sections
+      'Home': 'الرئيسية', 'Good morning': 'صباح الخير', 'Good afternoon': 'مساء الخير',
+      'Good evening': 'مساء الخير', 'Pick a process to get started': 'اختر عملية للبدء',
       'Dashboard': 'لوحة التحكم', 'AI Stock Analytics': 'تحليلات المخزون الذكية',
       'Notifications': 'الإشعارات', 'Create Request': 'إنشاء طلب', 'Requests': 'الطلبات',
       'Approvals': 'الموافقات', 'ERP Operator': 'مشغل ERP',
@@ -33,6 +35,8 @@ class I18n {
       'Server URL saved.': 'تم حفظ رابط الخادم.',
     },
     'fr': {
+      'Home': 'Accueil', 'Good morning': 'Bonjour', 'Good afternoon': 'Bonjour',
+      'Good evening': 'Bonsoir', 'Pick a process to get started': 'Choisissez un processus pour commencer',
       'Dashboard': 'Tableau de bord', 'AI Stock Analytics': 'Analyse IA du stock',
       'Notifications': 'Notifications', 'Create Request': 'Créer une demande', 'Requests': 'Demandes',
       'Approvals': 'Approbations', 'ERP Operator': 'Opérateur ERP',

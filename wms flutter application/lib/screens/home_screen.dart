@@ -32,9 +32,21 @@ class NavDest {
   final Widget Function() builder;
 }
 
+/// Section accent colours — same palette as the web launchpad, so the two
+/// home pages read as one product.
+const Map<String, Color> _sectionAccent = {
+  'General': Color(0xFF2a78d6),
+  'Material Requests': Color(0xFF7c3aed),
+  'Warehouse Execution': Color(0xFF1baf7a),
+  'Receiving & Quality': Color(0xFFeda100),
+  'Master Data & Admin': Color(0xFF5b6b86),
+};
+
 /// The app menu — a mobile-focused subset of the web app's MENU, in the same
-/// order and gated by the same permission keys.
+/// order and gated by the same permission keys. The Home launchpad (null
+/// permission = any signed-in user) is the landing view, like the web app.
 const List<Object> _menu = [
+  NavDest('Home', Icons.apps_outlined, null, _homePlaceholder),
   'General',
   NavDest('Dashboard', Icons.dashboard_outlined, 'dashboard', DashboardScreen.new),
   NavDest('AI Stock Analytics', Icons.insights_outlined, 'ai_analytics', AnalyticsScreen.new),
@@ -62,6 +74,7 @@ const List<Object> _menu = [
 ];
 
 // Builders for screens that take a constructor argument (can't use `.new`).
+Widget _homePlaceholder() => const SizedBox.shrink(); // Home is rendered by the state
 Widget _erpOperator() => const ErpOperatorScreen();
 Widget _allocation() => const WarehouseScreen(mode: WarehouseMode.allocate);
 Widget _pickerAssign() => const WarehouseScreen(mode: WarehouseMode.assignPicker);
@@ -111,8 +124,65 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
       drawer: _buildDrawer(session, dests),
-      body: current.builder(),
+      body: _index == 0 ? _buildLaunchpad(session, dests) : current.builder(),
     );
+  }
+
+  /// Launchpad landing page — the same method as the web home: colour-coded
+  /// module tiles grouped by process, filtered by the user's permissions.
+  Widget _buildLaunchpad(Session session, List<NavDest> dests) {
+    final children = <Widget>[
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 18, 16, 6),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('${_greeting()}, ${session.userName}',
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 2),
+            Text(t('Pick a process to get started'),
+                style: const TextStyle(color: Colors.grey, fontSize: 13)),
+          ],
+        ),
+      ),
+    ];
+    String? section;
+    var tiles = <Widget>[];
+    void flush() {
+      if (tiles.isEmpty) return;
+      children.add(Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+        child: Text(t(section!).toUpperCase(),
+            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold,
+                letterSpacing: 0.6, color: _sectionAccent[section] ?? Colors.grey)),
+      ));
+      children.add(Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Wrap(spacing: 8, runSpacing: 8, children: tiles),
+      ));
+      tiles = <Widget>[];
+    }
+    for (final e in _menu) {
+      if (e is String) { flush(); section = e; }
+      else if (e is NavDest && e.permission != null && session.can(e.permission)) {
+        final accent = _sectionAccent[section] ?? const Color(0xFF2a78d6);
+        final idx = dests.indexOf(e);
+        tiles.add(_LaunchTile(
+          label: t(e.label), icon: e.icon, accent: accent,
+          onTap: () => setState(() => _index = idx),
+        ));
+      }
+    }
+    flush();
+    children.add(const SizedBox(height: 24));
+    return ListView(children: children);
+  }
+
+  String _greeting() {
+    final h = DateTime.now().hour;
+    if (h < 12) return t('Good morning');
+    if (h < 18) return t('Good afternoon');
+    return t('Good evening');
   }
 
   Widget _buildDrawer(Session session, List<NavDest> dests) {
@@ -192,6 +262,54 @@ class _NoAccess extends StatelessWidget {
           'Your account has no mobile screen permissions yet.\nAsk an administrator to grant access.',
           textAlign: TextAlign.center,
           style: TextStyle(color: Colors.grey),
+        ),
+      ),
+    );
+  }
+}
+
+
+/// A launchpad tile: accent-tinted icon badge + label, sized for two per row.
+class _LaunchTile extends StatelessWidget {
+  const _LaunchTile({required this.label, required this.icon, required this.accent, required this.onTap});
+  final String label;
+  final IconData icon;
+  final Color accent;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final width = (MediaQuery.of(context).size.width - 32) / 2;
+    return Material(
+      color: Theme.of(context).colorScheme.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          width: width,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: accent.withValues(alpha: 0.35)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: accent, size: 22),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(label, maxLines: 2, overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+              ),
+            ],
+          ),
         ),
       ),
     );
