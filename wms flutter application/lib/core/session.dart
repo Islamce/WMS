@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api_client.dart';
 import 'i18n.dart';
+import 'push.dart';
 
 /// Holds the server URL, auth token and the signed-in user (with permissions),
 /// and exposes them app-wide via [ChangeNotifier]. Persists to
@@ -69,6 +70,7 @@ class Session extends ChangeNotifier {
       try {
         final res = await ApiClient(baseUrl: baseUrl, token: token).get('/api/auth/me');
         user = Map<String, dynamic>.from(res['user'] as Map);
+        Push.init(api); // fire-and-forget — never blocks app startup
       } catch (_) {
         // token invalid/expired or server unreachable — fall back to name only
         if (name != null) user = {'name': name, 'permissions': []};
@@ -111,10 +113,12 @@ class Session extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kToken, token!);
     await prefs.setString(_kUser, userName);
+    Push.init(api); // fire-and-forget — never blocks login
     notifyListeners();
   }
 
   Future<void> signOut() async {
+    await Push.unregister(api); // uses the still-valid token/api
     token = null;
     user = null;
     final prefs = await SharedPreferences.getInstance();

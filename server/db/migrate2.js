@@ -480,6 +480,22 @@ CREATE TABLE IF NOT EXISTS reference_data (
 );
 
 -- ---------------------------------------------------------------------------
+-- Registered mobile device tokens for real push notifications (Firebase
+-- Cloud Messaging). A user can be signed in on more than one device; each
+-- token maps to exactly one user (re-registering moves it, e.g. after a
+-- sign-out/sign-in with a different account on the same phone).
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS device_tokens (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    INTEGER NOT NULL REFERENCES users(id),
+  token      TEXT NOT NULL UNIQUE,
+  platform   TEXT NOT NULL DEFAULT 'android',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_device_tokens_user ON device_tokens(user_id);
+
+-- ---------------------------------------------------------------------------
 -- Stock reallocations — every warehouse/bin/project move of batch stock, with
 -- full movement history. Partial moves clone the batch into a new row.
 -- ---------------------------------------------------------------------------

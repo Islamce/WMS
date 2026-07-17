@@ -43,3 +43,11 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+// Real push notifications (Firebase Cloud Messaging) activate only once the
+// operator drops their own Firebase project's google-services.json here —
+// see DEPLOY-HOSTINGER.md. Without it, this build (and CI) is unaffected:
+// the app falls back to the in-app notification inbox only.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}

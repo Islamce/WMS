@@ -191,6 +191,34 @@ the `wms-data` volume and is preserved).
    rate-limited (10 failures / 15 min per IP+email), and `helmet` security
    headers are on.
 
+## Real push notifications on the mobile app (optional)
+
+By default the mobile app only shows notifications inside the app (a bell icon
+with an unread badge, polled every 60s) — no Android tray/lock-screen alert
+when the app is closed. Turning on **real device push** takes two one-time
+steps; nothing about the server or app code needs to change.
+
+1. **Create a Firebase project** (free) at https://console.firebase.google.com
+   → *Add project*. Add an **Android app** to it with package name
+   `com.wms.wms_mobile` (must match exactly).
+2. Download the **`google-services.json`** file Firebase generates and place
+   it at `wms flutter application/android/app/google-services.json` in this
+   repo, then rebuild the APK (push to `main`, or run
+   `flutter build apk --release` yourself). The build automatically detects
+   the file and wires up Firebase — no other change needed.
+3. On the **server**, generate a service account key: Firebase Console →
+   ⚙️ *Project settings* → *Service accounts* → *Generate new private key*
+   (downloads a JSON file). Put its contents in one of:
+   ```bash
+   FIREBASE_SERVICE_ACCOUNT_JSON='{"type":"service_account",...}'   # paste the whole file as one line
+   # or
+   FIREBASE_SERVICE_ACCOUNT_PATH=/path/to/service-account.json      # path to the file on the server
+   ```
+   in the server's `.env`, then `pm2 restart wms`.
+
+Until both are set, push is a no-op and the app behaves exactly as it does
+today (in-app inbox only) — nothing breaks if you skip this section.
+
 ## Backups
 
 The whole database is the single file at `DB_PATH` (`data/wms.db`). Back it up

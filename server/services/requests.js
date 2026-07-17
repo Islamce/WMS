@@ -5,7 +5,7 @@
 const db = require('./../db/connection');
 const audit = require('./audit');
 const notify = require('./notify');
-const { canTransition, HEADER_STATUS } = require('./../workflow/states');
+const { canTransition, HEADER_STATUS, LINE_STATUS } = require('./../workflow/states');
 
 /** Generate the next request number: MR-YYYY-000123. */
 function nextRequestNumber() {
@@ -102,6 +102,41 @@ function releaseOpenAllocations(requestId) {
   return open.length;
 }
 
+/**
+ * Reopen a GI-stage request for re-picking: restores the picked/proposed
+ * allocations' batch stock and quantities, resets line status, and moves the
+ * header back to Picking in Progress. Shared by the GI screen's explicit
+ * "Return to Picker" action and the generic reverse-workflow action (both
+ * undo the exact same GI->Picking step). Must run inside its own transaction
+ * by the caller (or already be inside one).
+ */
+function reopenForRepick(header, { user, reason, sourceScreen } = {}) {
+  const allocs = db.prepare(
+    "SELECT * FROM picking_allocations WHERE request_id=? AND status IN ('PICKED','SHORT','CANCELLED')"
+  ).all(header.id);
+  allocs.forEach((a) => {
+    db.prepare('UPDATE batches SET remaining_quantity = remaining_quantity + ?, reserved_quantity = reserved_quantity + ? WHERE id=?')
+      .run(a.picked_quantity || 0, a.proposed_quantity, a.batch_id);
+    // Already-validated scans stay valid; never-scanned proposals go back to PROPOSED.
+    db.prepare('UPDATE picking_allocations SET status=?, picked_quantity=0 WHERE id=?')
+      .run(a.scanned_qr_value ? 'SCANNED' : 'PROPOSED', a.id);
+  });
+  db.prepare(`
+    UPDATE material_request_lines
+    SET picked_quantity=0, shortage_quantity=0, shortage_reason=NULL,
+        line_status=?, updated_at=datetime('now')
+    WHERE request_id=? AND line_status IN (?,?,?,?)
+  `).run(LINE_STATUS.PICKING_IN_PROGRESS, header.id,
+    LINE_STATUS.PENDING_GI, LINE_STATUS.PICKED, LINE_STATUS.PARTIALLY_PICKED, LINE_STATUS.SHORTAGE);
+
+  setHeaderStatus(header, HEADER_STATUS.PICKING_IN_PROGRESS, { user, reason, sourceScreen });
+  const task = db.prepare("SELECT * FROM picking_tasks WHERE request_id=? ORDER BY id DESC LIMIT 1").get(header.id);
+  if (task) db.prepare("UPDATE picking_tasks SET task_status='Picking in Progress', updated_at=datetime('now') WHERE id=?").run(task.id);
+  audit.record({ entityType: 'MaterialRequestHeader', entityId: header.id, requestNumber: header.request_number,
+    action: 'RETURN_TO_PICKER', newValue: { reopened_allocations: allocs.length }, reason, user, sourceScreen });
+  return task;
+}
+
 function getHeaderOr404(res, id) {
   const header = db.prepare('SELECT * FROM material_request_headers WHERE id = ?').get(id);
   if (!header) {
@@ -152,4 +187,4 @@ function sweepReservations(nowMs = Date.now()) {
   return released;
 }
 
-module.exports = { nextRequestNumber, setHeaderStatus, refreshRollups, getHeaderOr404, releaseOpenAllocations, sweepReservations };
+module.exports = { nextRequestNumber, setHeaderStatus, refreshRollups, getHeaderOr404, releaseOpenAllocations, reopenForRepick, sweepReservations };

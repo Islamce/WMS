@@ -24,8 +24,11 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
   Map<String, dynamic>? _meta;
   String? _department;
   String? _plant;
+  String? _costCenter;
   String _priority = 'NORMAL';
+  DateTime? _requiredDate;
   final _purpose = TextEditingController();
+  final _wbs = TextEditingController();
   final List<_Line> _lines = [];
   bool _busy = false;
   bool _loadingMeta = true;
@@ -109,7 +112,14 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
       final body = {
         'department': _department,
         'plant': _plant,
+        'cost_center': _costCenter,
+        'wbs_element': _wbs.text.trim(),
         'priority': _priority,
+        'required_date': _requiredDate == null
+            ? null
+            : '${_requiredDate!.year.toString().padLeft(4, '0')}-'
+                '${_requiredDate!.month.toString().padLeft(2, '0')}-'
+                '${_requiredDate!.day.toString().padLeft(2, '0')}',
         'purpose': _purpose.text.trim(),
         'lines': _lines.map((l) => {
               'material_id': l.materialId,
@@ -125,6 +135,9 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
         setState(() {
           _lines.clear();
           _purpose.clear();
+          _wbs.clear();
+          _costCenter = null;
+          _requiredDate = null;
         });
       }
     } on ApiException catch (e) {
@@ -141,6 +154,7 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
     }
     final departments = _ref('departments');
     final plants = _ref('plants');
+    final costCenters = _ref('costCenters');
     return Stack(
       children: [
         ListView(
@@ -179,6 +193,46 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
                         .map((p) => DropdownMenuItem(value: p, child: Text(p)))
                         .toList(),
                     onChanged: (v) => setState(() => _priority = v ?? 'NORMAL'),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: _costCenter,
+                    isExpanded: true,
+                    decoration: const InputDecoration(labelText: 'Cost Center', border: OutlineInputBorder()),
+                    items: costCenters
+                        .map((c) => DropdownMenuItem(
+                            value: c['code'].toString(), child: Text('${c['code']} · ${c['label']}')))
+                        .toList(),
+                    onChanged: (v) => setState(() => _costCenter = v),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _wbs,
+                    decoration: const InputDecoration(
+                        labelText: 'Project / WBS Element', border: OutlineInputBorder()),
+                  ),
+                  const SizedBox(height: 12),
+                  InkWell(
+                    onTap: () async {
+                      final now = DateTime.now();
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: _requiredDate ?? now,
+                        firstDate: now.subtract(const Duration(days: 1)),
+                        lastDate: now.add(const Duration(days: 730)),
+                      );
+                      if (picked != null) setState(() => _requiredDate = picked);
+                    },
+                    child: InputDecorator(
+                      decoration: const InputDecoration(
+                          labelText: 'Required Date', border: OutlineInputBorder(),
+                          suffixIcon: Icon(Icons.calendar_today_outlined)),
+                      child: Text(_requiredDate == null
+                          ? 'Select a date'
+                          : '${_requiredDate!.year.toString().padLeft(4, '0')}-'
+                              '${_requiredDate!.month.toString().padLeft(2, '0')}-'
+                              '${_requiredDate!.day.toString().padLeft(2, '0')}'),
+                    ),
                   ),
                   const SizedBox(height: 12),
                   TextField(

@@ -6,6 +6,7 @@
  */
 const db = require('./../db/connection');
 const email = require('./email');
+const push = require('./push');
 
 // Configurable reminder/escalation SLA (minutes) for unaccepted picking tasks.
 const SLA = {
@@ -51,6 +52,12 @@ function send({ requestNumber, taskId, recipientUserId, notificationType, title,
     // Fire-and-forget; email is best-effort and must never block the workflow.
     email.sendEmail({ to: user.email, subject: title || 'WMS notification', text: message || title || '' })
       .catch((e) => console.error('[notify] email error:', e.message));
+  }
+
+  // Real device push (Firebase Cloud Messaging), mirroring every in-app
+  // notification. A no-op until FIREBASE_SERVICE_ACCOUNT_* is configured.
+  if (channel === 'IN_APP' && recipientUserId) {
+    push.sendToUser(recipientUserId, { title, message }).catch((e) => console.error('[notify] push error:', e.message));
   }
   return info.lastInsertRowid;
 }

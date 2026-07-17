@@ -43,3 +43,8 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# The operator's own Firebase project credential (see DEPLOY-HOSTINGER.md) —
+# never committed; push notifications are inert until this file is added
+# locally / in CI secrets before building.
+/android/app/google-services.json

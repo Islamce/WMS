@@ -56,6 +56,11 @@ class I18n {
       'Requester': 'مقدم الطلب', 'Department': 'القسم', 'Project': 'المشروع',
       'Cost Center': 'مركز التكلفة', 'Priority': 'الأولوية', 'Required date': 'التاريخ المطلوب',
       'Purpose': 'الغرض',
+      // R4: reverse workflow / dashboard drill-through
+      'Reverse one step': 'الرجوع خطوة للوراء',
+      'Reason (releases any reservation, allocation or picking task this stage holds)':
+          'السبب (يُفرج عن أي حجز أو تخصيص أو مهمة التقاط تحتفظ بها هذه المرحلة)',
+      'Request reversed.': 'تم إرجاع الطلب.',
     },
     'fr': {
       'Home': 'Accueil', 'Good morning': 'Bonjour', 'Good afternoon': 'Bonjour',
@@ -103,6 +108,11 @@ class I18n {
       'Requester': 'Demandeur', 'Department': 'Département', 'Project': 'Projet',
       'Cost Center': 'Centre de coûts', 'Priority': 'Priorité', 'Required date': 'Date requise',
       'Purpose': 'Objet',
+      // R4: reverse workflow / dashboard drill-through
+      'Reverse one step': 'Revenir en arrière d\'une étape',
+      'Reason (releases any reservation, allocation or picking task this stage holds)':
+          'Motif (libère toute réservation, allocation ou tâche de préparation détenue à ce stade)',
+      'Request reversed.': 'Demande renvoyée en arrière.',
     },
   };
 
