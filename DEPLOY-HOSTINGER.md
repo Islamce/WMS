@@ -201,11 +201,18 @@ steps; nothing about the server or app code needs to change.
 1. **Create a Firebase project** (free) at https://console.firebase.google.com
    → *Add project*. Add an **Android app** to it with package name
    `com.wms.wms_mobile` (must match exactly).
-2. Download the **`google-services.json`** file Firebase generates and place
-   it at `wms flutter application/android/app/google-services.json` in this
-   repo, then rebuild the APK (push to `main`, or run
-   `flutter build apk --release` yourself). The build automatically detects
-   the file and wires up Firebase — no other change needed.
+2. Download the **`google-services.json`** file Firebase generates, then give
+   it to the APK build as a **GitHub secret** (the file is a credential and is
+   gitignored — never commit it):
+   - GitHub → your repo → *Settings* → *Secrets and variables* → *Actions* →
+     *New repository secret*.
+   - Name: `GOOGLE_SERVICES_JSON` · Value: paste the **entire contents** of
+     the downloaded file.
+   - Re-run the **Build WMS Mobile APK** workflow (Actions tab → *Run
+     workflow*). The build injects the secret automatically and the released
+     APK has push enabled. (Building locally instead? Just place the file at
+     `wms flutter application/android/app/google-services.json` and run
+     `flutter build apk --release`.)
 3. On the **server**, generate a service account key: Firebase Console →
    ⚙️ *Project settings* → *Service accounts* → *Generate new private key*
    (downloads a JSON file). Put its contents in one of:

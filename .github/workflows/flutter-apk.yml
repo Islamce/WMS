@@ -35,6 +35,22 @@ jobs:
           channel: stable
           cache: true
 
+      # Firebase push notifications: if the repo has a GOOGLE_SERVICES_JSON
+      # secret (the raw contents of the Firebase google-services.json file),
+      # write it into the app so the build wires up FCM. Without the secret the
+      # build proceeds unchanged and push stays a no-op — see
+      # DEPLOY-HOSTINGER.md "Real push notifications".
+      - name: Add Firebase config (optional, from repo secret)
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            printf '%s' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
+            echo "google-services.json written — push notifications ENABLED in this build."
+          else
+            echo "No GOOGLE_SERVICES_JSON secret — building without push notifications."
+          fi
+
       - name: Install dependencies
         run: flutter pub get
 
