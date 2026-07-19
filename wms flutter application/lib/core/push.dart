@@ -45,7 +45,7 @@ Future<void> _ensureLocalNotifications() async {
     android: AndroidInitializationSettings('@mipmap/ic_launcher'),
   );
   await _fln.initialize(
-    init,
+    settings: init,
     onDidReceiveNotificationResponse: (resp) => _routeFromPayload(resp.payload),
   );
   await _fln
@@ -74,7 +74,13 @@ Future<void> _show(RemoteMessage message) async {
   // Stable-ish id from the message so the same message doesn't stack; fall back
   // to a time-based id when FCM gives no message id.
   final id = (message.messageId?.hashCode ?? DateTime.now().millisecondsSinceEpoch) & 0x7fffffff;
-  await _fln.show(id, title, body, details, payload: jsonEncode(data));
+  await _fln.show(
+    id: id,
+    title: title,
+    body: body,
+    notificationDetails: details,
+    payload: jsonEncode(data),
+  );
   debugPrint('[push] notification displayed id=$id');
 }
 
