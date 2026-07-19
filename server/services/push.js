@@ -59,17 +59,37 @@ function unregisterDevice(token) {
  * never throws — a push failure must never break the workflow action that
  * triggered it. Prunes tokens FCM reports as no-longer-registered.
  */
-async function sendToUser(userId, { title, message }) {
+async function sendToUser(userId, { title, message, data } = {}) {
   if (!userId) return;
   const a = getApp();
   if (!a) return; // Firebase not configured — in-app inbox already has the notification.
   const rows = db.prepare('SELECT token FROM device_tokens WHERE user_id=?').all(userId);
   if (!rows.length) return;
+
+  // DATA-ONLY payload (no `notification` block). The Android app renders every
+  // message itself through flutter_local_notifications in all three states
+  // (foreground, background, terminated), so there is exactly one notification
+  // per message and full control of the channel/priority. A `notification`
+  // block would make FCM auto-display a second, uncontrolled notification when
+  // the app is backgrounded — the classic duplicate. FCM requires every data
+  // value to be a string, so coerce them here. android.priority 'high' is
+  // needed for prompt delivery (and to wake a terminated app for a data-only
+  // message). Optional `data` carries tap-routing hints (e.g. requestId).
+  const payload = {
+    title: title == null ? 'WMS' : String(title),
+    body: message == null ? '' : String(message),
+    ...(data && typeof data === 'object'
+      ? Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)]))
+      : {}),
+  };
   try {
     const res = await admin.messaging(a).sendEachForMulticast({
       tokens: rows.map((r) => r.token),
-      notification: { title: title || 'WMS', body: message || '' },
+      data: payload,
+      android: { priority: 'high' },
     });
+    // Structured log — device/success/failure counts only, never the tokens.
+    console.log(`[push] user=${userId} devices=${rows.length} ok=${res.successCount} fail=${res.failureCount}`);
     res.responses.forEach((r, i) => {
       if (!r.success && ['messaging/registration-token-not-registered', 'messaging/invalid-registration-token']
         .includes(r.error && r.error.code)) {

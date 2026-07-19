@@ -10,6 +10,9 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
+        // Required by flutter_local_notifications (v10+): desugaring back-ports
+        // the java.time APIs it uses so notifications work on older Android too.
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -42,6 +45,11 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // Core-library desugaring runtime — required by flutter_local_notifications.
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }
 
 // Real push notifications (Firebase Cloud Messaging) activate only once the

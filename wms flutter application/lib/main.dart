@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'core/push.dart';
 import 'core/session.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
@@ -39,6 +40,8 @@ class WmsApp extends StatelessWidget {
         builder: (context, _) => MaterialApp(
           title: 'WMS Mobile',
           debugShowCheckedModeBanner: false,
+          // Lets a push-notification tap navigate (e.g. open a request).
+          navigatorKey: Push.navigatorKey,
           theme: ThemeData(
             colorScheme: ColorScheme.fromSeed(seedColor: seed),
             useMaterial3: true,
