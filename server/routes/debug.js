@@ -29,16 +29,11 @@ router.use(requireAdmin);
  */
 router.post('/push-test', (req, res) => {
   const userId = req.user.id;
+  const timestamp = new Date().toISOString();
   try {
-    const notificationLogId = notify.send({
-      recipientUserId: userId,
-      notificationType: 'PUSH_TEST',
-      title: 'Push Notification Test',
-      message: 'Firebase Push Notifications are working correctly.',
-    });
-
-    // Read-only diagnostics so the admin can interpret the result on the
-    // device (no Firebase call — just an env check and a token count).
+    // Read-only precondition diagnostics — an env check and a token count.
+    // No Firebase call; these mirror the two guards push.sendToUser() itself
+    // applies, so we can report truthfully whether a push will be attempted.
     const firebaseConfigured = Boolean(
       process.env.FIREBASE_SERVICE_ACCOUNT_JSON || process.env.FIREBASE_SERVICE_ACCOUNT_PATH
     );
@@ -46,22 +41,61 @@ router.post('/push-test', (req, res) => {
       .prepare('SELECT COUNT(*) AS n FROM device_tokens WHERE user_id=?')
       .get(userId).n;
 
-    return res.json({
+    // Scenario 3: Firebase not configured — no push infrastructure to validate.
+    // Report the failure instead of writing a log row that could never deliver.
+    if (!firebaseConfigured) {
+      return res.status(200).json({
+        success: false,
+        warning: 'Firebase service is not configured on the server.',
+        firebaseConfigured: false,
+        registeredDevices,
+        attemptedPush: false,
+        recipientUserId: userId,
+        timestamp,
+      });
+    }
+
+    // Scenario 2: no registered device — a push cannot be attempted. Do not
+    // silently report success when nothing could actually be delivered.
+    if (registeredDevices === 0) {
+      return res.status(200).json({
+        success: false,
+        warning: 'No registered Android device for this user.',
+        firebaseConfigured: true,
+        registeredDevices: 0,
+        attemptedPush: false,
+        recipientUserId: userId,
+        timestamp,
+      });
+    }
+
+    // Scenario 1: preconditions met — fire the real pipeline. notify.send()
+    // writes the notification_log row and triggers push.sendToUser() -> FCM.
+    const notificationLogId = notify.send({
+      recipientUserId: userId,
+      notificationType: 'PUSH_TEST',
+      title: 'Push Notification Test',
+      message: 'Firebase Push Notifications are working correctly.',
+    });
+
+    return res.status(200).json({
       success: true,
-      message: 'Test notification dispatched through the notification pipeline.',
       notificationLogId,
       recipientUserId: userId,
-      firebaseConfigured,
+      firebaseConfigured: true,
       registeredDevices,
-      note: firebaseConfigured
-        ? (registeredDevices > 0
-            ? 'A real device push was attempted. Check the Android device.'
-            : 'No device tokens registered for this user — sign in on the mobile app first, then retry.')
-        : 'Firebase is not configured on the server (FIREBASE_SERVICE_ACCOUNT_*). '
-          + 'The in-app notification was saved; real push is a no-op until Firebase is set.',
+      attemptedPush: true,
+      timestamp,
     });
   } catch (err) {
-    return res.status(500).json({ success: false, error: err.message });
+    // Scenario 4: internal error — structured diagnostics; stack only outside
+    // production so we never leak internals in a real deployment.
+    return res.status(500).json({
+      success: false,
+      error: err.message,
+      ...(process.env.NODE_ENV !== 'production' ? { stack: err.stack } : {}),
+      timestamp,
+    });
   }
 });
 
