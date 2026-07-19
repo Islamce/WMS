@@ -19,6 +19,10 @@ const router = express.Router();
 router.use(authenticate);
 router.use(requireAdmin);
 
+// Identifies this endpoint in every response — useful once multiple debug/API
+// versions exist side by side during troubleshooting.
+const ENDPOINT_META = { endpoint: '/api/debug/push-test', version: '1.0' };
+
 /**
  * POST /api/debug/push-test
  * Sends a test notification to the logged-in admin through the normal
@@ -34,7 +38,10 @@ router.post('/push-test', (req, res) => {
     // Read-only precondition diagnostics — an env check and a token count.
     // No Firebase call; these mirror the two guards push.sendToUser() itself
     // applies, so we can report truthfully whether a push will be attempted.
-    const firebaseConfigured = Boolean(
+    // Note: this only confirms Firebase *credentials are present* in env —
+    // it does NOT confirm firebase-admin has successfully initialized (that
+    // happens lazily, inside push.sendToUser() itself, on the real attempt).
+    const firebaseConfigurationPresent = Boolean(
       process.env.FIREBASE_SERVICE_ACCOUNT_JSON || process.env.FIREBASE_SERVICE_ACCOUNT_PATH
     );
     const registeredDevices = db
@@ -43,11 +50,12 @@ router.post('/push-test', (req, res) => {
 
     // Scenario 3: Firebase not configured — no push infrastructure to validate.
     // Report the failure instead of writing a log row that could never deliver.
-    if (!firebaseConfigured) {
+    if (!firebaseConfigurationPresent) {
       return res.status(200).json({
+        ...ENDPOINT_META,
         success: false,
         warning: 'Firebase service is not configured on the server.',
-        firebaseConfigured: false,
+        firebaseConfigurationPresent: false,
         registeredDevices,
         attemptedPush: false,
         recipientUserId: userId,
@@ -59,9 +67,10 @@ router.post('/push-test', (req, res) => {
     // silently report success when nothing could actually be delivered.
     if (registeredDevices === 0) {
       return res.status(200).json({
+        ...ENDPOINT_META,
         success: false,
         warning: 'No registered Android device for this user.',
-        firebaseConfigured: true,
+        firebaseConfigurationPresent: true,
         registeredDevices: 0,
         attemptedPush: false,
         recipientUserId: userId,
@@ -79,10 +88,11 @@ router.post('/push-test', (req, res) => {
     });
 
     return res.status(200).json({
+      ...ENDPOINT_META,
       success: true,
       notificationLogId,
       recipientUserId: userId,
-      firebaseConfigured: true,
+      firebaseConfigurationPresent: true,
       registeredDevices,
       attemptedPush: true,
       timestamp,
@@ -91,6 +101,7 @@ router.post('/push-test', (req, res) => {
     // Scenario 4: internal error — structured diagnostics; stack only outside
     // production so we never leak internals in a real deployment.
     return res.status(500).json({
+      ...ENDPOINT_META,
       success: false,
       error: err.message,
       ...(process.env.NODE_ENV !== 'production' ? { stack: err.stack } : {}),
