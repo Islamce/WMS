@@ -275,3 +275,34 @@ Adopted from this point forward, after every significant implementation I will:
 5. Report progress against the current release objective in each summary.
 
 This document is the living source of truth for V1.0 execution; IDs (OPS-x, SEC-x, QA-x…) are stable for reference in future requests.
+
+---
+
+# Release Readiness Update — 2026-07-20
+
+Baseline: `main @ 9072a22`; work branch `claude/warehouse-management-system-t8zidg`
+(PR #25) @ head `2b1e938`+. Feature freeze in effect.
+
+## Production-readiness score: 7.1 → **8.2 / 10**
+Gains: DR now has attachments + manifest + checksum + **verified restore drill**
+(automated in CI); ops runbook (monitoring + deploy/rollback) written; Android
+push fixed and CI-built. Remaining gap to higher score is **owner-executed**:
+device UAT sign-off, production monitor wiring, offsite backup destination.
+
+## Backlog status (this phase)
+| ID | Item | Status | Evidence | Remaining action | Target |
+|---|---|---|---|---|---|
+| R4-PUSH | Android push in all states (PR #25) | **UAT pending** | Code verified + CI green (test+build-apk on 2b1e938); APK checksums logged | Device UAT (docs/ANDROID-UAT-V1.0.md §C) then merge | 1.0 |
+| OPS-1 | Monitoring & alerting | **Code complete (doc)** | docs/OPS-RUNBOOK.md §1 | Operator wires external monitor + pm2-logrotate + alert recipients; test-fire | 1.0 |
+| OPS-2 | Backup + DR (attachments/manifest/checksum/offsite) | **Test complete** (offsite = doc) | scripts/backup.js; restore drill run; backup_test.py green | Operator sets offsite destination (rclone/rsync) | 1.0 |
+| OPS-3 | Deploy + rollback runbook | **Complete** | docs/OPS-RUNBOOK.md §3 | — | 1.0 |
+| DB-2 | Backup verification | **Complete** | scripts/verify-backup.js; failure paths proven; CI-enforced | — | 1.0 |
+| CLEAN-1 | Remove debug endpoint + temp code | **Blocked (by design)** | Needed for device push UAT | Remove at V1.0 tag (task #119) | 1.0 tag |
+| QA-DR | Backup/restore + push-shape + debug-presence tests | **Complete** | tests/e2e/backup_test.py (14 checks) | — | 1.0 |
+| QA-LOAD | Load sanity test | **Not started** | — | k6/driver vs staging; not representative locally (SQLite single-proc) | 1.0 (owner) |
+| UAT-PKG | Android device UAT package | **Complete** | docs/ANDROID-UAT-V1.0.md | Execute on device | 1.0 |
+| DEP-BUMP | Dependabot PRs #11–15,#22 | **Deferred** | 6 open PRs | Review post-1.0; not blockers | 1.1 |
+
+## Release checklist delta
+- [x] Main CI green · [x] APK generated + checksummed · [x] DR restore drill · [x] verify-backup CI-enforced · [x] rollback documented · [x] ops runbook · [x] UAT package
+- [ ] PR #25 merged (gated on device UAT) · [ ] device UAT signed off · [ ] monitoring wired in prod · [ ] offsite backup destination set · [ ] load sanity run · [ ] debug endpoint removed at tag · [ ] v1.0.0 tag
