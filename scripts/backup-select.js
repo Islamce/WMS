@@ -30,6 +30,19 @@ function fail(msg) { console.error(`FAIL: ${msg}`); process.exit(1); }
 
 function stampOf(name, re) { const m = name.match(re); return m ? m[1] : null; }
 
+/**
+ * A manifest-referenced name must be a plain basename (no path separators, no
+ * absolute path, no '..'). Rejects traversal attempts embedded in a malicious
+ * or corrupted manifest before the name is ever used to read a file.
+ */
+function assertSafeBasename(name, label) {
+  if (typeof name !== 'string' || name === '') fail(`${label} is missing`);
+  if (name !== path.basename(name)) fail(`${label} must be a bare filename (got '${name}')`);
+  if (name === '.' || name === '..' || name.includes('/') || name.includes('\\') || path.isAbsolute(name)) {
+    fail(`${label} contains an illegal path component (got '${name}')`);
+  }
+}
+
 function select(dir, chosenManifest) {
   if (!fs.existsSync(dir)) fail(`directory not found: ${dir}`);
   const manifests = fs.readdirSync(dir).filter((f) => MANIFEST_RE.test(f)).sort();
@@ -55,7 +68,8 @@ function select(dir, chosenManifest) {
   }
   if (typeof m.db_sha256 !== 'string' || m.db_sha256.length !== 64) fail('manifest db_sha256 is malformed');
 
-  // db_file must exist and share the manifest's stamp (same set).
+  // db_file must be a bare filename, exist, and share the manifest's stamp.
+  assertSafeBasename(m.db_file, 'manifest db_file');
   const dbStamp = stampOf(m.db_file, /^wms-(\d+)\.db$/);
   if (dbStamp !== manifestStamp) fail(`db_file '${m.db_file}' stamp does not match manifest stamp '${manifestStamp}'`);
   const dbPath = path.join(dir, m.db_file);
@@ -65,6 +79,7 @@ function select(dir, chosenManifest) {
   let attachmentsDir = null;
   if (m.attachment_count > 0) {
     if (!m.attachments_dir) fail('attachment_count > 0 but attachments_dir is null');
+    assertSafeBasename(m.attachments_dir, 'manifest attachments_dir');
     const aStamp = stampOf(m.attachments_dir, /^attachments-(\d+)$/);
     if (aStamp !== manifestStamp) fail(`attachments_dir stamp does not match manifest stamp`);
     const aPath = path.join(dir, m.attachments_dir);

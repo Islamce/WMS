@@ -31,6 +31,27 @@ function log(msg) { console.log(msg); }
 function warn(msg) { console.warn(`WARN: ${msg}`); }
 
 /**
+ * Defense-in-depth: refuse to act on a path that does not resolve to a direct
+ * child of the (real) backup root. All names retention builds come from a
+ * `\d+` stamp so they are already safe basenames — this guards against symlink
+ * escape and any future change that might introduce an unexpected name.
+ */
+function assertChildOfRoot(root, name) {
+  if (name !== path.basename(name) || name.includes('/') || name.includes('\\')) {
+    warn(`refusing unsafe name '${name}'`); return false;
+  }
+  const target = path.join(root, name);
+  const parent = path.dirname(path.resolve(target));
+  if (parent !== path.resolve(root)) { warn(`refusing target outside backup root: ${name}`); return false; }
+  // Never traverse a symlinked directory when deleting a set member.
+  try {
+    const st = fs.lstatSync(target);
+    if (st.isSymbolicLink()) { warn(`refusing to delete via symlink: ${name}`); return false; }
+  } catch { /* missing is fine — nothing to delete */ }
+  return true;
+}
+
+/**
  * Inspect a directory and classify every backup set. Returns
  * { valid: [{stamp, files[]}], invalid: [{stamp, reason}] }, valid sorted
  * newest-first by stamp.
@@ -75,7 +96,8 @@ function scan(dir) {
 
 function retain(dir, keep, dryRun) {
   if (!fs.existsSync(dir)) { console.error(`FAIL: directory not found: ${dir}`); process.exit(1); }
-  const { valid, invalid } = scan(dir);
+  const root = fs.realpathSync(dir); // resolve the backup root once, up front
+  const { valid, invalid } = scan(root);
   invalid.forEach((s) => warn(`skipping invalid/incomplete set ${s.stamp}: ${s.reason} (never auto-deleted)`));
 
   const keepN = Math.max(1, keep); // never delete the newest set
@@ -89,7 +111,8 @@ function retain(dir, keep, dryRun) {
     // Extra guard: never delete the newest valid stamp.
     if (valid[0] && set.stamp === valid[0].stamp) { warn(`refusing to delete newest set ${set.stamp}`); continue; }
     for (const f of set.files) {
-      const p = path.join(dir, f);
+      if (!assertChildOfRoot(root, f)) { failed++; continue; }
+      const p = path.join(root, f);
       if (dryRun) { log(`  DRYRUN would delete ${f}`); continue; }
       try { fs.rmSync(p, { recursive: true, force: true }); log(`  DELETE ${f}`); }
       catch (e) { warn(`could not delete ${f}: ${e.message}`); failed++; }

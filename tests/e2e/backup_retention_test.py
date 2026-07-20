@@ -89,6 +89,64 @@ try:
 finally:
     shutil.rmtree(d, ignore_errors=True)
 
+# ===== path-traversal / injection safety on manifest values =====
+def make_evil_manifest(d, stamp, db_file):
+    """A manifest whose db_file points outside the set (traversal attempt)."""
+    man = {'created_at': '2026-07-20T00:00:00.000Z', 'app_version': '1.0.0',
+           'db_file': db_file, 'db_bytes': 1, 'db_sha256': 'a'*64,
+           'attachments_dir': None, 'attachment_count': 0, 'attachments_sha256': None}
+    with open(os.path.join(d, f'wms-{stamp}.manifest.json'), 'w') as f: json.dump(man, f)
+
+for label, evil in [('parent-relative db_file', '../evil.db'),
+                    ('absolute db_file', '/etc/passwd'),
+                    ('nested path db_file', 'sub/evil.db'),
+                    ('backslash db_file', '..\\evil.db')]:
+    d = tempfile.mkdtemp(prefix='evil-')
+    try:
+        # also drop a real file the traversal might target, to prove it is NOT used
+        with open(os.path.join(os.path.dirname(d), 'evil.db'), 'wb') as f: f.write(b'x')
+        make_evil_manifest(d, '20260720140000', evil)
+        r = node('scripts/backup-select.js', d, '--manifest', 'wms-20260720140000.manifest.json', '--json')
+        check(f'select: rejects {label}', r.returncode != 0, (r.returncode, r.stdout, r.stderr))
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+        try: os.remove(os.path.join(os.path.dirname(d), 'evil.db'))
+        except OSError: pass
+
+# malformed attachment path in manifest
+d = tempfile.mkdtemp(prefix='evil-')
+try:
+    dbn = 'wms-20260720150000.db'
+    with open(os.path.join(d, dbn), 'wb') as f: f.write(b'x')
+    man = {'db_file': dbn, 'db_bytes': 1, 'db_sha256': 'a'*64,
+           'attachments_dir': '../../etc', 'attachment_count': 1, 'attachments_sha256': 'b'*64,
+           'created_at': 'x', 'app_version': '1.0.0'}
+    with open(os.path.join(d, 'wms-20260720150000.manifest.json'), 'w') as f: json.dump(man, f)
+    r = node('scripts/backup-select.js', d, '--manifest', 'wms-20260720150000.manifest.json', '--json')
+    check('select: rejects malformed attachments_dir (traversal)', r.returncode != 0, (r.returncode, r.stdout))
+finally:
+    shutil.rmtree(d, ignore_errors=True)
+
+# retention must not delete through a symlink escape
+d = tempfile.mkdtemp(prefix='ret-sym-')
+outside = tempfile.mkdtemp(prefix='outside-')
+try:
+    with open(os.path.join(outside, 'precious.txt'), 'w') as f: f.write('do not delete')
+    # 8 valid newer sets so the symlinked "set" would be a deletion candidate
+    for s in [f'2026072016{ i:02d}00' for i in range(8)]: make_set(d, s)
+    # craft an older set whose attachments dir is a symlink to 'outside'
+    make_set(d, '20260720000000')
+    os.remove(os.path.join(d, 'wms-20260720000000.db'))  # invalidate normal parts…
+    # actually create a proper-looking older valid set, then replace attachments with symlink
+    make_set(d, '20260715000000', with_attach=True)
+    shutil.rmtree(os.path.join(d, 'attachments-20260715000000'))
+    os.symlink(outside, os.path.join(d, 'attachments-20260715000000'))
+    r = node('scripts/backup-retention.js', d, '--keep', '7')
+    check('retention: does not delete through a symlink escape', os.path.exists(os.path.join(outside, 'precious.txt')), r.stdout[-300:])
+finally:
+    shutil.rmtree(d, ignore_errors=True)
+    shutil.rmtree(outside, ignore_errors=True)
+
 # ===== backup-retention.js =====
 def stamps_present(d):
     return sorted(s.split('wms-')[1].split('.db')[0] for s in os.listdir(d) if s.endswith('.db'))
