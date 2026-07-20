@@ -62,6 +62,28 @@ jobs:
           flutter build apk --release --split-per-abi
           flutter build apk --release
 
+      # Per-APK integrity manifest: prints filename, byte size and SHA-256 for
+      # every built APK, and fails the job if none are found. Reusable as-is for
+      # every future build — no application code involved.
+      - name: APK checksums (SHA-256)
+        run: |
+          set -euo pipefail
+          dir=build/app/outputs/flutter-apk
+          count=$(find "$dir" -maxdepth 1 -name '*.apk' | wc -l)
+          if [ "$count" -eq 0 ]; then
+            echo "::error::No APK files found in $dir"; exit 1
+          fi
+          echo "## APK checksums" >> "$GITHUB_STEP_SUMMARY"
+          echo '| file | bytes | sha256 |' >> "$GITHUB_STEP_SUMMARY"
+          echo '|---|---|---|' >> "$GITHUB_STEP_SUMMARY"
+          for apk in "$dir"/*.apk; do
+            name=$(basename "$apk")
+            bytes=$(stat -c%s "$apk")
+            sha=$(sha256sum "$apk" | awk '{print $1}')
+            echo "$name  bytes=$bytes  sha256=$sha"
+            echo "| $name | $bytes | \`$sha\` |" >> "$GITHUB_STEP_SUMMARY"
+          done
+
       - name: Read app version
         id: ver
         run: |

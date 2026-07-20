@@ -14,11 +14,17 @@
         <!-- usesCleartextTraffic allows plain-HTTP to a LAN dev server
              (e.g. http://10.0.2.2:3000 or http://192.168.x.x:3000). Production
              deployments should use HTTPS. -->
-        <!-- Default notification channel FCM uses when a "notification" payload
-             is delivered while the app is backgrounded/terminated. -->
+        <!-- Fallback channel/icon FCM would use if a "notification" payload ever
+             arrived. The app sends DATA-ONLY payloads and renders them itself on
+             this same channel (see lib/core/push.dart), which is created at
+             startup — so tray notifications are never dropped for a missing
+             channel. -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="wms_default"/>
+            android:value="wms_notifications"/>
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@mipmap/ic_launcher"/>
 
         <activity
             android:name=".MainActivity"

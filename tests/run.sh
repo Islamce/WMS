@@ -72,6 +72,7 @@ run_suite p3_test.py
 run_suite uat_test.py
 run_suite r3_test.py
 run_suite reverse_workflow_test.py
+run_suite backup_test.py
 run_suite uat2_test.py   # keep LAST — it factory-resets the database
 stop_server
 
