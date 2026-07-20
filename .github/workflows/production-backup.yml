@@ -1,0 +1,287 @@
+name: Production Offsite Backup
+
+# Scheduled offsite backup for the WMS production database, used because the
+# Hostinger Managed Node.js (Passenger/lsnode) plan exposes no working cron.
+# It runs the ALREADY-TESTED backup + restore-verification scripts remotely
+# over SSH, downloads only the newly verified backup set, verifies it again
+# independently on the runner, uploads it to S3-compatible offsite storage,
+# verifies the uploaded objects, and only then prunes old LOCAL sets.
+#
+# It NEVER installs deps, migrates, restarts, or runs git on production, and it
+# never modifies the deployed checkout. See docs/HOSTINGER-SCHEDULED-BACKUP.md.
+#
+# Security posture (see the same doc): minimal permissions (contents: read);
+# untrusted values (remote filenames, manifest content) are strictly validated
+# against fixed patterns AND passed to shell only via quoted environment
+# variables (never interpolated with ${{ }} into a run script); pinned SSH
+# known_hosts with StrictHostKeyChecking; the workflow runs only on schedule /
+# manual dispatch, so no untrusted pull request can trigger it or read secrets.
+
+on:
+  schedule:
+    # 02:30 UTC daily = 05:30 Asia/Riyadh (UTC+3). Adjust in both places if changed.
+    - cron: "30 2 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run_retention:
+        description: "Run local retention in dry-run mode (no deletion)"
+        type: boolean
+        default: false
+
+# One production backup at a time; never cancel a run that is already backing
+# up / uploading (cancelling mid-upload could leave a partial offsite object).
+concurrency:
+  group: production-backup
+  cancel-in-progress: false
+
+# Least privilege: the job only reads the repo (for the verification scripts).
+# It cannot modify repository content, releases, issues, or pull requests.
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      REMOTE_APP_DIR: /home/u716763642/domains/wms.kynox.io/nodejs
+      REMOTE_NODE: /opt/alt/alt-nodejs20/root/usr/bin/node
+      REMOTE_BACKUP_DIR: /home/u716763642/secure/wms-backups
+      KEEP_SETS: "7"
+    steps:
+      # Official GitHub actions only. Floating major tags (@v4) are accepted for
+      # these first-party actions on this non-PR, schedule/dispatch-only workflow;
+      # an operator whose policy requires it may pin them to full commit SHAs.
+      - name: Checkout (verification scripts run on the runner)
+        uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # better-sqlite3 is needed on the runner ONLY to independently
+      # integrity-check the downloaded DB — the runner's own copy, never touching
+      # production node_modules.
+      - name: Install runner dependencies
+        run: npm ci
+
+      - name: Configure SSH (pinned known_hosts; StrictHostKeyChecking on)
+        env:
+          SSH_KEY: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.HOSTINGER_KNOWN_HOSTS }}
+          SSH_HOST: ${{ secrets.HOSTINGER_HOST }}
+          SSH_USER: ${{ secrets.HOSTINGER_USERNAME }}
+          SSH_PORT: ${{ secrets.HOSTINGER_PORT }}
+        run: |
+          set -euo pipefail
+          if [ -z "${KNOWN_HOSTS:-}" ]; then echo "::error::HOSTINGER_KNOWN_HOSTS secret is required"; exit 1; fi
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_backup
+          chmod 600 ~/.ssh/id_backup
+          # Host key pinned from a secret the operator verified by fingerprint
+          # (see docs). Host-key checking is never disabled or auto-accepted.
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+          {
+            echo "Host hostinger"
+            echo "  HostName $SSH_HOST"
+            echo "  User $SSH_USER"
+            echo "  Port $SSH_PORT"
+            echo "  IdentityFile ~/.ssh/id_backup"
+            echo "  IdentitiesOnly yes"
+            echo "  StrictHostKeyChecking yes"
+            echo "  UserKnownHostsFile ~/.ssh/known_hosts"
+          } > ~/.ssh/config
+          chmod 600 ~/.ssh/config
+
+      - name: Snapshot existing manifests (before backup)
+        run: |
+          set -euo pipefail
+          ssh hostinger "ls -1 '$REMOTE_BACKUP_DIR' 2>/dev/null | grep -E '^wms-[0-9]+\\.manifest\\.json$' || true" \
+            | sort > before_manifests.txt
+          echo "Existing manifests: $(wc -l < before_manifests.txt)"
+
+      - name: Remote backup + restore verification (tested scripts, node 20)
+        run: |
+          set -euo pipefail
+          # Exactly the commands verified manually in production. set -e on the
+          # remote makes any failure abort the job. No npm/migrate/restart/git.
+          ssh hostinger "set -e; cd '$REMOTE_APP_DIR'; \
+            BACKUP_DIR='$REMOTE_BACKUP_DIR' '$REMOTE_NODE' scripts/backup.js; \
+            BACKUP_DIR='$REMOTE_BACKUP_DIR' '$REMOTE_NODE' scripts/verify-backup.js"
+
+      - name: Identify + validate the NEW backup set (manifest diff)
+        id: newset
+        run: |
+          set -euo pipefail
+          ssh hostinger "ls -1 '$REMOTE_BACKUP_DIR' | grep -E '^wms-[0-9]+\\.manifest\\.json$' || true" \
+            | sort > after_manifests.txt
+          # Deterministic: the manifest(s) that did not exist before this run.
+          new_manifests=$(comm -13 before_manifests.txt after_manifests.txt || true)
+          count=$(printf '%s\n' "$new_manifests" | grep -c . || true)
+          if [ "$count" -ne 1 ]; then
+            echo "::error::Expected exactly 1 new manifest from this run, found $count"; exit 1
+          fi
+          manifest=$(printf '%s' "$new_manifests" | tr -d '\r')
+          # The manifest name already matched the grep pattern; re-assert it.
+          printf '%s' "$manifest" | grep -Eq '^wms-[0-9]+\.manifest\.json$' \
+            || { echo "::error::unsafe manifest name"; exit 1; }
+          echo "New manifest: $manifest"
+          # Parse + STRICTLY VALIDATE the manifest on the remote (node 20): the
+          # referenced names must be plain basenames matching the fixed WMS
+          # patterns (no '..', no path separators, no absolute paths), and must
+          # exist. A malicious/corrupt manifest is rejected here.
+          info=$(ssh hostinger "cd '$REMOTE_BACKUP_DIR'; MAN='$manifest' '$REMOTE_NODE' -e '
+            const fs=require(\"fs\");
+            const ok=(s,re)=>typeof s===\"string\"&&re.test(s);
+            const m=JSON.parse(fs.readFileSync(process.env.MAN,\"utf8\"));
+            if(!ok(m.db_file,/^wms-[0-9]+\\.db$/)){console.error(\"bad db_file\");process.exit(1);}
+            if(!fs.existsSync(m.db_file)){console.error(\"db_file missing\");process.exit(1);}
+            const hasAtt=Number(m.attachment_count)>0;
+            if(hasAtt){
+              if(!ok(m.attachments_dir,/^attachments-[0-9]+$/)){console.error(\"bad attachments_dir\");process.exit(1);}
+              if(!fs.existsSync(m.attachments_dir)){console.error(\"attachments_dir missing\");process.exit(1);}
+            }
+            console.log(JSON.stringify({db:m.db_file,att:hasAtt?m.attachments_dir:\"\"}));
+          '")
+          db=$(printf '%s' "$info"  | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(String(JSON.parse(s).db)))')
+          att=$(printf '%s' "$info" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(String(JSON.parse(s).att||"")))')
+          stamp=$(printf '%s' "$manifest" | sed -E 's/^wms-([0-9]+)\.manifest\.json$/\1/')
+          # Re-validate on the runner side before trusting these downstream.
+          printf '%s' "$db"  | grep -Eq '^wms-[0-9]+\.db$' || { echo "::error::unsafe db name"; exit 1; }
+          [ -z "$att" ] || printf '%s' "$att" | grep -Eq '^attachments-[0-9]+$' || { echo "::error::unsafe attachments name"; exit 1; }
+          printf '%s' "$stamp" | grep -Eq '^[0-9]+$' || { echo "::error::unsafe stamp"; exit 1; }
+          {
+            echo "manifest=$manifest"
+            echo "db=$db"
+            echo "att=$att"
+            echo "stamp=$stamp"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Download ONLY the new set to the runner
+        env:
+          MANIFEST: ${{ steps.newset.outputs.manifest }}
+          DB: ${{ steps.newset.outputs.db }}
+          ATT: ${{ steps.newset.outputs.att }}
+        run: |
+          set -euo pipefail
+          mkdir -p download
+          scp "hostinger:$REMOTE_BACKUP_DIR/$MANIFEST" download/
+          scp "hostinger:$REMOTE_BACKUP_DIR/$DB" download/
+          if [ -n "$ATT" ]; then scp -r "hostinger:$REMOTE_BACKUP_DIR/$ATT" download/; fi
+          ls -la download
+
+      - name: Independent runner verification (structure + checksum + integrity)
+        env:
+          MANIFEST: ${{ steps.newset.outputs.manifest }}
+          DB: ${{ steps.newset.outputs.db }}
+        run: |
+          set -euo pipefail
+          # Structural: exactly this set; manifest references resolve; same stamp;
+          # rejects any '..'/absolute/separator in referenced names.
+          node scripts/backup-select.js download --manifest "$MANIFEST" --json
+          test -s "download/$DB" || { echo "::error::Downloaded DB is empty"; exit 1; }
+          # Recompute SHA-256 vs manifest + PRAGMA integrity_check + restore drill.
+          node scripts/verify-backup.js download
+
+      - name: Offsite upload (S3-compatible, HTTPS + SSE)
+        id: upload
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_STORAGE_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_STORAGE_SECRET_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.BACKUP_STORAGE_REGION }}
+          BUCKET: ${{ secrets.BACKUP_STORAGE_BUCKET }}
+          ENDPOINT: ${{ secrets.BACKUP_STORAGE_ENDPOINT }}
+          MANIFEST: ${{ steps.newset.outputs.manifest }}
+          DB: ${{ steps.newset.outputs.db }}
+          ATT: ${{ steps.newset.outputs.att }}
+          STAMP: ${{ steps.newset.outputs.stamp }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          # Validate storage config before use (HTTPS endpoint; safe bucket charset).
+          printf '%s' "$ENDPOINT" | grep -Eq '^https://[A-Za-z0-9._:%/-]+$' || { echo "::error::endpoint must be an https:// URL"; exit 1; }
+          printf '%s' "$BUCKET"   | grep -Eq '^[A-Za-z0-9._-]+$' || { echo "::error::invalid bucket name"; exit 1; }
+          datepath=$(date -u +%Y/%m/%d)
+          prefix="wms-production/${datepath}/${RUN_ID}"
+          echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
+          # Small, non-sensitive summary (no secrets, no DB rows, no signed URLs).
+          printf '{"stamp":"%s","manifest":"%s","db":"%s","run_id":"%s","uploaded_at":"%s"}\n' \
+            "$STAMP" "$MANIFEST" "$DB" "$RUN_ID" "$(date -u +%FT%TZ)" > download/backup-summary.json
+          up() { aws s3 cp "download/$1" "s3://${BUCKET}/${prefix}/$1" \
+                   --endpoint-url "$ENDPOINT" --only-show-errors --sse AES256; }
+          up "$MANIFEST"
+          up "$DB"
+          up "backup-summary.json"
+          if [ -n "$ATT" ]; then
+            tar -czf "download/${ATT}.tar.gz" -C download "$ATT"
+            up "${ATT}.tar.gz"
+          fi
+
+      - name: Verify offsite objects (exact keys, size match)
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_STORAGE_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_STORAGE_SECRET_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.BACKUP_STORAGE_REGION }}
+          BUCKET: ${{ secrets.BACKUP_STORAGE_BUCKET }}
+          ENDPOINT: ${{ secrets.BACKUP_STORAGE_ENDPOINT }}
+          PREFIX: ${{ steps.upload.outputs.prefix }}
+          MANIFEST: ${{ steps.newset.outputs.manifest }}
+          DB: ${{ steps.newset.outputs.db }}
+          ATT: ${{ steps.newset.outputs.att }}
+        run: |
+          set -euo pipefail
+          confirm() {
+            local key="$1"; local localfile="download/$1"; local remote_size local_size
+            remote_size=$(aws s3api head-object --bucket "$BUCKET" --key "${PREFIX}/${key}" \
+              --endpoint-url "$ENDPOINT" --query 'ContentLength' --output text)
+            local_size=$(stat -c%s "$localfile")
+            if [ "$remote_size" != "$local_size" ]; then
+              echo "::error::Size mismatch for $key: remote=$remote_size local=$local_size"; exit 1
+            fi
+            echo "confirmed $key ($remote_size bytes)"
+          }
+          confirm "$MANIFEST"
+          confirm "$DB"
+          confirm "backup-summary.json"
+          if [ -n "$ATT" ]; then confirm "${ATT}.tar.gz"; fi
+
+      - name: Prune old LOCAL sets (only after verified upload)
+        if: success()
+        env:
+          DRY: ${{ github.event.inputs.dry_run_retention }}
+        run: |
+          set -euo pipefail
+          # Copy the tested retention script to a TEMP path OUTSIDE the deployed
+          # checkout, run it with node 20, then remove it. The deployed tree is
+          # never modified.
+          tmp="/home/u716763642/.logs/wms/backup-retention.$$.js"
+          scp scripts/backup-retention.js "hostinger:$tmp"
+          dry=""; [ "$DRY" = "true" ] && dry="--dry-run"
+          # Retention failure must NOT invalidate the already-verified offsite
+          # backup — warn, do not fail the job.
+          ssh hostinger "'$REMOTE_NODE' '$tmp' '$REMOTE_BACKUP_DIR' --keep '$KEEP_SETS' $dry; rc=\$?; rm -f '$tmp'; exit \$rc" \
+            || echo "::warning::Local retention reported a problem; offsite backup is still valid. Inspect $REMOTE_BACKUP_DIR."
+
+      - name: Job summary (metadata only)
+        if: always()
+        env:
+          STAMP: ${{ steps.newset.outputs.stamp }}
+          PREFIX: ${{ steps.upload.outputs.prefix }}
+          ATT: ${{ steps.newset.outputs.att }}
+        run: |
+          {
+            echo "## WMS production offsite backup"
+            echo "- Run: ${{ github.run_id }} · Trigger: ${{ github.event_name }}"
+            echo "- New set stamp: \`${STAMP:-n/a}\`"
+            echo "- Offsite prefix: \`${PREFIX:-n/a}\`"
+            echo "- Attachments: $( [ -n "$ATT" ] && echo yes || echo no )"
+            echo "- Local retention: keep newest ${KEEP_SETS}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Scrub SSH key
+        if: always()
+        run: rm -f ~/.ssh/id_backup
