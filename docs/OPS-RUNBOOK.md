@@ -49,6 +49,19 @@ Set alert recipients via environment (never hardcode):
 ALERT_EMAIL=ops@yourco.com          # consumed by your cron/monitor wrappers
 ```
 
+### 1.5a Ready-to-cron monitor script (`scripts/monitor.sh`)
+A dependency-free probe is included. It checks `/healthz`, PM2 restart-loop
+(needs `pm2`+`jq`), disk free %, HTTP 5xx rate in the request log, and backup
+freshness — and emails `ALERT_EMAIL` (via system `mail`) on any failure, always
+logging to stdout. No credentials are hardcoded; everything is env-driven.
+```bash
+*/5 * * * * ALERT_EMAIL=ops@yourco.com BACKUP_DIR=/var/backups/wms \
+  /path/to/WMS/scripts/monitor.sh >> /var/log/wms/monitor.log 2>&1
+```
+Tunables: `HEALTH_URL`, `PM2_APP`, `DISK_MIN_FREE_PCT`, `RESTART_MAX`,
+`LOG_5XX_MAX`, `BACKUP_DIR` (see the script header). Use it alongside — not
+instead of — an external uptime monitor (1.2), which also catches full-host death.
+
 ### 1.5 Test-fire an alert (verification procedure)
 1. **Downtime**: `pm2 stop wms` → monitor should alert within its interval → `pm2 start wms`.
 2. **Backup failure**: `BACKUP_DIR=/nonexistent-ro npm run backup` → non-zero exit → cron alert.

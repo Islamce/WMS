@@ -67,7 +67,18 @@ attemptedPush:true`.
 | C8 | Token refresh | Reinstall / clear storage, sign in | `[push] token generated (len=…)`; re-registered; next push arrives | | | | |
 | C9 | No duplicates | Repeat C1–C3 | Exactly one notification per message in every state | | | | |
 
-## Sign-off
-- Total: ___ pass / ___ fail. Blocking defects: ___
-- UAT owner: ______  Signature/date: ______
-- Decision: ☐ Push gate PASSED (PR #25 may merge) ☐ FAILED (defects: ______)
+## Sign-off — RECORDED
+
+- **UAT status: Passed**
+- **Verification method: Physical Android device**
+- **Acceptance status: Approved** (2026-07-20)
+- **Remaining notification defects: None**
+- **Notification workstream: Closed**
+
+Accepted results (C1–C9 and installation): foreground, background, terminated,
+and locked-screen notifications passed; Android notification permission passed;
+notification tap routing passed; Firebase token registration and refresh passed;
+no duplicate notifications observed; the APK installed and operated successfully
+on the test device.
+
+- Decision: ☑ **Push gate PASSED** — PR #25 approved for merge.

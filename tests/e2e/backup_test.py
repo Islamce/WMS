@@ -4,8 +4,9 @@
 Runs the real backup script against the live test DB, then the verify script
 (which runs PRAGMA integrity_check and a restore drill in a scratch dir), and
 asserts the failure paths fail with a non-zero exit. Also asserts the temporary
-debug push-test endpoint is still present (removed only at the V1.0 tag) and
-that the backend push module builds a data-only FCM payload.
+debug push-test endpoint has been REMOVED (returns 404, no debug router mounted)
+while the production notification pipeline still works, and that the backend
+push module builds a data-only FCM payload.
 Runs in Phase 3 after reverse_workflow_test.py."""
 import json, os, subprocess, sys, tempfile, shutil, urllib.request, urllib.error
 
@@ -80,7 +81,10 @@ try:
 except Exception as e:
     check('push payload shape check ran', False, f'{e}: {r.stdout} {r.stderr}')
 
-# ===== 6. Temporary debug endpoint still present (removed only at V1.0 tag) =====
+# ===== 6. Release safety: temporary debug endpoint is GONE =====
+# The push-test endpoint completed its purpose at UAT and was removed. Confirm
+# it is a 404, no debug router is mounted, and the production notification
+# pipeline still works without it.
 def call(method, path, token=None, body=None):
     data = json.dumps(body).encode() if body is not None else None
     req = urllib.request.Request(B + path, data=data, method=method)
@@ -94,10 +98,23 @@ def call(method, path, token=None, body=None):
 
 _, lg = call('POST', '/api/auth/login', body={'email': 'admin@example.com', 'password': 'Admin@123456'})
 admin = lg.get('token')
+# 404 for admin (route no longer exists — not 401/403 which would imply it still exists)
 c, r = call('POST', '/api/debug/push-test', admin, {})
-check('debug push-test endpoint present for admin (200)', c == 200, (c, r))
-c, r = call('POST', '/api/debug/push-test', None, {})
-check('debug push-test rejects unauthenticated (401)', c == 401, (c, r))
+check('debug push-test endpoint removed (404 for admin)', c == 404, (c, r))
+c, r = call('GET', '/api/debug/push-test', admin)
+check('no debug push endpoint on GET either (404)', c == 404, (c, r))
+# No debug router mounted at all: any /api/debug/* path is a JSON 404.
+c, r = call('GET', '/api/debug/anything', admin)
+check('no /api/debug router mounted (404)', c == 404, (c, r))
+# The production notification pipeline is unaffected: device registration
+# (the real FCM entry point) still works end-to-end.
+c, r = call('POST', '/api/notifications/register-device', admin, {'token': 'safety-tok-1', 'platform': 'android'})
+check('production push pipeline intact (register-device 200)', c == 200, (c, r))
+c, r = call('POST', '/api/notifications/unregister-device', admin, {'token': 'safety-tok-1'})
+check('production push pipeline intact (unregister-device 200)', c == 200, (c, r))
+# In-app inbox still serves notifications.
+c, r = call('GET', '/api/notifications/unread-count', admin)
+check('in-app notification inbox intact (unread-count 200)', c == 200 and 'unread' in r, (c, r))
 
 print(f"\n===== RESULT: {passed} passed, {failed} failed =====")
 if fails: print("Failed:", fails)

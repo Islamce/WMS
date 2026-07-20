@@ -131,10 +131,6 @@ app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/kpi', require('./routes/kpi'));
 app.use('/api/analytics', require('./routes/analytics'));
 
-// TEMPORARY — push-notification validation endpoint (admin-only).
-// ⚠️ REMOVE BEFORE VERSION 1.0 RELEASE: delete this line and server/routes/debug.js.
-app.use('/api/debug', require('./routes/debug'));
-
 // --- Static frontend ------------------------------------------------------
 app.use(express.static(path.join(__dirname, '..', 'public')));
 // Chart.js is served from node_modules so the app has no CDN dependency.

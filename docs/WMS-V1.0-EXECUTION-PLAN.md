@@ -292,13 +292,13 @@ device UAT sign-off, production monitor wiring, offsite backup destination.
 ## Backlog status (this phase)
 | ID | Item | Status | Evidence | Remaining action | Target |
 |---|---|---|---|---|---|
-| R4-PUSH | Android push in all states (PR #25) | **UAT pending** | Code verified + CI green (test+build-apk on 2b1e938); APK checksums logged | Device UAT (docs/ANDROID-UAT-V1.0.md §C) then merge | 1.0 |
+| R4-PUSH | Android push in all states (PR #25) | **Complete** | Physical-device UAT PASSED 2026-07-20 (docs/ANDROID-UAT-V1.0.md sign-off); CI green; APK checksummed | Workstream CLOSED | 1.0 |
 | OPS-1 | Monitoring & alerting | **Code complete (doc)** | docs/OPS-RUNBOOK.md §1 | Operator wires external monitor + pm2-logrotate + alert recipients; test-fire | 1.0 |
 | OPS-2 | Backup + DR (attachments/manifest/checksum/offsite) | **Test complete** (offsite = doc) | scripts/backup.js; restore drill run; backup_test.py green | Operator sets offsite destination (rclone/rsync) | 1.0 |
 | OPS-3 | Deploy + rollback runbook | **Complete** | docs/OPS-RUNBOOK.md §3 | — | 1.0 |
 | DB-2 | Backup verification | **Complete** | scripts/verify-backup.js; failure paths proven; CI-enforced | — | 1.0 |
-| CLEAN-1 | Remove debug endpoint + temp code | **Blocked (by design)** | Needed for device push UAT | Remove at V1.0 tag (task #119) | 1.0 tag |
-| QA-DR | Backup/restore + push-shape + debug-presence tests | **Complete** | tests/e2e/backup_test.py (14 checks) | — | 1.0 |
+| CLEAN-1 | Remove debug endpoint + temp code | **Complete** | /api/debug/push-test + route file + markers removed; backup_test.py now asserts 404 | — | 1.0 |
+| QA-DR | Backup/restore + push-shape + debug-removal tests | **Complete** | tests/e2e/backup_test.py (backup+restore+failure paths+data-only payload+debug-404) | — | 1.0 |
 | QA-LOAD | Load sanity test | **Not started** | — | k6/driver vs staging; not representative locally (SQLite single-proc) | 1.0 (owner) |
 | UAT-PKG | Android device UAT package | **Complete** | docs/ANDROID-UAT-V1.0.md | Execute on device | 1.0 |
 | DEP-BUMP | Dependabot PRs #11–15,#22 | **Deferred** | 6 open PRs | Review post-1.0; not blockers | 1.1 |
