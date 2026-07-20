@@ -306,3 +306,27 @@ device UAT sign-off, production monitor wiring, offsite backup destination.
 ## Release checklist delta
 - [x] Main CI green · [x] APK generated + checksummed · [x] DR restore drill · [x] verify-backup CI-enforced · [x] rollback documented · [x] ops runbook · [x] UAT package
 - [ ] PR #25 merged (gated on device UAT) · [ ] device UAT signed off · [ ] monitoring wired in prod · [ ] offsite backup destination set · [ ] load sanity run · [ ] debug endpoint removed at tag · [ ] v1.0.0 tag
+
+---
+
+# Retention Decision (V1.0) — 2026-07-20
+
+Adopted after PR #26 (scheduled offsite backup) merged to `main` at `6564b353`.
+
+| Tier | Policy | V1.0 status | Mechanism |
+|---|---|---|---|
+| Hostinger **local** | keep newest **7** valid backup sets | **In V1.0** | `scripts/backup-retention.js` (run by the workflow after verified upload) |
+| Offsite **daily** | retain **14 days** | **In V1.0** | provider bucket lifecycle rule on prefix `wms-production/` |
+| Offsite **weekly** | retain **8 weeks** | **Deferred to V1.1** | requires a promotion/copy step to a `wms-weekly/` prefix — NOT added in PR #26 |
+| Offsite **monthly** | retain **12 months** | **Deferred to V1.1** | requires a promotion/copy step to a `wms-monthly/` prefix — NOT added in PR #26 |
+
+Rationale: daily offsite with 14 recovery points meets the mandatory DR gate
+(RPO 24h). Weekly/monthly tiering needs object **promotion** (lifecycle rules
+expire, they do not copy), which is a small future enhancement — no promotion
+logic was added to PR #26 by decision.
+
+## V1.1 backlog additions
+- **OPS-RET-1** Offsite weekly (8w) + monthly (12m) tiering via a tested
+  promotion step (copy one run/week and one run/month to dedicated prefixes
+  with their own lifecycle expiry). Priority P2. Dependency: PR #26 live +
+  first successful offsite run.
