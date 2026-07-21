@@ -103,7 +103,7 @@ jobs:
       # root (working-directory does not apply to action inputs).
       - name: Publish APK to a GitHub Release
         if: github.ref == 'refs/heads/main'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: mobile-v${{ steps.ver.outputs.tagver }}-${{ github.run_number }}
           name: WMS Mobile v${{ steps.ver.outputs.version }}
