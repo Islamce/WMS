@@ -21,7 +21,7 @@ jobs:
         run: npm ci
 
       - name: Syntax check
-        run: find server public/js index.js -name '*.js' -print0 | xargs -0 -n1 node --check
+        run: find server public/js index.js tests/load -name '*.js' -print0 | xargs -0 -n1 node --check
 
       - name: Lint (ESLint + security plugin)
         run: npm run lint
@@ -31,6 +31,22 @@ jobs:
 
       - name: Run end-to-end test suites
         run: npm test
+
+      - name: Local bounded load test
+        run: |
+          set -Eeuo pipefail
+          rm -f data/wms.db data/wms.db-shm data/wms.db-wal
+          npm run migrate >/dev/null
+          npm run seed >/dev/null
+          node index.js >/tmp/wms-load-server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:3000/healthz >/dev/null && break
+            sleep 0.5
+          done
+          curl -sf http://127.0.0.1:3000/healthz >/dev/null
+          npm run test:load
 
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
