@@ -1,13 +1,24 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../core/format.dart';
 import '../main.dart';
 import '../widgets/common.dart';
 
-class BatchDetailScreen extends StatelessWidget {
+class BatchDetailScreen extends StatefulWidget {
   const BatchDetailScreen({super.key, required this.batch});
 
   final Map<String, dynamic> batch;
+
+  @override
+  State<BatchDetailScreen> createState() => _BatchDetailScreenState();
+}
+
+class _BatchDetailScreenState extends State<BatchDetailScreen> {
+  bool _openingPdf = false;
 
   Widget _row(String label, dynamic value) {
     final text = value == null || value.toString().isEmpty ? '—' : value.toString();
@@ -41,15 +52,37 @@ class BatchDetailScreen extends StatelessWidget {
     );
   }
 
+  Future<void> _openPdf(String path, String batchNumber) async {
+    if (_openingPdf) return;
+    setState(() => _openingPdf = true);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final session = SessionScope.of(context);
+      final bytes = await session.api.downloadBytes(path, expectedContentType: 'application/pdf');
+      final dir = await getTemporaryDirectory();
+      final safeName = batchNumber.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+      final file = File('${dir.path}/$safeName-qr-label.pdf');
+      await file.writeAsBytes(bytes, flush: true);
+      final result = await OpenFilex.open(file.path, type: 'application/pdf');
+      if (result.type != ResultType.done) {
+        throw Exception(result.message.isEmpty ? 'No PDF viewer is available.' : result.message);
+      }
+    } catch (e) {
+      if (mounted) messenger.showSnackBar(SnackBar(content: Text('Unable to open QR PDF: $e')));
+    } finally {
+      if (mounted) setState(() => _openingPdf = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final session = SessionScope.of(context);
     final canReadQr = session.can('qr_printing') || session.can('goods_receipt');
 
     return Scaffold(
-      appBar: AppBar(title: Text('${batch['batch_number'] ?? 'Batch'}')),
+      appBar: AppBar(title: Text('${widget.batch['batch_number'] ?? 'Batch'}')),
       body: FutureBuilder<dynamic>(
-        future: session.api.get('/api/receiving/batches/${batch['id']}/traceability'),
+        future: session.api.get('/api/receiving/batches/${widget.batch['id']}/traceability'),
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
             return const Center(child: CircularProgressIndicator());
@@ -63,7 +96,7 @@ class BatchDetailScreen extends StatelessWidget {
           }
 
           final payload = Map<String, dynamic>.from(snapshot.data as Map);
-          final b = Map<String, dynamic>.from(payload['batch'] ?? batch);
+          final b = Map<String, dynamic>.from(payload['batch'] ?? widget.batch);
           final qr = payload['qr'] == null ? <String, dynamic>{} : Map<String, dynamic>.from(payload['qr']);
           final summary = Map<String, dynamic>.from(payload['summary'] ?? {});
           final allocations = List<Map<String, dynamic>>.from(
@@ -73,8 +106,8 @@ class BatchDetailScreen extends StatelessWidget {
           final movements = List<Map<String, dynamic>>.from(
               (payload['movements'] ?? []).map((e) => Map<String, dynamic>.from(e)));
           final audit = List<Map<String, dynamic>>.from(
-              (payload['audit'] ?? []).map((e) => Map<String, dynamic>.from(e)));
-          final pdfPath = payload['pdf_path'];
+              (payload['events'] ?? []).map((e) => Map<String, dynamic>.from(e)));
+          final pdfPath = qr['pdf_path']?.toString();
 
           return ListView(
             padding: const EdgeInsets.all(12),
@@ -122,12 +155,30 @@ class BatchDetailScreen extends StatelessWidget {
                         ? Column(children: [
                             _row('QR ID', qr['id']),
                             _row('QR value', qr['qr_code_value']),
-                            _row('QR status', qr['status']),
+                            _row('QR status', qr['qr_status'] ?? qr['status']),
                             _row('Print count', qr['print_count']),
-                            _row('Last printed', qr['last_printed_at']),
+                            _row('Last printed', qr['printed_at'] ?? qr['last_printed_at']),
                             _row('Last scanned', qr['last_scanned_at']),
                             _row('Scanned by', qr['last_scanned_by']),
-                            _row('Label PDF', pdfPath),
+                            if (pdfPath != null && pdfPath.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: SizedBox(
+                                  width: double.infinity,
+                                  child: FilledButton.icon(
+                                    onPressed: _openingPdf
+                                        ? null
+                                        : () => _openPdf(pdfPath, b['batch_number']?.toString() ?? 'batch'),
+                                    icon: _openingPdf
+                                        ? const SizedBox.square(
+                                            dimension: 18,
+                                            child: CircularProgressIndicator(strokeWidth: 2),
+                                          )
+                                        : const Icon(Icons.picture_as_pdf),
+                                    label: Text(_openingPdf ? 'Opening PDF…' : 'Download and open QR PDF'),
+                                  ),
+                                ),
+                              ),
                           ])
                         : Column(children: [
                             _row('QR ID', qr['id']),
@@ -141,11 +192,11 @@ class BatchDetailScreen extends StatelessWidget {
               SectionCard(
                 title: 'Traceability summary',
                 child: Column(children: [
-                  _row('Prints', summary['print_count']),
+                  _row('Prints', summary['qr_print_count'] ?? summary['print_count']),
                   _row('Picking allocations', summary['allocation_count']),
                   _row('Reallocations', summary['reallocation_count']),
                   _row('Stock movements', summary['movement_count']),
-                  _row('Audit events', summary['audit_count']),
+                  _row('Audit events', summary['event_count'] ?? summary['audit_count']),
                 ]),
               ),
               if (allocations.isNotEmpty)
