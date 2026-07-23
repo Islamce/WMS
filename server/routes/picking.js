@@ -100,8 +100,6 @@ router.post('/allocations/:allocId/scan', requirePermission('picking'), (req, re
   const line = db.prepare('SELECT * FROM material_request_lines WHERE id=?').get(alloc.line_id);
   const { qr_value, override, override_reason, skip } = req.body || {};
 
-  // Admin may skip the QR scan entirely (audited) — for tests, damaged labels,
-  // or materials without printed QRs.
   if (skip === true) {
     if (req.user.role !== 'admin') {
       return res.status(403).json({ error: 'Only an administrator can skip the QR scan.' });
@@ -117,8 +115,6 @@ router.post('/allocations/:allocId/scan', requirePermission('picking'), (req, re
 
   if (!isNonEmptyString(qr_value)) return res.status(400).json({ error: 'QR value is required.' });
 
-  // A scan of the BIN LOCATION label is accepted as an alternative to the batch
-  // QR: scanning the expected bin passes; scanning a different bin fails.
   const scanned = qr_value.trim();
   const binRow = db.prepare(
     'SELECT bin_code, full_bin_location FROM bin_locations WHERE warehouse_code=? AND (bin_code=? OR full_bin_location=?)'
@@ -150,14 +146,12 @@ router.post('/allocations/:allocId/scan', requirePermission('picking'), (req, re
       warehouseCode: alloc.warehouse_code, binLocation: alloc.bin_location },
   });
 
-  // Always log the scan (success or failure).
   audit.record({ entityType: 'PickingAllocation', entityId: alloc.id, requestNumber: alloc.request_number,
     lineNumber: alloc.line_number, action: result.ok ? 'QR_SCAN_PASS' : 'QR_SCAN_FAIL',
     newValue: { qr: qr_value, code: result.code, message: result.message }, user: req.user, sourceScreen: 'QR Scan' });
   if (result.qr) qrService.markScanned(result.qr.id, req.user.id);
 
   if (!result.ok) {
-    // Authorized supervisor override path (reason mandatory).
     const canOverride = req.user.role === 'admin' || req.user.permissions.includes('bin_batch_assignment') || req.user.permissions.includes('picker_assignment');
     if (override && canOverride && isNonEmptyString(override_reason)) {
       db.prepare("UPDATE picking_allocations SET status='SCANNED', scanned_qr_value=?, scan_result=? WHERE id=?")
@@ -209,11 +203,7 @@ router.post('/lines/:lineId/confirm', requirePermission('picking'), (req, res) =
     return res.status(400).json({ error: 'A shortage reason is required when picking less than the approved quantity.' });
   }
 
-  // QR verification required for batch/expiry-managed lines (unless overridden).
   const allocs = db.prepare("SELECT * FROM picking_allocations WHERE line_id=? AND status IN ('PROPOSED','SCANNED')").all(line.id);
-  // A pick that moves quantity must consume batch stock through open
-  // allocations — otherwise picked_quantity and physical inventory diverge
-  // (e.g. a duplicate confirm after the line was already confirmed).
   if (picked > 0 && allocs.length === 0) {
     return res.status(400).json({ error: 'This line has no open allocations to pick from (already confirmed or not allocated). Re-run allocation or return the task properly.' });
   }
@@ -225,19 +215,16 @@ router.post('/lines/:lineId/confirm', requirePermission('picking'), (req, res) =
   }
 
   const confirm = db.transaction(() => {
-    // consume batch stock proportionally across the line's scanned allocations
     let toConsume = picked;
     for (const a of allocs) {
       if (toConsume <= 0) break;
       const take = Math.min(toConsume, a.proposed_quantity);
       db.prepare("UPDATE picking_allocations SET picked_quantity=?, status=? WHERE id=?")
         .run(take, take >= a.proposed_quantity ? 'PICKED' : 'SHORT', a.id);
-      // decrement batch remaining + release the reservation for this allocation
       db.prepare('UPDATE batches SET remaining_quantity = remaining_quantity - ?, reserved_quantity = MAX(0, reserved_quantity - ?) WHERE id=?')
         .run(take, a.proposed_quantity, a.batch_id);
       toConsume -= take;
     }
-    // release any leftover reservation for unscanned/short allocations beyond what we consumed
     allocs.forEach((a) => {
       if (a.status === 'PROPOSED') {
         db.prepare('UPDATE batches SET reserved_quantity = MAX(0, reserved_quantity - ?) WHERE id=?')
@@ -272,47 +259,98 @@ router.post('/lines/:lineId/confirm', requirePermission('picking'), (req, res) =
 
 /** POST /api/picking/tasks/:id/complete — finish picking; route to GI queue. */
 router.post('/tasks/:id/complete', requirePermission('picking'), (req, res) => {
-  const task = loadTask(res, req.params.id, req.user);
-  if (!task) return;
-  if (task.task_status !== TASK_STATUS.IN_PROGRESS) {
-    return res.status(400).json({ error: 'Task is not in progress.' });
-  }
-  const header = db.prepare('SELECT * FROM material_request_headers WHERE id=?').get(task.request_id);
-  const lines = db.prepare("SELECT * FROM material_request_lines WHERE request_id=? AND line_status NOT IN ('Rejected','Cancelled')").all(task.request_id);
-  const pending = lines.filter((l) => ![LINE_STATUS.PICKED, LINE_STATUS.PARTIALLY_PICKED, LINE_STATUS.SHORTAGE, LINE_STATUS.NOT_AVAILABLE].includes(l.line_status));
-  if (pending.length > 0) {
-    return res.status(400).json({ error: `Confirm all lines before completing (${pending.length} still pending).` });
-  }
-  const anyShort = lines.some((l) => [LINE_STATUS.PARTIALLY_PICKED, LINE_STATUS.SHORTAGE].includes(l.line_status));
-  const allShort = lines.every((l) => [LINE_STATUS.SHORTAGE, LINE_STATUS.NOT_AVAILABLE].includes(l.line_status));
+  const initialTask = loadTask(res, req.params.id, req.user);
+  if (!initialTask) return;
 
-  db.transaction(() => {
-    db.prepare("UPDATE picking_tasks SET task_status=?, completed_at=datetime('now'), updated_at=datetime('now') WHERE id=?")
-      .run(anyShort && !allShort ? TASK_STATUS.PARTIALLY_COMPLETED : TASK_STATUS.COMPLETED, task.id);
+  const replayTaskStatuses = [TASK_STATUS.COMPLETED, TASK_STATUS.PARTIALLY_COMPLETED];
+  const replayHeaderStatuses = [HEADER_STATUS.PENDING_ERP_GI, HEADER_STATUS.GI_POSTED, HEADER_STATUS.COMPLETED];
+  const initialHeader = db.prepare('SELECT * FROM material_request_headers WHERE id=?').get(initialTask.request_id);
+  if (replayTaskStatuses.includes(initialTask.task_status) && replayHeaderStatuses.includes(initialHeader.request_status)) {
+    return res.json({
+      message: 'Picking completion already recorded. Request is in the GI workflow.',
+      idempotent: true,
+      task_status: initialTask.task_status,
+      request_status: initialHeader.request_status,
+    });
+  }
+
+  let outcome = null;
+  let replay = null;
+  const complete = db.transaction(() => {
+    const task = db.prepare('SELECT * FROM picking_tasks WHERE id=?').get(initialTask.id);
+    const header = db.prepare('SELECT * FROM material_request_headers WHERE id=?').get(task.request_id);
+
+    if (replayTaskStatuses.includes(task.task_status) && replayHeaderStatuses.includes(header.request_status)) {
+      replay = { task_status: task.task_status, request_status: header.request_status };
+      return;
+    }
+    if (task.task_status !== TASK_STATUS.IN_PROGRESS) {
+      const err = new Error(`Task cannot be completed from status '${task.task_status}'.`);
+      err.status = 409;
+      throw err;
+    }
+
+    const lines = db.prepare("SELECT * FROM material_request_lines WHERE request_id=? AND line_status NOT IN ('Rejected','Cancelled')").all(task.request_id);
+    const pending = lines.filter((l) => ![LINE_STATUS.PICKED, LINE_STATUS.PARTIALLY_PICKED, LINE_STATUS.SHORTAGE, LINE_STATUS.NOT_AVAILABLE].includes(l.line_status));
+    if (pending.length > 0) {
+      const err = new Error(`Confirm all lines before completing (${pending.length} still pending).`);
+      err.status = 400;
+      throw err;
+    }
+
+    const anyShort = lines.some((l) => [LINE_STATUS.PARTIALLY_PICKED, LINE_STATUS.SHORTAGE].includes(l.line_status));
+    const allShort = lines.every((l) => [LINE_STATUS.SHORTAGE, LINE_STATUS.NOT_AVAILABLE].includes(l.line_status));
+    const taskStatus = anyShort && !allShort ? TASK_STATUS.PARTIALLY_COMPLETED : TASK_STATUS.COMPLETED;
+
+    const claimed = db.prepare(`
+      UPDATE picking_tasks
+      SET task_status=?, completed_at=COALESCE(completed_at, datetime('now')), updated_at=datetime('now')
+      WHERE id=? AND task_status=?
+    `).run(taskStatus, task.id, TASK_STATUS.IN_PROGRESS);
+    if (claimed.changes !== 1) {
+      const current = db.prepare('SELECT task_status FROM picking_tasks WHERE id=?').get(task.id);
+      if (replayTaskStatuses.includes(current.task_status)) {
+        replay = { task_status: current.task_status, request_status: header.request_status };
+        return;
+      }
+      const err = new Error(`Task completion could not claim status '${current.task_status}'.`);
+      err.status = 409;
+      throw err;
+    }
+
     setHeaderStatus(header, anyShort ? HEADER_STATUS.PARTIALLY_PICKED : HEADER_STATUS.PICKING_COMPLETED,
       { user: req.user, sourceScreen: 'Picker Task' });
     setHeaderStatus(header, HEADER_STATUS.PENDING_ERP_GI, { user: req.user, sourceScreen: 'Picker Task' });
     db.prepare("UPDATE material_request_lines SET line_status=? WHERE request_id=? AND line_status IN (?,?)")
       .run(LINE_STATUS.PENDING_GI, header.id, LINE_STATUS.PICKED, LINE_STATUS.PARTIALLY_PICKED);
     refreshRollups(header.id);
-  })();
+    outcome = { anyShort, requestNumber: header.request_number, taskStatus };
+  });
 
-  notify.notifyPermission('gi_posting', { requestNumber: header.request_number,
-    notificationType: 'PICKING_COMPLETED', title: `Picking complete for ${header.request_number}`,
+  try { complete(); } catch (err) {
+    const status = err.status || 500;
+    return res.status(status).json({ error: err.message || 'Failed to complete picking.' });
+  }
+
+  if (replay) {
+    return res.json({
+      message: 'Picking completion already recorded. Request is in the GI workflow.',
+      idempotent: true,
+      task_status: replay.task_status,
+      request_status: replay.request_status,
+    });
+  }
+
+  notify.notifyPermission('gi_posting', { requestNumber: outcome.requestNumber,
+    notificationType: 'PICKING_COMPLETED', title: `Picking complete for ${outcome.requestNumber}`,
     message: 'Ready for Goods Issue posting.' });
-  res.json({ message: `Picking ${anyShort ? 'partially ' : ''}completed. Sent to GI posting.` });
+  res.json({
+    message: `Picking ${outcome.anyShort ? 'partially ' : ''}completed. Sent to GI posting.`,
+    task_status: outcome.taskStatus,
+  });
 });
 
-// ---------------------------------------------------------------------------
-// Reminder / escalation sweep (called by scheduler in index.js, and testable).
-// ---------------------------------------------------------------------------
-/**
- * Process one reminder/escalation cycle for tasks pending acceptance.
- * @param {number} nowMs override "now" (ms) for testing; defaults to Date.now().
- */
 function sweepReminders(nowMs = Date.now()) {
-  // Include already-escalated tasks so a level-1 escalation can progress to
-  // level 2 on a later sweep. Accepted/completed tasks are excluded.
   const tasks = db.prepare(`
     SELECT * FROM picking_tasks
     WHERE task_status IN ('Pending Picker Acceptance','Reminder Sent','Assigned to Picker','Escalated to Supervisor')
@@ -326,7 +364,6 @@ function sweepReminders(nowMs = Date.now()) {
     const header = db.prepare('SELECT * FROM material_request_headers WHERE id=?').get(task.request_id);
 
     if (elapsedMin >= sla.escalateAfter && task.escalation_level < 2) {
-      // escalate to warehouse manager / allow reassignment
       db.prepare("UPDATE picking_tasks SET escalation_level=2, task_status='Escalated to Supervisor', updated_at=datetime('now') WHERE id=?").run(task.id);
       if (header) try { setHeaderStatus(header, HEADER_STATUS.ESCALATED_TO_SUPERVISOR, { sourceScreen: 'Scheduler' }); } catch {}
       notify.notifyPermission('picker_assignment', { requestNumber: task.request_number, taskId: task.id,
@@ -345,7 +382,6 @@ function sweepReminders(nowMs = Date.now()) {
         action: 'ESCALATE', newValue: { level: 1, elapsedMin: Math.round(elapsedMin) }, sourceScreen: 'Scheduler' });
       actions.push({ task: task.id, action: 'ESCALATE_SUPERVISOR' });
     } else {
-      // send reminders at each configured interval not yet covered by reminder_count
       const due = sla.reminders.filter((m) => elapsedMin >= m).length;
       if (due > task.reminder_count) {
         db.prepare("UPDATE picking_tasks SET reminder_count=?, last_reminder_at=datetime('now'), task_status='Reminder Sent', updated_at=datetime('now') WHERE id=?")
@@ -363,9 +399,7 @@ function sweepReminders(nowMs = Date.now()) {
   return actions;
 }
 
-/** POST /api/picking/sweep — manual trigger (supervisors/admin); supports testMinutes. */
 router.post('/sweep', requirePermission(['picker_assignment']), (req, res) => {
-  // testMinutes lets tests fast-forward the SLA clock deterministically.
   const now = isPositiveNumber(req.body.testMinutes)
     ? Date.now() + Number(req.body.testMinutes) * 60000
     : Date.now();

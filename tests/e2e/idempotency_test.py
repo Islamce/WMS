@@ -71,7 +71,10 @@ created = must('create request', 'POST', '/api/requests', requester, {
 }, expected=201)
 rid = created['id']
 
-must('submit request', 'POST', f'/api/requests/{rid}/submit', requester)
+first_submit = must('submit request', 'POST', f'/api/requests/{rid}/submit', requester)
+replay_submit = must('replay request submit', 'POST', f'/api/requests/{rid}/submit', requester)
+check('request submit replay is idempotent', replay_submit.get('idempotent') is True, replay_submit)
+
 must('approve request', 'POST', f'/api/approvals/{rid}/decision', manager, {'decision': 'approve'})
 must('save ERP details', 'PATCH', f'/api/erp-operator/{rid}', erp, {
     'erp_reservation_number': f'RES-IDEMP-{rid}',
@@ -81,7 +84,12 @@ must('save ERP details', 'PATCH', f'/api/erp-operator/{rid}', erp, {
     'issue_warehouse_code': 'WH01',
 })
 must('send to warehouse', 'POST', f'/api/erp-operator/{rid}/send-to-warehouse', erp)
-must('allocate request', 'POST', f'/api/warehouse/{rid}/allocate', supervisor)
+first_allocation = must('allocate request', 'POST', f'/api/warehouse/{rid}/allocate', supervisor)
+replay_allocation = must('replay allocation', 'POST', f'/api/warehouse/{rid}/allocate', supervisor)
+check('allocation replay is idempotent', replay_allocation.get('idempotent') is True, replay_allocation)
+check('allocation replay preserves proposal count',
+      len(replay_allocation.get('allocations', [])) > 0,
+      {'first': first_allocation, 'replay': replay_allocation})
 
 pickers = must('load pickers', 'GET', '/api/warehouse/pickers', supervisor)
 matching = [p for p in pickers.get('pickers', []) if p.get('email') == 'picker@example.com']
@@ -106,7 +114,9 @@ for alloc in task['allocations']:
     value = qr['qr_codes'][0]['qr_code_value']
     must(f"scan allocation {alloc['id']}", 'POST', f"/api/picking/allocations/{alloc['id']}/scan", picker, {'qr_value': value})
 must('confirm picked quantity', 'POST', f"/api/picking/lines/{line['id']}/confirm", picker, {'picked_quantity': 1})
-must('complete picking task', 'POST', f'/api/picking/tasks/{tid}/complete', picker)
+first_complete = must('complete picking task', 'POST', f'/api/picking/tasks/{tid}/complete', picker)
+replay_complete = must('replay picking completion', 'POST', f'/api/picking/tasks/{tid}/complete', picker)
+check('picking completion replay is idempotent', replay_complete.get('idempotent') is True, replay_complete)
 
 body = {'gi_document_number': f'49{rid:08d}', 'fiscal_year': '2026'}
 first_gi = must('first GI posting', 'POST', f'/api/gi/{rid}/post', whop, body)

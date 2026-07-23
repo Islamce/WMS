@@ -6,8 +6,7 @@ import '../core/i18n.dart';
 import '../main.dart';
 import '../widgets/common.dart';
 
-/// Stock Reallocation — move batch stock between warehouses / bins / projects.
-/// Reserved stock never moves; partial moves split the batch (new QR).
+/// Governed stock reallocation: request → approval/rejection → execution.
 class ReallocationScreen extends StatefulWidget {
   const ReallocationScreen({super.key});
   @override
@@ -60,7 +59,7 @@ class _ReallocationScreenState extends State<ReallocationScreen> {
           }
 
           return AlertDialog(
-            title: Text(t('New reallocation')),
+            title: Text(t('New reallocation request')),
             content: SingleChildScrollView(
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 TextField(
@@ -120,13 +119,12 @@ class _ReallocationScreenState extends State<ReallocationScreen> {
                 ),
                 const SizedBox(height: 10),
                 DropdownButtonFormField<String>(
-                  initialValue: toBin.isEmpty ? '' : toBin,
+                  initialValue: '',
                   isExpanded: true,
                   decoration: InputDecoration(labelText: t('Target bin'), border: const OutlineInputBorder()),
                   items: [
                     DropdownMenuItem(value: '', child: Text(t('No bin / assign later'))),
-                    ...bins.map((b) => DropdownMenuItem(
-                        value: '${b['bin_code']}', child: Text('${b['bin_code']}'))),
+                    ...bins.map((b) => DropdownMenuItem(value: '${b['bin_code']}', child: Text('${b['bin_code']}'))),
                   ],
                   onChanged: (v) => toBin = v ?? '',
                 ),
@@ -134,18 +132,18 @@ class _ReallocationScreenState extends State<ReallocationScreen> {
                 TextField(controller: project,
                     decoration: InputDecoration(labelText: t('Project / WBS'), border: const OutlineInputBorder())),
                 const SizedBox(height: 10),
-                TextField(controller: reason,
-                    decoration: InputDecoration(labelText: t('Reason'), border: const OutlineInputBorder())),
+                TextField(controller: reason, maxLines: 2,
+                    decoration: InputDecoration(labelText: t('Mandatory business reason'), border: const OutlineInputBorder())),
               ]),
             ),
             actions: [
               TextButton(onPressed: () => Navigator.pop(context), child: Text(t('Cancel'))),
               FilledButton(
                 onPressed: () {
-                  if (batch == null || double.tryParse(qty.text.trim()) == null) return;
+                  if (batch == null || double.tryParse(qty.text.trim()) == null || reason.text.trim().isEmpty) return;
                   Navigator.pop(context, true);
                 },
-                child: Text(t('Move stock')),
+                child: Text(t('Submit for approval')),
               ),
             ],
           );
@@ -171,15 +169,59 @@ class _ReallocationScreenState extends State<ReallocationScreen> {
     }
   }
 
+  Future<void> _action(Map<String, dynamic> move, String action) async {
+    final api = SessionScope.of(context).api;
+    String? reason;
+    if (action == 'reject') {
+      final controller = TextEditingController();
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(t('Reject reallocation')),
+          content: TextField(controller: controller, maxLines: 3,
+              decoration: InputDecoration(labelText: t('Rejection reason'), border: const OutlineInputBorder())),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: Text(t('Cancel'))),
+            FilledButton(onPressed: () {
+              if (controller.text.trim().isNotEmpty) Navigator.pop(context, true);
+            }, child: Text(t('Reject'))),
+          ],
+        ),
+      );
+      if (ok != true) return;
+      reason = controller.text.trim();
+    }
+    try {
+      final r = await api.post('/api/reallocation/${move['id']}/$action',
+          action == 'reject' ? {'reason': reason} : null);
+      if (mounted) {
+        showSnack(context, '${r['message']}');
+        setState(() => _key++);
+      }
+    } on ApiException catch (e) {
+      if (mounted) showSnack(context, e.message, error: true);
+    }
+  }
+
+  Color _statusColor(String status) {
+    switch (status) {
+      case 'EXECUTED': return Colors.green;
+      case 'APPROVED': return Colors.blue;
+      case 'REJECTED': return Colors.red;
+      case 'EXECUTING': return Colors.orange;
+      default: return Colors.amber.shade800;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final session = SessionScope.of(context);
+    final canRequest = session.can('reallocation');
+    final canApprove = session.can('bin_batch_assignment');
     return Scaffold(
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _create,
-        icon: const Icon(Icons.swap_horiz),
-        label: Text(t('Reallocate')),
-      ),
+      floatingActionButton: canRequest
+          ? FloatingActionButton.extended(onPressed: _create, icon: const Icon(Icons.swap_horiz), label: Text(t('Request reallocation')))
+          : null,
       body: AsyncView<List<Map<String, dynamic>>>(
         key: ValueKey(_key),
         load: () async {
@@ -194,23 +236,48 @@ class _ReallocationScreenState extends State<ReallocationScreen> {
               Center(child: Text(t('No reallocations yet'), style: const TextStyle(color: Colors.grey))),
             ]);
           }
-          return ListView.separated(
-            itemCount: rows.length,
-            separatorBuilder: (_, __) => const Divider(height: 1),
-            itemBuilder: (context, i) {
-              final m = rows[i];
-              return ListTile(
-                leading: const Icon(Icons.swap_horiz),
-                title: Text('${m['realloc_number']} · ${m['material_code'] ?? ''}',
-                    style: const TextStyle(fontWeight: FontWeight.w600)),
-                subtitle: Text('${m['batch_number'] ?? ''} · ${fmtQty(m['quantity'])}\n'
-                    '${m['from_warehouse'] ?? ''}/${m['from_bin'] ?? '—'} → ${m['to_warehouse'] ?? ''}/${m['to_bin'] ?? '—'}'
-                    '${(m['to_project'] ?? '').toString().isNotEmpty ? ' · ${m['to_project']}' : ''}'),
-                isThreeLine: true,
-                trailing: Text(fmtDate(m['created_at']),
-                    style: const TextStyle(fontSize: 11, color: Colors.grey)),
-              );
-            },
+          return RefreshIndicator(
+            onRefresh: () async => refresh(),
+            child: ListView.separated(
+              itemCount: rows.length,
+              separatorBuilder: (_, __) => const Divider(height: 1),
+              itemBuilder: (context, i) {
+                final m = rows[i];
+                final status = '${m['status'] ?? 'EXECUTED'}';
+                final actions = <Widget>[];
+                if (canApprove && status == 'PENDING_APPROVAL') {
+                  actions.add(TextButton(onPressed: () => _action(m, 'approve'), child: Text(t('Approve'))));
+                  actions.add(TextButton(onPressed: () => _action(m, 'reject'), child: Text(t('Reject'))));
+                } else if (canApprove && status == 'APPROVED') {
+                  actions.add(FilledButton.tonal(onPressed: () => _action(m, 'execute'), child: Text(t('Execute'))));
+                }
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Column(children: [
+                    ListTile(
+                      leading: const Icon(Icons.swap_horiz),
+                      title: Text('${m['realloc_number']} · ${m['material_code'] ?? ''}',
+                          style: const TextStyle(fontWeight: FontWeight.w600)),
+                      subtitle: Text('${m['batch_number'] ?? ''} · ${fmtQty(m['quantity'])}\n'
+                          '${m['from_warehouse'] ?? ''}/${m['from_bin'] ?? '—'} → ${m['to_warehouse'] ?? ''}/${m['to_bin'] ?? '—'}'
+                          '${(m['to_project'] ?? '').toString().isNotEmpty ? ' · ${m['to_project']}' : ''}\n'
+                          '${m['reason'] ?? ''}'),
+                      isThreeLine: true,
+                      trailing: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                        Chip(label: Text(status, style: const TextStyle(fontSize: 10)),
+                            side: BorderSide(color: _statusColor(status))),
+                        Text(fmtDate(m['created_at']), style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                      ]),
+                    ),
+                    if (actions.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 16, right: 16, bottom: 6),
+                        child: Row(mainAxisAlignment: MainAxisAlignment.end, children: actions),
+                      ),
+                  ]),
+                );
+              },
+            ),
           );
         },
       ),

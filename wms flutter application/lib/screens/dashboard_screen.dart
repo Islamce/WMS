@@ -1,16 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../core/format.dart';
-import '../core/session.dart';
 import '../main.dart';
 import '../widgets/common.dart';
 import 'batches_screen.dart';
+import 'bin_locations_screen.dart';
 import 'gi_screen.dart';
 import 'materials_screen.dart';
 import 'users_screen.dart';
 
-/// Opens [screen] as a normal pushed route, titled [title] — the same
-/// destinations the KPI tiles/lists drill through to on the web dashboard.
 void _drill(BuildContext context, String title, Widget screen) {
   Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => Scaffold(appBar: AppBar(title: Text(title)), body: screen)));
@@ -26,22 +24,25 @@ class DashboardScreen extends StatelessWidget {
       load: () async => Map<String, dynamic>.from(await session.api.get('/api/dashboard')),
       builder: (context, data, refresh) {
         final k = Map<String, dynamic>.from(data['kpis'] ?? {});
-        // Same drill-through targets as the web dashboard (UAT2-1): a tile only
-        // becomes tappable when the destination screen exists and the user can
-        // open it — mirrors the web `nav(perm, route)` helper.
         void goMaterials() => _drill(context, 'Materials', const MaterialsScreen());
         void goBatches() => _drill(context, 'Batch Tracking', const BatchesScreen());
         void goGi() => _drill(context, 'Goods Issue Posting', const GiScreen());
         void goUsers() => _drill(context, 'Users', const UsersScreen());
+        void goBins(String status) => Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => BinLocationsScreen(status: status)));
 
+        final canOpenBins = session.can('dashboard');
         final tiles = <_Kpi>[
           _Kpi('Materials', k['total_materials'], Icons.inventory_2_outlined, const Color(0xFF2a78d6),
               session.can('materials') ? goMaterials : null),
           _Kpi('Total Stock', k['total_stock'], Icons.warehouse_outlined, const Color(0xFF1baf7a),
               session.can('batch_tracking') ? goBatches : null),
-          _Kpi('Bin Locations', k['total_locations'], Icons.grid_view_outlined, const Color(0xFF2a78d6), null),
-          _Kpi('Occupied Bins', k['occupied_locations'], Icons.inventory_outlined, const Color(0xFF1baf7a), null),
-          _Kpi('Empty Bins', k['empty_locations'], Icons.crop_free, const Color(0xFFeda100), null),
+          _Kpi('Bin Locations', k['total_locations'], Icons.grid_view_outlined, const Color(0xFF2a78d6),
+              canOpenBins ? () => goBins('all') : null),
+          _Kpi('Occupied Bins', k['occupied_locations'], Icons.inventory_outlined, const Color(0xFF1baf7a),
+              canOpenBins ? () => goBins('occupied') : null),
+          _Kpi('Empty Bins', k['empty_locations'], Icons.crop_free, const Color(0xFFeda100),
+              canOpenBins ? () => goBins('empty') : null),
           _Kpi('Stock In (today)', k['stock_in_today'], Icons.south_west, const Color(0xFF1baf7a),
               session.can('batch_tracking') ? goBatches : null),
           _Kpi('Stock Out (today)', k['stock_out_today'], Icons.north_east, const Color(0xFFe34948),

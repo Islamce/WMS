@@ -1,0 +1,123 @@
+name: Mobile CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'wms flutter application/**'
+      - '.github/workflows/mobile-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  flutter:
+    name: Flutter analyze, test and APK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: wms flutter application
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter version
+        run: flutter --version
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        id: analyze
+        continue-on-error: true
+        run: |
+          set +e
+          flutter analyze --no-fatal-warnings --no-fatal-infos 2>&1 | tee flutter-analyze.txt
+          status=${PIPESTATUS[0]}
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload analyzer report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-analyze-${{ github.sha }}
+          path: wms flutter application/flutter-analyze.txt
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Test
+        id: tests
+        continue-on-error: true
+        run: |
+          set +e
+          flutter test 2>&1 | tee flutter-test.txt
+          status=${PIPESTATUS[0]}
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-test-${{ github.sha }}
+          path: wms flutter application/flutter-test.txt
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Build release APK
+        run: flutter build apk --release
+
+      - name: APK checksums
+        run: |
+          set -Eeuo pipefail
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          test -s "$APK"
+          ls -lh "$APK"
+          sha256sum "$APK" | tee apk-sha256.txt
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: wms-mobile-apk-${{ github.sha }}
+          path: |
+            wms flutter application/build/app/outputs/flutter-apk/app-release.apk
+            wms flutter application/apk-sha256.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Enforce Flutter gates
+        if: always()
+        run: |
+          analyze_code='${{ steps.analyze.outputs.exit_code }}'
+          test_code='${{ steps.tests.outputs.exit_code }}'
+          test -n "$analyze_code"
+          test -n "$test_code"
+          failed=0
+          if [ "$analyze_code" != "0" ]; then
+            echo "Flutter analyzer reported errors (exit code $analyze_code)."
+            failed=1
+          fi
+          if [ "$test_code" != "0" ]; then
+            echo "Flutter tests failed (exit code $test_code)."
+            failed=1
+          fi
+          exit "$failed"
