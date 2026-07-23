@@ -29,20 +29,20 @@ Pages.dashboard = {
     const k = data.kpis || {};
     const ek = execution?.kpis || null;
     const nav = (perm, route) => (App.can(perm) ? ` data-nav="${route}" role="button" tabindex="0"` : '');
-    const metric = (cls, label, value, sub, perm, route, attrs = '') => `
-      <div class="kpi ${cls}"${nav(perm, route)}${App.can(perm) ? attrs : ''}>
+    const metric = (cls, label, value, sub, perm, route) => `
+      <div class="kpi ${cls}"${nav(perm, route)}>
         <div class="label">${UI.esc(label)}</div>
         <div class="value">${value}</div>
         ${sub ? `<div class="sub">${UI.esc(sub)}</div>` : ''}
       </div>`;
 
     const exceptionCards = ek ? [
-      { level: ek.erp_error > 0 ? 'critical' : 'clear', value: ek.erp_error, label: 'ERP posting errors', detail: 'Requests requiring posting correction', route: 'requests', permission: 'material_requests', state: { status: 'ERP Error' } },
-      { level: ek.shortage_lines > 0 ? 'warning' : 'clear', value: ek.shortage_lines, label: 'Shortage lines', detail: `${ek.shortage_percentage || 0}% of request lines`, route: 'requests', permission: 'material_requests', state: { status: '' } },
-      { level: ek.expired_batches > 0 ? 'critical' : 'clear', value: ek.expired_batches, label: 'Expired batches', detail: 'Stock requiring immediate disposition', route: 'expiry', permission: 'expiry_alerts' },
-      { level: ek.qr_scan_failure > 0 ? 'warning' : 'clear', value: ek.qr_scan_failure, label: 'Failed QR scans', detail: `${ek.qr_scan_pass || 0} successful scans`, route: 'audit', permission: 'audit_trail', state: { action: 'QR_SCAN_FAILURE' } },
-      { level: ek.open > 0 ? 'info' : 'clear', value: ek.open, label: 'Open requests', detail: 'Active execution workload', route: 'requests', permission: 'material_requests', state: { status: '' } },
-      { level: ek.partially_completed > 0 ? 'warning' : 'clear', value: ek.partially_completed, label: 'Partially completed', detail: 'Requests awaiting remaining quantities', route: 'requests', permission: 'material_requests', state: { status: 'Partially Completed' } },
+      { level: ek.erp_error > 0 ? 'critical' : 'clear', value: ek.erp_error, label: 'ERP posting errors', detail: 'Requests requiring posting correction', route: 'requests', state: { status: 'ERP Error' } },
+      { level: ek.shortage_lines > 0 ? 'warning' : 'clear', value: ek.shortage_lines, label: 'Shortage lines', detail: `${ek.shortage_percentage || 0}% of request lines`, route: 'requests', state: { status: '' } },
+      { level: ek.expired_batches > 0 ? 'critical' : 'clear', value: ek.expired_batches, label: 'Expired batches', detail: 'Stock requiring immediate disposition', route: 'expiry' },
+      { level: ek.qr_scan_failure > 0 ? 'warning' : 'clear', value: ek.qr_scan_failure, label: 'Failed QR scans', detail: `${ek.qr_scan_pass || 0} successful scans`, route: 'audit', state: { action: 'QR_SCAN_FAILURE' } },
+      { level: ek.open > 0 ? 'info' : 'clear', value: ek.open, label: 'Open requests', detail: 'Active execution workload', route: 'requests', state: { status: '' } },
+      { level: ek.partially_completed > 0 ? 'warning' : 'clear', value: ek.partially_completed, label: 'Partially completed', detail: 'Requests awaiting remaining quantities', route: 'requests', state: { status: 'Partially Completed' } },
     ] : [];
 
     el.innerHTML = `
@@ -61,10 +61,10 @@ Pages.dashboard = {
       ${ek ? `<section class="cc-section">
         <div class="cc-section-head"><div><h2>Action required</h2><p>Exception queues ranked by operational impact.</p></div></div>
         <div class="cc-exceptions">
-          ${exceptionCards.map((x) => `<article class="cc-exception ${x.level}${App.can(x.permission) ? '' : ' disabled'}"${App.can(x.permission) ? ` data-exception-route="${x.route}" data-exception-state='${UI.esc(JSON.stringify(x.state || {}))}' role="button" tabindex="0"` : ''}>
+          ${exceptionCards.map((x) => `<article class="cc-exception ${x.level}" data-exception-route="${x.route}" data-exception-state='${UI.esc(JSON.stringify(x.state || {}))}' role="button" tabindex="0">
             <div class="cc-exception-value">${UI.fmtQty(x.value || 0)}</div>
             <div><strong>${UI.esc(x.label)}</strong><span>${UI.esc(x.detail)}</span></div>
-            ${App.can(x.permission) ? '<span class="cc-arrow">→</span>' : ''}
+            <span class="cc-arrow">→</span>
           </article>`).join('')}
         </div>
       </section>` : `<div class="inline-alert warning">Execution KPI data is unavailable or not permitted. Stock monitoring remains active.</div>`}
@@ -76,7 +76,7 @@ Pages.dashboard = {
           ${metric('accent', 'Total stock', UI.fmtQty(k.total_stock || 0), 'Quantity across all bins', 'batch_tracking', 'batches')}
           ${metric('green', 'Stock in today', UI.fmtQty(k.stock_in_today || 0), `${UI.fmtQty(k.stock_in_month || 0)} this month`, 'batch_tracking', 'batches')}
           ${metric('red', 'Stock out today', UI.fmtQty(k.stock_out_today || 0), `${UI.fmtQty(k.stock_out_month || 0)} this month`, 'gi_posting', 'gi-posting')}
-          ${metric('green', 'Occupied bins', UI.fmtQty(k.occupied_locations || 0), `${UI.fmtQty(k.total_locations || 0)} total bins`, 'all_locations', 'all-locations', ' data-bin-filter="occupied"')}
+          ${metric('green', 'Occupied bins', UI.fmtQty(k.occupied_locations || 0), `${UI.fmtQty(k.total_locations || 0)} total bins`, 'all_locations', 'all-locations')}
           ${metric('amber', 'Empty bins', UI.fmtQty(k.empty_locations || 0), 'Available storage locations', 'empty_locations', 'empty-locations')}
           ${ek ? metric('green', 'ERP success rate', `${ek.erp_success_rate || 0}%`, `${ek.erp_posting_success || 0} successful postings`, 'kpi_dashboard', 'kpi') : ''}
           ${ek ? metric('accent', 'Completed requests', UI.fmtQty(ek.completed || 0), `${UI.fmtQty(ek.total_requests || 0)} total requests`, 'material_requests', 'requests') : ''}
@@ -101,22 +101,17 @@ Pages.dashboard = {
           </table></div></div>
           <div class="card"><h3>Top bins by stock</h3><div class="table-wrap"><table>
             <thead><tr><th>Location</th><th class="text-right">Quantity</th></tr></thead>
-            <tbody>${(data.top_locations || []).map((l) => `<tr${App.can('all_locations') ? ' data-nav="all-locations" data-bin-filter="occupied" class="row-link"' : ''}><td>${UI.esc(l.code)}</td><td class="text-right">${UI.fmtQty(l.quantity)}</td></tr>`).join('') || '<tr><td colspan="2" class="muted">No stock yet</td></tr>'}</tbody>
+            <tbody>${(data.top_locations || []).map((l) => `<tr${App.can('all_locations') ? ' data-nav="all-locations" class="row-link"' : ''}><td>${UI.esc(l.code)}</td><td class="text-right">${UI.fmtQty(l.quantity)}</td></tr>`).join('') || '<tr><td colspan="2" class="muted">No stock yet</td></tr>'}</tbody>
           </table></div></div>
         </div>
       </section>
 
       <section class="cc-section"><div class="card"><h3>Recent stock transactions</h3><div class="table-wrap"><table>
         <thead><tr><th>Type</th><th>Material</th><th>Location</th><th class="text-right">Qty</th><th>Reservation</th><th>User</th><th>Date</th></tr></thead>
-        <tbody>${(data.recent_transactions || []).map((t) => `<tr${App.can('batch_tracking') ? ' data-nav="batches" class="row-link"' : ''}><td><span class="badge ${UI.esc(t.transaction_type)}">${UI.esc(t.transaction_type)}</span></td><td class="wrap">${UI.esc(t.item_code)} — ${UI.esc(t.material_description)}</td><td>${UI.esc(t.location_code)}</td><td class="text-right">${UI.fmtQty(t.quantity)}</td><td>${UI.esc(t.reservation_number || '—')}</td><td>${UI.esc(t.user_name)}</td><td>${UI.fmtDate(t.transaction_date)}</td></tr>`).join('') || '<tr><td colspan="7" class="muted">No transactions yet</td></tr>'}</tbody>
+        <tbody>${(data.recent_transactions || []).map((t) => `<tr><td><span class="badge ${UI.esc(t.transaction_type)}">${UI.esc(t.transaction_type)}</span></td><td class="wrap">${UI.esc(t.item_code)} — ${UI.esc(t.material_description)}</td><td>${UI.esc(t.location_code)}</td><td class="text-right">${UI.fmtQty(t.quantity)}</td><td>${UI.esc(t.reservation_number || '—')}</td><td>${UI.esc(t.user_name)}</td><td>${UI.fmtDate(t.transaction_date)}</td></tr>`).join('') || '<tr><td colspan="7" class="muted">No transactions yet</td></tr>'}</tbody>
       </table></div></div></section>`;
 
-    const go = (node) => {
-      if (node.dataset.binFilter && Pages.alllocations) {
-        Pages.alllocations.state = { occupancy: node.dataset.binFilter };
-      }
-      location.hash = `#/${node.dataset.nav}`;
-    };
+    const go = (node) => { location.hash = `#/${node.dataset.nav}`; };
     el.querySelectorAll('[data-nav]').forEach((node) => {
       node.classList.add('clickable');
       node.addEventListener('click', () => go(node));
