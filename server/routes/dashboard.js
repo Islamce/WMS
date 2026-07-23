@@ -12,13 +12,7 @@ const router = express.Router();
 
 router.use(authenticate, requirePermission('dashboard'));
 
-/**
- * GET /api/dashboard/bins?status=all|occupied|empty
- *
- * Drill-through data for dashboard bin KPIs. Occupancy uses the same physical
- * bin-to-batch matching rule as the KPI counters, so card totals and detail
- * rows cannot silently disagree.
- */
+/** GET /api/dashboard/bins?status=all|occupied|empty */
 router.get('/bins', (req, res) => {
   const status = String(req.query.status || 'all').toLowerCase();
   if (!['all', 'occupied', 'empty'].includes(status)) {
@@ -32,27 +26,24 @@ router.get('/bins', (req, res) => {
       : '';
 
   const bins = db.prepare(`
-    SELECT bl.id,
-           bl.warehouse_code,
-           bl.bin_code,
-           bl.full_bin_location,
-           bl.storage_type,
-           bl.storage_section,
-           bl.is_active,
+    SELECT bl.id, bl.warehouse_code, bl.zone, bl.rack, bl.line_or_aisle,
+           bl.level, bl.column_number, bl.bin_code, bl.full_bin_location,
+           bl.capacity, bl.current_occupancy, bl.hazard_flag,
+           bl.temperature_controlled_flag, bl.quality_restricted_flag,
            COUNT(DISTINCT CASE WHEN b.remaining_quantity > 0 THEN b.id END) AS batch_count,
            COUNT(DISTINCT CASE WHEN b.remaining_quantity > 0 THEN b.material_id END) AS material_count,
            COALESCE(SUM(CASE WHEN b.remaining_quantity > 0 THEN b.remaining_quantity ELSE 0 END), 0) AS available_quantity,
-           CASE
-             WHEN COALESCE(SUM(CASE WHEN b.remaining_quantity > 0 THEN b.remaining_quantity ELSE 0 END), 0) > 0
-             THEN 'occupied' ELSE 'empty'
-           END AS occupancy_status
+           CASE WHEN COALESCE(SUM(CASE WHEN b.remaining_quantity > 0 THEN b.remaining_quantity ELSE 0 END), 0) > 0
+                THEN 'occupied' ELSE 'empty' END AS occupancy_status
     FROM bin_locations bl
     LEFT JOIN batches b
       ON b.warehouse_code = bl.warehouse_code
      AND b.bin_location IN (bl.bin_code, bl.full_bin_location)
     WHERE bl.is_active = 1
-    GROUP BY bl.id, bl.warehouse_code, bl.bin_code, bl.full_bin_location,
-             bl.storage_type, bl.storage_section, bl.is_active
+    GROUP BY bl.id, bl.warehouse_code, bl.zone, bl.rack, bl.line_or_aisle,
+             bl.level, bl.column_number, bl.bin_code, bl.full_bin_location,
+             bl.capacity, bl.current_occupancy, bl.hazard_flag,
+             bl.temperature_controlled_flag, bl.quality_restricted_flag
     ${having}
     ORDER BY bl.warehouse_code, COALESCE(NULLIF(bl.full_bin_location, ''), bl.bin_code)
   `).all();
@@ -64,9 +55,7 @@ router.get('/', (req, res) => {
   const one = (sql, ...params) => db.prepare(sql).get(...params);
   const all = (sql, ...params) => db.prepare(sql).all(...params);
 
-  // --- KPI counters -------------------------------------------------------
   const totalMaterials = one('SELECT COUNT(*) AS n FROM materials').n;
-  // Occupancy is measured on physical bin locations vs the batches stored in them.
   const totalLocations = one('SELECT COUNT(*) AS n FROM bin_locations WHERE is_active = 1').n;
   const emptyLocations = one(`
     SELECT COUNT(*) AS n FROM bin_locations bl
@@ -88,10 +77,8 @@ router.get('/', (req, res) => {
   const stockOutToday = movementSince('OUT', "date('now')");
   const stockInMonth = movementSince('IN', "date('now','start of month')");
   const stockOutMonth = movementSince('OUT', "date('now','start of month')");
-
   const pendingUsers = one("SELECT COUNT(*) AS n FROM users WHERE status = 'pending'").n;
 
-  // --- Top lists ----------------------------------------------------------
   const topMaterials = all(`
     SELECT m.item_code, m.description, m.unit, SUM(b.remaining_quantity) AS quantity
     FROM batches b JOIN materials m ON m.id = b.material_id
@@ -117,8 +104,6 @@ router.get('/', (req, res) => {
     ORDER BY st.id DESC LIMIT 10
   `);
 
-  // --- Chart data ---------------------------------------------------------
-  // Stock IN vs OUT per day over the last 30 days.
   const inOutOverTime = all(`
     SELECT date(transaction_date) AS day,
       SUM(CASE WHEN transaction_type = 'IN' THEN quantity ELSE 0 END) AS in_qty,
