@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../core/format.dart';
-import '../core/session.dart';
 import '../main.dart';
 import '../widgets/common.dart';
 import 'batches_screen.dart';
