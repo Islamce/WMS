@@ -71,7 +71,7 @@ class _BatchesScreenState extends State<BatchesScreen> {
                 ]);
               }
               return RefreshIndicator(
-                onRefresh: refresh,
+                onRefresh: () async => refresh(),
                 child: ListView.separated(
                   itemCount: rows.length,
                   separatorBuilder: (_, __) => const Divider(height: 1),
