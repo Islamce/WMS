@@ -97,7 +97,7 @@ router.post('/:id/post', (req, res) => {
   // tabs and from multiple application workers sharing the SQLite database.
   const claim = db.prepare(`
     UPDATE material_request_headers
-    SET erp_posting_status='PROCESSING', updated_at=datetime('now')
+    SET erp_posting_status='PROCESSING'
     WHERE id=? AND request_status IN (?, ?)
       AND COALESCE(erp_posting_status, '') <> 'PROCESSING'
   `).run(header.id, ...GI_STAGES);
@@ -128,7 +128,7 @@ router.post('/:id/post', (req, res) => {
       simulateError: !!b.simulate_error, user: req.user,
     });
   } catch (err) {
-    db.prepare("UPDATE material_request_headers SET erp_posting_status='FAILED', erp_error_message=?, updated_at=datetime('now') WHERE id=?")
+    db.prepare("UPDATE material_request_headers SET erp_posting_status='FAILED', erp_error_message=? WHERE id=?")
       .run(err.message || 'ERP connector failure', header.id);
     return sendError(res, err);
   }
