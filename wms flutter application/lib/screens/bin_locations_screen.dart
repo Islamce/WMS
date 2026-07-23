@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../core/format.dart';
-import '../core/session.dart';
 import '../main.dart';
 import '../widgets/common.dart';
 
@@ -40,7 +39,7 @@ class BinLocationsScreen extends StatelessWidget {
             );
           }
           return RefreshIndicator(
-            onRefresh: refresh,
+            onRefresh: () async => refresh(),
             child: ListView.builder(
               padding: const EdgeInsets.all(12),
               itemCount: bins.length,
