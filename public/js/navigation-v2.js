@@ -113,8 +113,9 @@
       const link = links.get(route);
       if (!link) return;
       const label = link.querySelector('.lbl');
-      if (label && LABELS[route]) label.textContent = LABELS[route];
-      link.title = LABELS[route] || link.title;
+      if (label && LABELS[route] && label.textContent !== LABELS[route]) label.textContent = LABELS[route];
+      const nextTitle = LABELS[route] || link.title;
+      if (link.title !== nextTitle) link.title = nextTitle;
       body.appendChild(link);
     });
 
@@ -146,7 +147,7 @@
 
     if (home) {
       const label = home.querySelector('.lbl');
-      if (label) label.textContent = 'Workspace Home';
+      if (label && label.textContent !== 'Workspace Home') label.textContent = 'Workspace Home';
       fragment.appendChild(home);
     }
 
@@ -156,7 +157,6 @@
       }
     });
 
-    // Preserve any future permitted route that has not yet been classified.
     const unassigned = [...links.entries()].filter(([route]) => !GROUPS.some((g) => g.routes.includes(route)));
     if (unassigned.length) {
       const other = { key: 'other', label: 'Additional Operations', routes: unassigned.map(([route]) => route) };
@@ -169,10 +169,12 @@
 
   function applyShellIdentity() {
     const brand = document.querySelector('.sidebar .brand-name');
-    if (brand) brand.textContent = 'KYNOX WMS';
+    if (brand && brand.textContent !== 'KYNOX WMS') brand.textContent = 'KYNOX WMS';
     const mark = document.querySelector('.sidebar .brand-mark');
-    if (mark) mark.textContent = 'K';
-    document.documentElement.classList.add('kynox-v2');
+    if (mark && mark.textContent !== 'K') mark.textContent = 'K';
+    if (!document.documentElement.classList.contains('kynox-v2')) {
+      document.documentElement.classList.add('kynox-v2');
+    }
   }
 
   const observer = new MutationObserver(() => {
