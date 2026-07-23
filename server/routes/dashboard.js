@@ -12,6 +12,54 @@ const router = express.Router();
 
 router.use(authenticate, requirePermission('dashboard'));
 
+/**
+ * GET /api/dashboard/bins?status=all|occupied|empty
+ *
+ * Drill-through data for dashboard bin KPIs. Occupancy uses the same physical
+ * bin-to-batch matching rule as the KPI counters, so card totals and detail
+ * rows cannot silently disagree.
+ */
+router.get('/bins', (req, res) => {
+  const status = String(req.query.status || 'all').toLowerCase();
+  if (!['all', 'occupied', 'empty'].includes(status)) {
+    return res.status(400).json({ error: "status must be 'all', 'occupied', or 'empty'." });
+  }
+
+  const having = status === 'occupied'
+    ? 'HAVING COALESCE(SUM(CASE WHEN b.remaining_quantity > 0 THEN b.remaining_quantity ELSE 0 END), 0) > 0'
+    : status === 'empty'
+      ? 'HAVING COALESCE(SUM(CASE WHEN b.remaining_quantity > 0 THEN b.remaining_quantity ELSE 0 END), 0) = 0'
+      : '';
+
+  const bins = db.prepare(`
+    SELECT bl.id,
+           bl.warehouse_code,
+           bl.bin_code,
+           bl.full_bin_location,
+           bl.storage_type,
+           bl.storage_section,
+           bl.is_active,
+           COUNT(DISTINCT CASE WHEN b.remaining_quantity > 0 THEN b.id END) AS batch_count,
+           COUNT(DISTINCT CASE WHEN b.remaining_quantity > 0 THEN b.material_id END) AS material_count,
+           COALESCE(SUM(CASE WHEN b.remaining_quantity > 0 THEN b.remaining_quantity ELSE 0 END), 0) AS available_quantity,
+           CASE
+             WHEN COALESCE(SUM(CASE WHEN b.remaining_quantity > 0 THEN b.remaining_quantity ELSE 0 END), 0) > 0
+             THEN 'occupied' ELSE 'empty'
+           END AS occupancy_status
+    FROM bin_locations bl
+    LEFT JOIN batches b
+      ON b.warehouse_code = bl.warehouse_code
+     AND b.bin_location IN (bl.bin_code, bl.full_bin_location)
+    WHERE bl.is_active = 1
+    GROUP BY bl.id, bl.warehouse_code, bl.bin_code, bl.full_bin_location,
+             bl.storage_type, bl.storage_section, bl.is_active
+    ${having}
+    ORDER BY bl.warehouse_code, COALESCE(NULLIF(bl.full_bin_location, ''), bl.bin_code)
+  `).all();
+
+  return res.json({ status, count: bins.length, bins });
+});
+
 router.get('/', (req, res) => {
   const one = (sql, ...params) => db.prepare(sql).get(...params);
   const all = (sql, ...params) => db.prepare(sql).all(...params);
