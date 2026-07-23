@@ -46,10 +46,23 @@ jobs:
         run: flutter pub get
 
       - name: Analyze
-        # Existing informational lints remain visible in the log. The gate fails
-        # on real analyzer errors while legacy warnings/infos are tracked
-        # separately instead of blocking the APK validation workstream.
-        run: flutter analyze --no-fatal-warnings --no-fatal-infos
+        id: analyze
+        continue-on-error: true
+        run: |
+          set +e
+          flutter analyze --no-fatal-warnings --no-fatal-infos 2>&1 | tee flutter-analyze.txt
+          status=${PIPESTATUS[0]}
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload analyzer report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-analyze-${{ github.sha }}
+          path: wms flutter application/flutter-analyze.txt
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Test
         run: flutter test
@@ -74,3 +87,13 @@ jobs:
             wms flutter application/apk-sha256.txt
           if-no-files-found: error
           retention-days: 14
+
+      - name: Enforce analyzer result
+        if: always()
+        run: |
+          code='${{ steps.analyze.outputs.exit_code }}'
+          test -n "$code"
+          if [ "$code" != "0" ]; then
+            echo "Flutter analyzer reported errors (exit code $code)."
+            exit "$code"
+          fi
