@@ -1,12 +1,8 @@
-/**
- * Material Requests — creation, line management, submission, listing, detail.
- * Requesters create and track their own requests; the workflow moves the
- * request to approval on submit.
- */
+// Material Requests — creation, line management, submission, listing, detail.
 const express = require('express');
 const db = require('./../db/connection');
 const { authenticate, requirePermission } = require('./../middleware/auth');
-const { isNonEmptyString, isPositiveNumber, isId, parsePagination } = require('./../utils/validate');
+const { isPositiveNumber, isId, parsePagination } = require('./../utils/validate');
 const { sendError } = require('./../utils/errors');
 const audit = require('./../services/audit');
 const notify = require('./../services/notify');
@@ -17,7 +13,6 @@ const { HEADER_STATUS, LINE_STATUS } = require('./../workflow/states');
 const router = express.Router();
 router.use(authenticate);
 
-/** Whether the current user may see a request (owner, or has approval/warehouse/erp perms, or admin). */
 function canView(req, header) {
   if (req.user.role === 'admin') return true;
   if (header.requester_id === req.user.id) return true;
@@ -27,18 +22,14 @@ function canView(req, header) {
     .some((p) => perms.includes(p));
 }
 
-/** GET /api/requests — list (own requests for requesters; all for privileged roles). */
 router.get('/', requirePermission('material_requests'), (req, res) => {
   const { page, limit, offset } = parsePagination(req.query);
   const filters = [];
   const params = [];
-
-  // Requesters (without a broad view perm) only see their own.
   const privileged = req.user.role === 'admin' ||
     ['approvals', 'erp_operator', 'warehouse_dashboard', 'gi_posting', 'audit_trail', 'kpi_dashboard']
       .some((p) => req.user.permissions.includes(p));
   if (!privileged) { filters.push('requester_id = ?'); params.push(req.user.id); }
-
   if (req.query.status) { filters.push('request_status = ?'); params.push(req.query.status); }
   if (req.query.search) {
     filters.push('(request_number LIKE ? OR purpose LIKE ? OR requester_name LIKE ?)');
@@ -46,7 +37,6 @@ router.get('/', requirePermission('material_requests'), (req, res) => {
     params.push(like, like, like);
   }
   const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
-
   const { total } = db.prepare(`SELECT COUNT(*) AS total FROM material_request_headers ${where}`).get(...params);
   const requests = db.prepare(`
     SELECT id, request_number, request_type, requester_name, department, priority, required_date,
@@ -55,11 +45,9 @@ router.get('/', requirePermission('material_requests'), (req, res) => {
     FROM material_request_headers ${where}
     ORDER BY id DESC LIMIT ? OFFSET ?
   `).all(...params, limit, offset);
-
   res.json({ requests, total, page, limit });
 });
 
-/** GET /api/requests/:id — full detail with lines. */
 router.get('/:id', requirePermission('material_requests'), (req, res) => {
   const header = getHeaderOr404(res, req.params.id);
   if (!header) return;
@@ -69,10 +57,8 @@ router.get('/:id', requirePermission('material_requests'), (req, res) => {
   res.json({ request: header, lines, task });
 });
 
-/** POST /api/requests — create a draft with header + lines. */
 router.post('/', requirePermission('create_request'), (req, res) => {
   const b = req.body || {};
-  // Purpose / justification is optional.
   if (!Array.isArray(b.lines) || b.lines.length === 0) {
     return res.status(400).json({ error: 'At least one material line is required.' });
   }
@@ -82,7 +68,6 @@ router.post('/', requirePermission('create_request'), (req, res) => {
       return res.status(400).json({ error: `Line ${i + 1}: quantity must be greater than zero.` });
     }
   }
-
   const requestNumber = nextRequestNumber();
   const create = db.transaction(() => {
     const info = db.prepare(`
@@ -107,7 +92,6 @@ router.post('/', requirePermission('create_request'), (req, res) => {
       status: HEADER_STATUS.DRAFT, total: b.lines.length,
     });
     const requestId = info.lastInsertRowid;
-
     const insLine = db.prepare(`
       INSERT INTO material_request_lines
         (request_id, request_number, line_number, material_id, material_code, material_description,
@@ -128,52 +112,61 @@ router.post('/', requirePermission('create_request'), (req, res) => {
         is_serial_managed: m.is_serial_managed || 0,
       });
     });
-
     audit.record({ entityType: 'MaterialRequestHeader', entityId: requestId, requestNumber,
       action: 'CREATE', newValue: { lines: b.lines.length }, user: req.user, sourceScreen: 'Create Request' });
     return requestId;
   });
-
   let id;
-  try { id = create(); } catch (err) {
-    return sendError(res, err, 'Failed to create request.');
-  }
+  try { id = create(); } catch (err) { return sendError(res, err, 'Failed to create request.'); }
   res.status(201).json({ message: 'Request created as draft.', id, request_number: requestNumber });
 });
 
-/** POST /api/requests/:id/submit — submit draft → pending manager approval. */
 router.post('/:id/submit', requirePermission('create_request'), (req, res) => {
   const header = getHeaderOr404(res, req.params.id);
   if (!header) return;
   if (header.requester_id !== req.user.id && req.user.role !== 'admin') {
     return res.status(403).json({ error: 'You can only submit your own requests.' });
   }
-  if (![HEADER_STATUS.DRAFT, HEADER_STATUS.RETURNED_TO_REQUESTER].includes(header.request_status)) {
-    return res.status(400).json({ error: `Cannot submit a request in status '${header.request_status}'.` });
-  }
-  const lines = db.prepare('SELECT COUNT(*) AS n FROM material_request_lines WHERE request_id=?').get(header.id);
-  if (lines.n === 0) return res.status(400).json({ error: 'Cannot submit a request with no material lines.' });
 
+  let outcome;
   const submit = db.transaction(() => {
-    setHeaderStatus(header, HEADER_STATUS.SUBMITTED, { user: req.user, sourceScreen: 'My Requests' });
-    setHeaderStatus(header, HEADER_STATUS.PENDING_MANAGER_APPROVAL, {
+    const current = db.prepare('SELECT * FROM material_request_headers WHERE id=?').get(header.id);
+    if ([HEADER_STATUS.SUBMITTED, HEADER_STATUS.PENDING_MANAGER_APPROVAL, HEADER_STATUS.UNDER_REVIEW].includes(current.request_status)) {
+      return { idempotent: true, status: current.request_status };
+    }
+    if (![HEADER_STATUS.DRAFT, HEADER_STATUS.RETURNED_TO_REQUESTER].includes(current.request_status)) {
+      const err = new Error(`Cannot submit a request in status '${current.request_status}'.`);
+      err.status = 400;
+      throw err;
+    }
+    const lines = db.prepare('SELECT COUNT(*) AS n FROM material_request_lines WHERE request_id=?').get(current.id);
+    if (lines.n === 0) { const err = new Error('Cannot submit a request with no material lines.'); err.status = 400; throw err; }
+    setHeaderStatus(current, HEADER_STATUS.SUBMITTED, { user: req.user, sourceScreen: 'My Requests' });
+    setHeaderStatus(current, HEADER_STATUS.PENDING_MANAGER_APPROVAL, {
       user: req.user, sourceScreen: 'My Requests', set: { submitted_at: new Date().toISOString() },
     });
-    db.prepare("UPDATE material_request_lines SET line_status=? WHERE request_id=?")
-      .run(LINE_STATUS.PENDING_APPROVAL, header.id);
-  });
-  submit();
-
-  notify.notifyPermission('approvals', {
-    requestNumber: header.request_number, notificationType: 'REQUEST_SUBMITTED',
-    title: `New request ${header.request_number} awaiting approval`,
-    message: `${req.user.name} submitted a material request for approval.`,
+    db.prepare('UPDATE material_request_lines SET line_status=? WHERE request_id=?')
+      .run(LINE_STATUS.PENDING_APPROVAL, current.id);
+    return { idempotent: false, status: HEADER_STATUS.PENDING_MANAGER_APPROVAL };
   });
 
-  res.json({ message: 'Request submitted for manager approval.' });
+  try { outcome = submit(); } catch (err) { return sendError(res, err); }
+  if (!outcome.idempotent) {
+    notify.notifyPermission('approvals', {
+      requestNumber: header.request_number, notificationType: 'REQUEST_SUBMITTED',
+      title: `New request ${header.request_number} awaiting approval`,
+      message: `${req.user.name} submitted a material request for approval.`,
+    });
+  }
+  return res.json({
+    message: outcome.idempotent
+      ? 'Request was already submitted for manager approval.'
+      : 'Request submitted for manager approval.',
+    idempotent: outcome.idempotent,
+    status: outcome.status,
+  });
 });
 
-/** POST /api/requests/:id/cancel — requester/admin cancels an open request. */
 router.post('/:id/cancel', requirePermission('material_requests'), (req, res) => {
   const header = getHeaderOr404(res, req.params.id);
   if (!header) return;
@@ -185,8 +178,6 @@ router.post('/:id/cancel', requirePermission('material_requests'), (req, res) =>
     return res.status(400).json({ error: `Cannot cancel a request in status '${header.request_status}'.` });
   }
   const cancel = db.transaction(() => {
-    // Release any batch reservations still held by this request so the
-    // stock immediately becomes available again.
     const released = releaseOpenAllocations(header.id);
     setHeaderStatus(header, HEADER_STATUS.CANCELLED, {
       user: req.user, reason: req.body.reason, sourceScreen: 'Request Detail',
@@ -198,12 +189,6 @@ router.post('/:id/cancel', requirePermission('material_requests'), (req, res) =>
   res.json({ message: `Request cancelled.${released ? ` Released ${released} stock reservation(s).` : ''}` });
 });
 
-/**
- * POST /api/requests/:id/reverse — send the request back one step (to the
- * previous queue), undoing that stage's own effects (ERP reservation, batch
- * allocation, picking task). body: { reason? }. Distinct from
- * POST /api/gi/:id/reverse, which fully reverses a *posted* goods issue.
- */
 router.post('/:id/reverse', (req, res) => {
   const header = getHeaderOr404(res, req.params.id);
   if (!header) return;
