@@ -65,7 +65,23 @@ jobs:
           retention-days: 7
 
       - name: Test
-        run: flutter test
+        id: tests
+        continue-on-error: true
+        run: |
+          set +e
+          flutter test 2>&1 | tee flutter-test.txt
+          status=${PIPESTATUS[0]}
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-test-${{ github.sha }}
+          path: wms flutter application/flutter-test.txt
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Build release APK
         run: flutter build apk --release
@@ -88,12 +104,20 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Enforce analyzer result
+      - name: Enforce Flutter gates
         if: always()
         run: |
-          code='${{ steps.analyze.outputs.exit_code }}'
-          test -n "$code"
-          if [ "$code" != "0" ]; then
-            echo "Flutter analyzer reported errors (exit code $code)."
-            exit "$code"
+          analyze_code='${{ steps.analyze.outputs.exit_code }}'
+          test_code='${{ steps.tests.outputs.exit_code }}'
+          test -n "$analyze_code"
+          test -n "$test_code"
+          failed=0
+          if [ "$analyze_code" != "0" ]; then
+            echo "Flutter analyzer reported errors (exit code $analyze_code)."
+            failed=1
           fi
+          if [ "$test_code" != "0" ]; then
+            echo "Flutter tests failed (exit code $test_code)."
+            failed=1
+          fi
+          exit "$failed"
