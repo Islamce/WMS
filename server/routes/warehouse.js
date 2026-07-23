@@ -40,29 +40,70 @@ router.get('/queue', requirePermission(['warehouse_dashboard', 'bin_batch_assign
 /**
  * POST /api/warehouse/:id/allocate — run FIFO/FEFO allocation for every
  * approved line, reserve batch stock, and write picking_allocations.
+ *
+ * A normal retry after a successful allocation returns the existing proposal.
+ * An operator must send { force_reallocate: true } to deliberately replace it.
+ * This makes duplicate/concurrent submissions safe while preserving controlled
+ * re-allocation before picker assignment.
  */
 router.post('/:id/allocate', requirePermission('bin_batch_assignment'), (req, res) => {
-  const header = getHeaderOr404(res, req.params.id);
-  if (!header) return;
-  // Re-allocation is permitted up until a picker is assigned; it is
-  // reservation-safe because releaseOpenAllocations() runs first.
+  const initial = getHeaderOr404(res, req.params.id);
+  if (!initial) return;
+  const forceReallocate = req.body?.force_reallocate === true;
+
+  const existingAllocations = db.prepare(`
+    SELECT pa.*, l.material_code
+    FROM picking_allocations pa
+    JOIN material_request_lines l ON l.id=pa.line_id
+    WHERE pa.request_id=? AND pa.status IN ('PROPOSED','SCANNED')
+    ORDER BY pa.line_number, pa.sequence
+  `).all(initial.id);
+  if (!forceReallocate && existingAllocations.length > 0 &&
+      [HEADER_STATUS.LOCATION_ASSIGNED, HEADER_STATUS.BATCH_ASSIGNED, HEADER_STATUS.PENDING_PICKER_ASSIGNMENT]
+        .includes(initial.request_status)) {
+    return res.json({
+      message: 'Allocation already completed. Existing FIFO/FEFO proposal returned.',
+      idempotent: true,
+      allocations: existingAllocations,
+    });
+  }
+
   const allowed = [HEADER_STATUS.PENDING_BIN_ASSIGNMENT, HEADER_STATUS.WAREHOUSE_ASSIGNED,
     HEADER_STATUS.LOCATION_ASSIGNED, HEADER_STATUS.BATCH_ASSIGNED, HEADER_STATUS.PENDING_PICKER_ASSIGNMENT];
-  if (!allowed.includes(header.request_status)) {
-    return res.status(400).json({ error: `Request is not ready for allocation (status '${header.request_status}').` });
+  if (!allowed.includes(initial.request_status)) {
+    return res.status(400).json({ error: `Request is not ready for allocation (status '${initial.request_status}').` });
   }
-  const freeze = activeFreeze(header.issue_warehouse_code);
-  if (freeze) return res.status(400).json({ error: freezeMessage(freeze, header.issue_warehouse_code) });
-
-  const lines = db.prepare(
-    "SELECT * FROM material_request_lines WHERE request_id=? AND line_status NOT IN ('Rejected','Cancelled')"
-  ).all(header.id);
+  const freeze = activeFreeze(initial.issue_warehouse_code);
+  if (freeze) return res.status(400).json({ error: freezeMessage(freeze, initial.issue_warehouse_code) });
 
   const results = [];
+  let replay = null;
   const run = db.transaction(() => {
-    // Clean re-allocation: FIRST release the batch reservations held by prior
-    // proposals (otherwise reserved_quantity double-counts on every re-run),
-    // then remove the superseded proposal rows.
+    const header = db.prepare('SELECT * FROM material_request_headers WHERE id=?').get(initial.id);
+    const currentAllocations = db.prepare(`
+      SELECT pa.*, l.material_code
+      FROM picking_allocations pa
+      JOIN material_request_lines l ON l.id=pa.line_id
+      WHERE pa.request_id=? AND pa.status IN ('PROPOSED','SCANNED')
+      ORDER BY pa.line_number, pa.sequence
+    `).all(header.id);
+
+    if (!forceReallocate && currentAllocations.length > 0 &&
+        [HEADER_STATUS.LOCATION_ASSIGNED, HEADER_STATUS.BATCH_ASSIGNED, HEADER_STATUS.PENDING_PICKER_ASSIGNMENT]
+          .includes(header.request_status)) {
+      replay = currentAllocations;
+      return;
+    }
+    if (!allowed.includes(header.request_status)) {
+      const err = new Error(`Request is not ready for allocation (status '${header.request_status}').`);
+      err.status = 409;
+      throw err;
+    }
+
+    const lines = db.prepare(
+      "SELECT * FROM material_request_lines WHERE request_id=? AND line_status NOT IN ('Rejected','Cancelled')"
+    ).all(header.id);
+
     releaseOpenAllocations(header.id);
     db.prepare("DELETE FROM picking_allocations WHERE request_id=? AND status='CANCELLED'").run(header.id);
 
@@ -83,12 +124,10 @@ router.post('/:id/allocate', requirePermission('bin_batch_assignment'), (req, re
         `).run(header.id, header.request_number, line.id, line.line_number, line.material_id,
           a.batch_id, a.batch_number, a.warehouse_code, a.bin_location, a.qr_code_id,
           a.proposed_quantity, a.allocation_method, seq++);
-        // reserve batch quantity
         db.prepare('UPDATE batches SET reserved_quantity = reserved_quantity + ? WHERE id=?')
           .run(a.proposed_quantity, a.batch_id);
       });
 
-      // stamp the primary bin/batch on the line + reserved qty
       const primary = plan.allocations[0];
       db.prepare(`
         UPDATE material_request_lines
@@ -108,7 +147,7 @@ router.post('/:id/allocate', requirePermission('bin_batch_assignment'), (req, re
       );
 
       audit.record({ entityType: 'MaterialRequestLine', entityId: line.id, requestNumber: header.request_number,
-        lineNumber: line.line_number, action: 'ALLOCATE', newValue: {
+        lineNumber: line.line_number, action: forceReallocate ? 'REALLOCATE' : 'ALLOCATE', newValue: {
           method: plan.method, allocated: plan.allocatedQty, shortfall: plan.shortfall,
           batches: plan.allocations.map((a) => `${a.batch_number}:${a.proposed_quantity}`),
         }, user: req.user, sourceScreen: 'Bin & Batch Assignment' });
@@ -124,8 +163,16 @@ router.post('/:id/allocate', requirePermission('bin_batch_assignment'), (req, re
   });
   try { run(); } catch (err) { return sendError(res, err); }
 
-  notify.notifyPermission('picker_assignment', { requestNumber: header.request_number,
-    notificationType: 'PICKER_ASSIGNMENT_NEEDED', title: `Request ${header.request_number} ready for picker assignment`,
+  if (replay) {
+    return res.json({
+      message: 'Allocation already completed. Existing FIFO/FEFO proposal returned.',
+      idempotent: true,
+      allocations: replay,
+    });
+  }
+
+  notify.notifyPermission('picker_assignment', { requestNumber: initial.request_number,
+    notificationType: 'PICKER_ASSIGNMENT_NEEDED', title: `Request ${initial.request_number} ready for picker assignment`,
     message: 'Bins and batches are assigned; assign a picker.' });
 
   res.json({ message: 'Allocation complete (FIFO/FEFO applied).', allocations: results });
@@ -153,8 +200,6 @@ router.post('/:id/assign-picker', requirePermission('picker_assignment'), (req, 
   const picker = db.prepare("SELECT u.id, u.name FROM users u JOIN roles r ON r.id=u.role_id WHERE u.id=? AND r.name='picker' AND u.status='active'").get(picker_id);
   if (!picker) return res.status(404).json({ error: 'Picker not found or inactive.' });
 
-  // Idempotency guard: retries of the same assignment must return the existing
-  // open task rather than superseding it and creating duplicate notifications.
   const existing = db.prepare(`
     SELECT id, assigned_picker_id, task_status
     FROM picking_tasks
@@ -174,7 +219,6 @@ router.post('/:id/assign-picker', requirePermission('picker_assignment'), (req, 
   const binCount = db.prepare("SELECT COUNT(DISTINCT bin_location) AS n FROM picking_allocations WHERE request_id=? AND status='PROPOSED'").get(header.id).n;
 
   const assign = db.transaction(() => {
-    // supersede any existing open task (reassignment)
     const prev = db.prepare("SELECT * FROM picking_tasks WHERE request_id=? AND task_status NOT IN ('Picking Completed','Cancelled')").get(header.id);
     if (prev) db.prepare('UPDATE picking_tasks SET task_status=?, updated_at=datetime(\'now\') WHERE id=?')
       .run(TASK_STATUS.REASSIGNED, prev.id);
@@ -201,7 +245,7 @@ router.post('/:id/assign-picker', requirePermission('picker_assignment'), (req, 
 
   notify.send({ requestNumber: header.request_number, taskId, recipientUserId: picker.id,
     notificationType: 'TASK_ASSIGNED', title: `New picking task ${header.request_number}`,
-    message: `You have been assigned a picking task. Please accept it.` });
+    message: 'You have been assigned a picking task. Please accept it.' });
 
   res.json({ message: `Picking task assigned to ${picker.name}. Awaiting acceptance.`, task_id: taskId });
 });
