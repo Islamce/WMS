@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:http/http.dart' as http;
 
 /// Thrown for any non-2xx response; [message] is the server's error text.
@@ -34,6 +36,40 @@ class ApiClient {
   Future<dynamic> put(String path, [Object? body]) => _send('PUT', path, body);
   Future<dynamic> patch(String path, [Object? body]) => _send('PATCH', path, body);
   Future<dynamic> delete(String path, [Object? body]) => _send('DELETE', path, body);
+
+  /// Downloads an authenticated non-JSON response, such as a protected QR PDF.
+  Future<Uint8List> downloadBytes(String path, {String? expectedContentType}) async {
+    late http.Response res;
+    try {
+      res = await http.get(
+        _uri(path),
+        headers: {
+          if (token != null && token!.isNotEmpty) 'Authorization': 'Bearer $token',
+          'Accept': expectedContentType ?? 'application/octet-stream',
+        },
+      ).timeout(const Duration(seconds: 30));
+    } catch (e) {
+      throw ApiException(0, 'Cannot reach the server. Check the server URL and network connection.\n($e)');
+    }
+
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      var message = 'Download failed (${res.statusCode}).';
+      try {
+        final decoded = jsonDecode(res.body);
+        if (decoded is Map && decoded['error'] != null) message = decoded['error'].toString();
+      } catch (_) {
+        // Binary/non-JSON error body; retain the status-based message.
+      }
+      throw ApiException(res.statusCode, message);
+    }
+
+    final contentType = res.headers['content-type']?.toLowerCase() ?? '';
+    if (expectedContentType != null && !contentType.contains(expectedContentType.toLowerCase())) {
+      throw ApiException(res.statusCode, 'Unexpected download type: ${contentType.isEmpty ? 'unknown' : contentType}.');
+    }
+    if (res.bodyBytes.isEmpty) throw ApiException(res.statusCode, 'The downloaded file is empty.');
+    return res.bodyBytes;
+  }
 
   Future<dynamic> _send(String method, String path, [Object? body]) async {
     final req = http.Request(method, _uri(path));
