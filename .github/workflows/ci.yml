@@ -30,7 +30,20 @@ jobs:
         run: npm audit --omit=dev --audit-level=high
 
       - name: Run end-to-end test suites
-        run: npm test
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee /tmp/wms-e2e.log
+
+      - name: Upload E2E diagnostic log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wms-e2e-diagnostic
+          path: |
+            /tmp/wms-e2e.log
+            /tmp/wms-test-server.log
+          if-no-files-found: warn
+          retention-days: 3
 
       - name: Local bounded load test
         run: |

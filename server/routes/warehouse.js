@@ -153,6 +153,23 @@ router.post('/:id/assign-picker', requirePermission('picker_assignment'), (req, 
   const picker = db.prepare("SELECT u.id, u.name FROM users u JOIN roles r ON r.id=u.role_id WHERE u.id=? AND r.name='picker' AND u.status='active'").get(picker_id);
   if (!picker) return res.status(404).json({ error: 'Picker not found or inactive.' });
 
+  // Idempotency guard: retries of the same assignment must return the existing
+  // open task rather than superseding it and creating duplicate notifications.
+  const existing = db.prepare(`
+    SELECT id, assigned_picker_id, task_status
+    FROM picking_tasks
+    WHERE request_id=? AND task_status NOT IN ('Picking Completed','Cancelled','Reassigned')
+    ORDER BY id DESC LIMIT 1
+  `).get(header.id);
+  if (existing && Number(existing.assigned_picker_id) === Number(picker.id)
+      && existing.task_status === TASK_STATUS.PENDING_ACCEPTANCE) {
+    return res.json({
+      message: `Picking task is already assigned to ${picker.name}. Awaiting acceptance.`,
+      task_id: existing.id,
+      idempotent: true,
+    });
+  }
+
   const lineCount = db.prepare("SELECT COUNT(*) AS n FROM material_request_lines WHERE request_id=? AND line_status NOT IN ('Rejected','Cancelled')").get(header.id).n;
   const binCount = db.prepare("SELECT COUNT(DISTINCT bin_location) AS n FROM picking_allocations WHERE request_id=? AND status='PROPOSED'").get(header.id).n;
 

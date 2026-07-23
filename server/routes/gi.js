@@ -21,6 +21,20 @@ const router = express.Router();
 router.use(authenticate, requirePermission('gi_posting'));
 
 const GI_STAGES = [HEADER_STATUS.PENDING_ERP_GI, HEADER_STATUS.ERP_ERROR];
+const FINAL_GI_STAGES = [HEADER_STATUS.COMPLETED, HEADER_STATUS.PARTIALLY_COMPLETED, HEADER_STATUS.CLOSED_WITH_SHORTAGE];
+
+function existingGiResponse(header) {
+  return {
+    message: `Goods Issue was already posted. Request ${header.request_status}.`,
+    gi: {
+      giDocumentNumber: header.gi_document_number,
+      fiscalYear: header.gi_fiscal_year,
+      postingDate: header.gi_posting_date,
+    },
+    status: header.request_status,
+    idempotent: true,
+  };
+}
 
 /** GET /api/gi — GI posting queue. */
 router.get('/', (req, res) => {
@@ -53,9 +67,19 @@ router.get('/:id', (req, res) => {
 router.post('/:id/post', (req, res) => {
   const header = getHeaderOr404(res, req.params.id);
   if (!header) return;
+
+  // Safe replay: a client retry after a successful response must not create a
+  // second ERP posting or duplicate stock-ledger rows.
+  if (FINAL_GI_STAGES.includes(header.request_status) && header.gi_document_number) {
+    return res.json(existingGiResponse(header));
+  }
   if (!GI_STAGES.includes(header.request_status)) {
     return res.status(400).json({ error: `Request is not ready for GI posting (status '${header.request_status}').` });
   }
+  if (header.erp_posting_status === 'PROCESSING') {
+    return res.status(409).json({ error: 'Goods Issue posting is already in progress for this request.' });
+  }
+
   const lines = db.prepare("SELECT * FROM material_request_lines WHERE request_id=? AND line_status NOT IN ('Rejected','Cancelled')").all(header.id);
   const picked = lines.filter((l) => (l.picked_quantity || 0) > 0);
   if (picked.length === 0) {
@@ -69,6 +93,22 @@ router.post('/:id/post', (req, res) => {
   ]);
   if (sodErr) return res.status(403).json({ error: sodErr });
 
+  // Atomic claim. This protects duplicate submissions from concurrent browser
+  // tabs and from multiple application workers sharing the SQLite database.
+  const claim = db.prepare(`
+    UPDATE material_request_headers
+    SET erp_posting_status='PROCESSING'
+    WHERE id=? AND request_status IN (?, ?)
+      AND COALESCE(erp_posting_status, '') <> 'PROCESSING'
+  `).run(header.id, ...GI_STAGES);
+  if (claim.changes !== 1) {
+    const current = db.prepare('SELECT * FROM material_request_headers WHERE id=?').get(header.id);
+    if (current && FINAL_GI_STAGES.includes(current.request_status) && current.gi_document_number) {
+      return res.json(existingGiResponse(current));
+    }
+    return res.status(409).json({ error: 'Goods Issue posting is already in progress for this request.' });
+  }
+
   const b = req.body || {};
   const payload = {
     requestNumber: header.request_number, erpReservationNumber: header.erp_reservation_number,
@@ -80,11 +120,18 @@ router.post('/:id/post', (req, res) => {
       batch: l.batch_number, bin: l.bin_location })),
   };
 
-  const result = erp.connector().postGoodsIssue({
-    requestNumber: header.request_number, payload,
-    giDocumentNumber: b.gi_document_number, fiscalYear: b.fiscal_year,
-    simulateError: !!b.simulate_error, user: req.user,
-  });
+  let result;
+  try {
+    result = erp.connector().postGoodsIssue({
+      requestNumber: header.request_number, payload,
+      giDocumentNumber: b.gi_document_number, fiscalYear: b.fiscal_year,
+      simulateError: !!b.simulate_error, user: req.user,
+    });
+  } catch (err) {
+    db.prepare("UPDATE material_request_headers SET erp_posting_status='FAILED', erp_error_message=? WHERE id=?")
+      .run(err.message || 'ERP connector failure', header.id);
+    return sendError(res, err);
+  }
 
   if (!result.ok) {
     setHeaderStatus(header, HEADER_STATUS.ERP_ERROR, { user: req.user, sourceScreen: 'GI Posting',

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # WMS end-to-end test runner (used by `npm test` and CI).
 #
-# Phase 1 (fresh DB): 25-scenario workflow regression + UI-refinement suite
-#                     + P0 regression (reservation leaks, rate limit, JWT guard).
+# Phase 1 (fresh DB): workflow regression + UI refinements + P0/P1 regression.
+# Phase 1B (fresh DB): focused idempotency regression on an isolated dataset.
 # Phase 2 (fresh DB): feature suite (AI analytics, PDF labels, mass upload,
 #                     quality step) — needs its own clean dataset.
 set -u
@@ -41,7 +41,7 @@ run_suite() {
   if ! "$PY" "tests/e2e/$1"; then FAILED=1; fi
 }
 
-echo "=== Phase 1: workflow + refinements + P0 regression ==="
+echo "=== Phase 1: workflow + refinements + P0/P1 regression ==="
 fresh_db || exit 1
 start_server || exit 1
 run_suite workflow_test.py
@@ -53,6 +53,13 @@ run_suite reports_test.py
 run_suite p0_hardening_test.py
 run_suite p1_hardening_test.py
 run_suite quickwins_test.py
+stop_server
+
+echo ""
+echo "=== Phase 1B: isolated workflow idempotency regression ==="
+fresh_db || exit 1
+start_server || exit 1
+run_suite idempotency_test.py
 stop_server
 
 echo ""
