@@ -68,6 +68,7 @@ fresh_db || exit 1
 start_server || exit 1
 run_suite features_test.py
 run_suite import_test.py
+run_suite movement_history_import_test.py
 stop_server
 
 echo ""

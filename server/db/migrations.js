@@ -1,20 +1,6 @@
 /**
  * Versioned migration runner.
- *
- * The base schema (`migrate.js`) and the MRP/WMS schema (`migrate2.js`) are the
- * idempotent *baseline*: they use CREATE TABLE IF NOT EXISTS and conditional
- * ALTERs, so an existing install is always brought up to the baseline shape on
- * boot. That baseline is what keeps zero-downtime, git-connected deploys safe.
- *
- * This runner layers ordered, *one-time* migrations on top of that baseline and
- * records each in `schema_migrations`. Any schema change from here on should be
- * added as a new numbered entry in MIGRATIONS rather than by expanding the
- * idempotent baseline — that gives an auditable, ordered history of what's in
- * place and a clean path to a server RDBMS (see docs/POSTGRES-MIGRATION.md), where
- * CREATE IF NOT EXISTS is not a strategy.
- *
- * Each migration is { id, description, up(db) }. `up` runs once, inside a
- * transaction, and only if `id` is not already recorded.
+ * Ordered, forward-only and transactional.
  */
 const db = require('./connection');
 
@@ -23,51 +9,15 @@ function addColumnIfMissing(database, table, name, definition) {
   if (!cols.has(name)) database.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${definition}`);
 }
 
-// Ordered list. The two baseline entries are recorded as applied because the
-// idempotent baseline exec (migrate.js + migrate2.js) already materialises them;
-// they exist so `schema_migrations` is a truthful record of what's in place.
-// Append new deltas below with the next number and a real `up`.
 const MIGRATIONS = [
-  {
-    id: '001_base_schema',
-    description: 'Base inventory schema (users, roles, permissions, materials, locations, stock).',
-    up() { /* applied by the idempotent baseline in migrate.js */ },
-  },
-  {
-    id: '002_mrp_wms_execution',
-    description: 'MRP / warehouse-execution schema (requests, batches, bins, picking, audit, notifications).',
-    up() { /* applied by the idempotent baseline in migrate2.js */ },
-  },
-  {
-    id: '003_audit_append_only',
-    description: 'Append-only triggers on audit_trail (block UPDATE/DELETE).',
-    up() { /* triggers created by the idempotent baseline in migrate2.js */ },
-  },
-  {
-    id: '004_scheduler_locks',
-    description: 'Cross-process scheduler lease table for single-runner background sweeps.',
-    up() { /* table created by the idempotent baseline in migrate2.js */ },
-  },
-  {
-    id: '005_enterprise_completeness',
-    description: 'Approval matrix, request attachments, and cycle-count tables (P2/P3).',
-    up() { /* tables created by the idempotent baseline in migrate2.js */ },
-  },
-  {
-    id: '006_non_stock_items',
-    description: 'materials.is_stock_item flag — non-stock items cannot be reserved/allocated.',
-    up() { /* column added by the idempotent baseline in migrate2.js */ },
-  },
-  {
-    id: '007_realloc_inventory_shipping',
-    description: 'Stock reallocations, physical inventory sessions, outbound shipments, batches.project.',
-    up() { /* tables/column created by the idempotent baseline in migrate2.js */ },
-  },
-  {
-    id: '008_device_tokens',
-    description: 'device_tokens table for real push notifications (Firebase Cloud Messaging).',
-    up() { /* table created by the idempotent baseline in migrate2.js */ },
-  },
+  { id: '001_base_schema', description: 'Base inventory schema (users, roles, permissions, materials, locations, stock).', up() {} },
+  { id: '002_mrp_wms_execution', description: 'MRP / warehouse-execution schema (requests, batches, bins, picking, audit, notifications).', up() {} },
+  { id: '003_audit_append_only', description: 'Append-only triggers on audit_trail (block UPDATE/DELETE).', up() {} },
+  { id: '004_scheduler_locks', description: 'Cross-process scheduler lease table for single-runner background sweeps.', up() {} },
+  { id: '005_enterprise_completeness', description: 'Approval matrix, request attachments, and cycle-count tables (P2/P3).', up() {} },
+  { id: '006_non_stock_items', description: 'materials.is_stock_item flag — non-stock items cannot be reserved/allocated.', up() {} },
+  { id: '007_realloc_inventory_shipping', description: 'Stock reallocations, physical inventory sessions, outbound shipments, batches.project.', up() {} },
+  { id: '008_device_tokens', description: 'device_tokens table for real push notifications (Firebase Cloud Messaging).', up() {} },
   {
     id: '009_reallocation_approval_workflow',
     description: 'Approval, segregation-of-duties, execution and replay evidence for stock reallocations.',
@@ -88,60 +38,109 @@ const MIGRATIONS = [
       addColumnIfMissing(database, 'stock_reallocations', 'executed_at', 'TEXT');
       addColumnIfMissing(database, 'stock_reallocations', 'execution_error', 'TEXT');
       addColumnIfMissing(database, 'stock_reallocations', 'updated_at', "TEXT NOT NULL DEFAULT (datetime('now'))");
-
       database.exec(`
         UPDATE stock_reallocations
-        SET status='EXECUTED',
-            requested_by=COALESCE(requested_by, moved_by),
-            requested_by_name=COALESCE(requested_by_name, moved_by_name),
-            requested_at=COALESCE(requested_at, created_at),
-            approved_by=COALESCE(approved_by, moved_by),
-            approved_by_name=COALESCE(approved_by_name, moved_by_name),
-            approved_at=COALESCE(approved_at, created_at),
-            executed_by=COALESCE(executed_by, moved_by),
-            executed_by_name=COALESCE(executed_by_name, moved_by_name),
-            executed_at=COALESCE(executed_at, created_at),
-            updated_at=COALESCE(updated_at, created_at)
-        WHERE status IS NULL OR status='' OR status='EXECUTED'
+        SET status='EXECUTED', requested_by=COALESCE(requested_by,moved_by),
+            requested_by_name=COALESCE(requested_by_name,moved_by_name), requested_at=COALESCE(requested_at,created_at),
+            approved_by=COALESCE(approved_by,moved_by), approved_by_name=COALESCE(approved_by_name,moved_by_name),
+            approved_at=COALESCE(approved_at,created_at), executed_by=COALESCE(executed_by,moved_by),
+            executed_by_name=COALESCE(executed_by_name,moved_by_name), executed_at=COALESCE(executed_at,created_at),
+            updated_at=COALESCE(updated_at,created_at)
+        WHERE status IS NULL OR status='' OR status='EXECUTED';
+        CREATE INDEX IF NOT EXISTS idx_realloc_status ON stock_reallocations(status, created_at);
+        CREATE INDEX IF NOT EXISTS idx_realloc_requester ON stock_reallocations(requested_by, status);
       `);
-      database.exec('CREATE INDEX IF NOT EXISTS idx_realloc_status ON stock_reallocations(status, created_at)');
-      database.exec('CREATE INDEX IF NOT EXISTS idx_realloc_requester ON stock_reallocations(requested_by, status)');
+    },
+  },
+  {
+    id: '010_stock_movement_history_import',
+    description: 'Protected append-only import batches, movement history and row-level import errors.',
+    up(database) {
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS stock_movement_import_batches (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          movement_type TEXT NOT NULL CHECK (movement_type IN ('RECEIPT','ISSUE','RETURN')),
+          source_filename TEXT NOT NULL,
+          period_start TEXT,
+          period_end TEXT,
+          status TEXT NOT NULL DEFAULT 'IN_PROGRESS' CHECK (status IN ('IN_PROGRESS','COMPLETED','COMPLETED_WITH_ERRORS','FAILED')),
+          total_rows INTEGER NOT NULL DEFAULT 0,
+          inserted_rows INTEGER NOT NULL DEFAULT 0,
+          duplicate_rows INTEGER NOT NULL DEFAULT 0,
+          invalid_rows INTEGER NOT NULL DEFAULT 0,
+          created_by INTEGER REFERENCES users(id),
+          created_by_name TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          completed_at TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS stock_movement_history (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          import_batch_id INTEGER NOT NULL REFERENCES stock_movement_import_batches(id),
+          external_id TEXT,
+          movement_type TEXT NOT NULL CHECK (movement_type IN ('RECEIPT','ISSUE','RETURN')),
+          material_code TEXT NOT NULL,
+          plant_code TEXT,
+          warehouse_code TEXT,
+          bin_location TEXT,
+          description TEXT,
+          unit TEXT,
+          quantity REAL NOT NULL CHECK (quantity > 0),
+          movement_date TEXT NOT NULL,
+          movement_timestamp TEXT,
+          performed_by TEXT,
+          reservation_number TEXT,
+          source_filename TEXT NOT NULL,
+          source_row_number INTEGER NOT NULL,
+          row_fingerprint TEXT NOT NULL UNIQUE,
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS stock_movement_import_errors (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          import_batch_id INTEGER NOT NULL REFERENCES stock_movement_import_batches(id),
+          source_row_number INTEGER NOT NULL,
+          external_id TEXT,
+          error_code TEXT NOT NULL,
+          error_message TEXT NOT NULL,
+          raw_row_json TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_movement_history_date ON stock_movement_history(movement_date, movement_type);
+        CREATE INDEX IF NOT EXISTS idx_movement_history_material ON stock_movement_history(material_code, movement_date);
+        CREATE INDEX IF NOT EXISTS idx_movement_history_plant ON stock_movement_history(plant_code, movement_date);
+        CREATE INDEX IF NOT EXISTS idx_movement_history_bin ON stock_movement_history(bin_location, movement_date);
+        CREATE INDEX IF NOT EXISTS idx_movement_history_reservation ON stock_movement_history(reservation_number);
+        CREATE INDEX IF NOT EXISTS idx_movement_batches_created ON stock_movement_import_batches(created_at DESC);
+
+        CREATE TRIGGER IF NOT EXISTS movement_history_block_update BEFORE UPDATE ON stock_movement_history
+        BEGIN SELECT RAISE(ABORT, 'stock_movement_history is append-only'); END;
+        CREATE TRIGGER IF NOT EXISTS movement_history_block_delete BEFORE DELETE ON stock_movement_history
+        BEGIN SELECT RAISE(ABORT, 'stock_movement_history is append-only'); END;
+      `);
     },
   },
 ];
 
 function ensureTable() {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS schema_migrations (
-      version     TEXT PRIMARY KEY,
-      description TEXT,
-      applied_at  TEXT NOT NULL DEFAULT (datetime('now'))
-    )
-  `);
+  db.exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
+    version TEXT PRIMARY KEY, description TEXT, applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )`);
 }
 
 function runMigrations() {
   ensureTable();
-  const applied = new Set(
-    db.prepare('SELECT version FROM schema_migrations').all().map((r) => r.version)
-  );
-  const record = db.prepare(
-    'INSERT INTO schema_migrations (version, description) VALUES (?, ?)'
-  );
+  const applied = new Set(db.prepare('SELECT version FROM schema_migrations').all().map((r) => r.version));
+  const record = db.prepare('INSERT INTO schema_migrations (version, description) VALUES (?, ?)');
   let count = 0;
   for (const m of MIGRATIONS) {
     if (applied.has(m.id)) continue;
-    db.transaction(() => {
-      m.up(db);
-      record.run(m.id, m.description || '');
-    })();
+    db.transaction(() => { m.up(db); record.run(m.id, m.description || ''); })();
     count += 1;
     console.log(`Applied migration ${m.id} — ${m.description}`);
   }
-  console.log(
-    count ? `Migrations: ${count} newly applied, ${MIGRATIONS.length} total.`
-          : `Migrations: up to date (${MIGRATIONS.length} recorded).`
-  );
+  console.log(count ? `Migrations: ${count} newly applied, ${MIGRATIONS.length} total.` : `Migrations: up to date (${MIGRATIONS.length} recorded).`);
 }
 
 module.exports = { runMigrations, MIGRATIONS };

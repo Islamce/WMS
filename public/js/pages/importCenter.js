@@ -35,9 +35,8 @@ Pages.importCenter = {
       <div class="card">
         <h3>Import data from CSV</h3>
         <p class="muted" style="margin:6px 0 16px">
-          Load your old database in bulk. Pick a data type, download its template, fill it in
-          (Excel → Save As CSV), then upload. Existing records are updated, new ones created.
-          Import in this order for a fresh system: <strong>Warehouses → Bin Locations → Materials → Opening Stock</strong>.
+          Import data additively. Existing production records must not be deleted by deployments or upgrades.
+          For a new production setup, import in this order: <strong>Warehouses → Bin Locations → Materials → Opening Stock</strong>.
         </p>
         <div class="form-row">
           <div class="form-group">
@@ -61,14 +60,14 @@ Pages.importCenter = {
       </div>
       <div id="imp-result"></div>
       ${App.user && App.user.role === 'admin' ? `
-      <div class="card" style="border-color:var(--danger)">
-        <h3>Start fresh — clear the sample / test data</h3>
+      <div class="card" style="border-color:var(--warning)">
+        <h3>One-time production initialization</h3>
         <p class="muted" style="margin:6px 0 12px">
-          Removes all demo and test data (requests, picking, batches, QR labels, stock movements,
-          and optionally the sample materials/warehouses/bins) so you can import your real
-          database above. <strong>Users, roles, permissions and movement-type configuration are kept.</strong>
-          This cannot be undone.</p>
-        <button class="btn danger" id="imp-reset">🗑 Clear data…</button>
+          Controlled transition from demo/UAT data to real operational data. The operation requires a verified backup,
+          displays the affected row counts before execution, and permanently locks itself after completion.
+          <strong>Do not run this after real data entry begins.</strong>
+        </p>
+        <button class="btn danger" id="imp-initialize">Prepare production initialization…</button>
       </div>` : ''}`;
 
     this.rows = [];
@@ -82,30 +81,72 @@ Pages.importCenter = {
     el.querySelector('#imp-template').addEventListener('click', () => this.downloadTemplate(entitySel.value));
     el.querySelector('#imp-file').addEventListener('change', (e) => this.onFile(e.target.files[0]));
     el.querySelector('#imp-run').addEventListener('click', () => this.runImport(entitySel.value));
-    const resetBtn = el.querySelector('#imp-reset');
-    if (resetBtn) resetBtn.addEventListener('click', () => this.confirmReset());
+    const initializeBtn = el.querySelector('#imp-initialize');
+    if (initializeBtn) initializeBtn.addEventListener('click', () => this.confirmProductionInitialization());
   },
 
-  /** Admin-only: clear demo/test data so the real database can be imported. */
-  confirmReset() {
+  async confirmProductionInitialization() {
+    let status;
+    try {
+      status = await Api.get('/api/admin/production-initialization?keep_master_data=false');
+    } catch (err) {
+      UI.toast(err.message, 'error');
+      return;
+    }
+
+    if (status.locked) {
+      UI.modal({
+        title: 'Production initialization is locked',
+        submitLabel: 'Close',
+        bodyHtml: `<div class="inline-alert success">
+          Initialization was completed on ${UI.esc(status.lock?.completed_at || 'an earlier date')}.
+          Production data is protected from another reset.
+        </div>`,
+        onSubmit: async (_overlay, close) => close(),
+      });
+      return;
+    }
+
+    const rows = Object.entries(status.counts || {})
+      .filter(([, count]) => count > 0)
+      .map(([table, count]) => `<tr><td>${UI.esc(table)}</td><td>${count}</td></tr>`)
+      .join('');
+
     UI.modal({
-      title: 'Clear all data and start fresh?', submitLabel: 'Clear data',
+      title: 'Initialize production data once?',
+      submitLabel: 'Initialize and permanently lock',
       bodyHtml: `
-        <p>This permanently deletes every request, picking task, batch, QR label, stock movement
-        and the audit history of that test data. <strong>Users, roles, permissions and
-        movement-type configuration are kept.</strong></p>
-        <label class="perm-item"><input type="checkbox" id="rs-keep">
-          <span>Keep master data (materials, warehouses, bins, locations)</span></label>
+        <div class="inline-alert warning">
+          ${status.enabled
+    ? 'The controlled initialization window is enabled.'
+    : 'Initialization is disabled on the server. An administrator must temporarily set PRODUCTION_INITIALIZATION_ENABLED=true.'}
+        </div>
+        <p>This will clear <strong>${status.total || 0}</strong> demo/UAT rows. Users, roles, permissions and configuration are kept.</p>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Table</th><th>Rows to clear</th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="2">No current demo/UAT rows detected.</td></tr>'}</tbody>
+        </table></div>
+        <label class="perm-item" style="margin-top:12px">
+          <input type="checkbox" id="pi-backup-confirmed">
+          <span>I confirm a verified backup exists and can be restored.</span>
+        </label>
         <div class="form-group" style="margin-top:10px">
-          <label for="rs-confirm">Type <strong>RESET</strong> to confirm</label>
-          <input type="text" id="rs-confirm" autocomplete="off"></div>`,
-      onSubmit: async (ov, close) => {
+          <label for="pi-backup-reference">Backup reference / run ID</label>
+          <input type="text" id="pi-backup-reference" autocomplete="off" placeholder="Example: offsite run 30000000000">
+        </div>
+        <div class="form-group">
+          <label for="pi-confirm">Type <strong>RESET PRODUCTION DATA</strong></label>
+          <input type="text" id="pi-confirm" autocomplete="off">
+        </div>`,
+      onSubmit: async (overlay, close) => {
         try {
-          const r = await Api.post('/api/admin/factory-reset', {
-            confirm: ov.querySelector('#rs-confirm').value.trim(),
-            keep_master_data: ov.querySelector('#rs-keep').checked,
+          const result = await Api.post('/api/admin/production-initialization', {
+            confirm: overlay.querySelector('#pi-confirm').value.trim(),
+            backup_confirmed: overlay.querySelector('#pi-backup-confirmed').checked,
+            backup_reference: overlay.querySelector('#pi-backup-reference').value.trim(),
+            keep_master_data: false,
           });
-          UI.toast(r.message);
+          UI.toast(result.message, 'success');
           close();
           this.render(this.el);
         } catch (err) { UI.toast(err.message, 'error'); }
