@@ -264,15 +264,10 @@ const ENTITIES = {
         WHERE is_active=1 AND (full_bin_location=? OR bin_code=?)`);
       const location = db.prepare('SELECT id FROM locations WHERE code=?');
       const insertLocation = db.prepare('INSERT INTO locations(code) VALUES(?)');
-      const fb = db.prepare('SELECT id,receiving_date,receiving_date_source FROM batches WHERE material_id=? AND batch_number=? AND warehouse_code=? AND bin_location=?');
+      const fb = db.prepare('SELECT id,bin_location,receiving_date,receiving_date_source FROM batches WHERE material_id=? AND batch_number=? AND warehouse_code=?');
+      const openingRegistered = db.prepare('SELECT 1 FROM opening_stock_batch_registry WHERE batch_id=?');
       const ib = db.prepare(`INSERT INTO batches(batch_number,material_id,material_code,material_description,po_number,receiving_date,manufacturing_date,expiry_date,received_quantity,remaining_quantity,warehouse_code,bin_location,quality_status,fifo_date,fefo_date,receiving_date_source)
         VALUES(@batch_number,@material_id,@material_code,@material_description,@po_number,@receiving_date,@manufacturing_date,@expiry_date,@quantity,@quantity,@warehouse_code,@bin_location,@quality_status,@receiving_date,@expiry_date,@receiving_date_source)`);
-      const top = db.prepare(`UPDATE batches SET received_quantity=received_quantity+@quantity,
-        remaining_quantity=remaining_quantity+@quantity,
-        receiving_date=CASE WHEN receiving_date IS NULL OR date(@receiving_date)<date(receiving_date) THEN @receiving_date ELSE receiving_date END,
-        fifo_date=CASE WHEN fifo_date IS NULL OR date(@receiving_date)<date(fifo_date) THEN @receiving_date ELSE fifo_date END,
-        receiving_date_source=CASE WHEN receiving_date IS NULL OR date(@receiving_date)<date(receiving_date) THEN @receiving_date_source ELSE receiving_date_source END
-        WHERE id=@id`);
       const upsertStock = db.prepare(`INSERT INTO material_location_stock(material_id,location_id,quantity)
         VALUES(@material_id,@location_id,@quantity)
         ON CONFLICT(material_id,location_id) DO UPDATE SET
@@ -305,14 +300,37 @@ const ENTITIES = {
         if (!(quantity > 0)) return { error: 'quantity must be a valid number greater than zero' };
 
         const canonicalBin = s(resolvedBin.full_bin_location) || s(resolvedBin.bin_code);
-        let locationRow = location.get(canonicalBin);
-        if (!locationRow) locationRow = { id: Number(insertLocation.run(canonicalBin).lastInsertRowid) };
-
         const receiving = resolveReceivingDate(m.item_code, warehouse_code, canonicalBin, r.receiving_date);
         const batch_number = s(r.batch_number) || `OPEN-${m.item_code}-${warehouse_code}-${canonicalBin}`;
-        const existing = fb.get(m.id, batch_number, warehouse_code, canonicalBin);
+        const existing = fb.get(m.id, batch_number, warehouse_code);
+
+        if (existing && s(existing.bin_location) !== canonicalBin) {
+          return {
+            error: `batch ${batch_number} already exists for material ${m.item_code} in bin ${existing.bin_location}; it cannot be imported into ${canonicalBin}`
+          };
+        }
+
+        if (existing && openingRegistered.get(existing.id)) {
+          return {
+            status: 'skipped',
+            message: `opening stock already registered: ${m.item_code} / ${batch_number} / ${warehouse_code} / ${canonicalBin}`
+          };
+        }
+
+        if (existing) {
+          return {
+            error: `batch ${batch_number} already exists but is not registered as opening stock; existing stock cannot be increased through opening-stock import`
+          };
+        }
+
+        let locationRow = location.get(canonicalBin);
+        if (!locationRow) {
+          locationRow = {
+            id: Number(insertLocation.run(canonicalBin).lastInsertRowid)
+          };
+        }
+
         const batchData = {
-          id: existing && existing.id,
           batch_number,
           material_id: m.id,
           material_code: m.item_code,
@@ -327,7 +345,7 @@ const ENTITIES = {
           bin_location: canonicalBin,
           quality_status: s(r.quality_status).toUpperCase() || 'RELEASED',
         };
-        if (existing) top.run(batchData); else ib.run(batchData);
+        ib.run(batchData);
 
         upsertStock.run({ material_id: m.id, location_id: locationRow.id, quantity });
         insertTransaction.run({
@@ -338,7 +356,7 @@ const ENTITIES = {
           receiving_date: receiving.date,
           notes: `Opening stock import — batch ${batch_number}; receiving_date=${receiving.date}; date_source=${receiving.source}`,
         });
-        return { status: existing ? 'updated' : 'created', message: `${m.item_code} +${quantity} at ${canonicalBin}; receiving ${receiving.date} (${receiving.source})` };
+        return { status: 'created', message: `${m.item_code} +${quantity} at ${canonicalBin}; receiving ${receiving.date} (${receiving.source})` };
       });
     },
   },
