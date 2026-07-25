@@ -72,6 +72,7 @@ check('new opening stock created', c == 200 and r['created'] == 1 and r['errors'
 check('new batch quantity created', scalar("SELECT remaining_quantity FROM batches WHERE batch_number='OPEN-IMP-001-A'") == 250)
 check('historical receiving date applied', scalar("SELECT receiving_date FROM batches WHERE batch_number='OPEN-IMP-001-A'") == '2023-01-15')
 check('historical date source recorded', scalar("SELECT receiving_date_source FROM batches WHERE batch_number='OPEN-IMP-001-A'") == 'HISTORICAL_BIN')
+check('opening batch permanently registered', scalar("SELECT COUNT(*) FROM opening_stock_batch_registry r JOIN batches b ON b.id=r.batch_id WHERE b.batch_number='OPEN-IMP-001-A'") == 1)
 check('bin stock balance created', scalar('''SELECT mls.quantity FROM material_location_stock mls
  JOIN materials m ON m.id=mls.material_id JOIN locations l ON l.id=mls.location_id
  WHERE m.item_code=? AND l.code=?''', ('IMP-001','WH-IMP-A-01')) == 250)
@@ -100,9 +101,32 @@ check('second bin has independent balance', abs(scalar('''SELECT mls.quantity FR
  JOIN materials m ON m.id=mls.material_id JOIN locations l ON l.id=mls.location_id
  WHERE m.item_code=? AND l.code=?''', ('IMP-001','WH-IMP-A-02')) - 1250.5) < 0.0001)
 
-# Reconciliation is safe and dry-run by default.
+# Reconciliation scans only permanently registered opening-stock batches.
 c, r = call('POST', '/api/import/stock/reconcile-dates', admin, {'apply':False})
+registered_open = scalar('''SELECT COUNT(*) FROM opening_stock_batch_registry r
+ JOIN batches b ON b.id=r.batch_id WHERE b.remaining_quantity>0''')
 check('date reconciliation defaults to dry run', c == 200 and r.get('mode') == 'DRY_RUN', r)
+check('ordinary GR batches are excluded from reconciliation', r.get('registered_batches_scanned') == registered_open, r)
+
+# Same batch number in different material/bin scopes must not cross-update.
+c, r = call('POST', '/api/import/movements/chunk', admin, {
+    'movement_type':'RECEIPT', 'source_filename':'duplicate-scope.csv', 'finalize':True,
+    'rows':[
+      {'id':'REC-DUP-1','material_code':'IMP-001','warehouse_code':'WH-IMP','bin_location':'WH-IMP-A-02','quantity':'1','movement_date':'01/05/2021'},
+      {'id':'REC-DUP-2','material_code':'IMP-002','warehouse_code':'WH-IMP','bin_location':'WH-IMP-A-01','quantity':'1','movement_date':'01/06/2020'}]})
+check('duplicate-scope historical receipts imported', c == 200 and r.get('inserted') == 2, r)
+c, r = call('POST', '/api/import/stock', admin, {'rows':[
+    {'material_code':'IMP-001','warehouse_code':'WH-IMP','batch_number':'DUP-BATCH','quantity':'1','bin_location':'WH-IMP-A-02','receiving_date':'01/01/2026'},
+    {'material_code':'IMP-002','warehouse_code':'WH-IMP','batch_number':'DUP-BATCH','quantity':'1','bin_location':'WH-IMP-A-01','receiving_date':'01/01/2026'}]})
+check('duplicate batch number accepted in separate scopes', c == 200 and r.get('created') == 2, r)
+with sqlite3.connect(DB) as conn:
+    conn.execute("UPDATE batches SET receiving_date='2026-01-01',fifo_date='2026-01-01',receiving_date_source='ESTIMATED_IMPORT_DATE' WHERE batch_number='DUP-BATCH'")
+c, r = call('POST', '/api/import/stock/reconcile-dates', admin, {'apply':True})
+check('scoped reconciliation applies', c == 200 and r.get('mode') == 'APPLIED', r)
+check('first duplicate batch gets its own date', scalar('''SELECT b.receiving_date FROM batches b JOIN materials m ON m.id=b.material_id
+ WHERE b.batch_number='DUP-BATCH' AND m.item_code='IMP-001' AND b.bin_location='WH-IMP-A-02' ''') == '2021-05-01')
+check('second duplicate batch gets its own date', scalar('''SELECT b.receiving_date FROM batches b JOIN materials m ON m.id=b.material_id
+ WHERE b.batch_number='DUP-BATCH' AND m.item_code='IMP-002' AND b.bin_location='WH-IMP-A-01' ''') == '2020-06-01')
 
 # Required validation cases plus one valid row in the same request.
 c, r = call('POST', '/api/import/stock', admin, {'rows':[
