@@ -37,6 +37,8 @@ picker = login('picker@example.com', 'Passw0rd!')
 # Meta, master-data imports, and existing row-level behavior.
 c, r = call('GET', '/api/import/meta', admin)
 check('meta lists materials and stock', c == 200 and {'materials','stock'}.issubset({e['key'] for e in r.get('entities', [])}), r)
+stock_meta = next((e for e in r.get('entities', []) if e['key'] == 'stock'), {})
+check('opening stock meta includes receiving_date', 'receiving_date' in stock_meta.get('columns', []), stock_meta)
 c, r = call('POST', '/api/import/materials', admin, {'rows': [
     {'item_code':'IMP-001','description':'Imported bolt','unit':'EA'},
     {'item_code':'IMP-002','description':'Imported oil','unit':'L'},
@@ -55,12 +57,21 @@ c, r = call('POST', '/api/import/bins', admin, {'rows':[
     {'warehouse_code':'NOPE','bin_code':'X'}]})
 check('bins import validates warehouse', c == 200 and r['created'] == 3 and r['errors'] == 1, r)
 
-# New opening stock.
+# Historical receipt used by opening-stock date resolution.
+c, r = call('POST', '/api/import/movements/chunk', admin, {
+    'movement_type':'RECEIPT', 'source_filename':'stock-in.csv', 'finalize':True,
+    'rows':[{'id':'REC-1','material_code':'IMP-001','warehouse_code':'WH-IMP',
+             'bin_location':'WH-IMP-A-01','quantity':'250','movement_date':'15/01/2023'}]})
+check('historical receipt imported', c == 200 and r.get('inserted') == 1, r)
+
+# New opening stock derives its date from historical Stock In.
 c, r = call('POST', '/api/import/stock', admin, {'rows':[{
     'material_code':'IMP-001','warehouse_code':'WH-IMP','batch_number':'OPEN-IMP-001-A',
     'quantity':'250','bin_location':'WH-IMP-A-01','quality_status':'RELEASED'}]})
 check('new opening stock created', c == 200 and r['created'] == 1 and r['errors'] == 0, r)
 check('new batch quantity created', scalar("SELECT remaining_quantity FROM batches WHERE batch_number='OPEN-IMP-001-A'") == 250)
+check('historical receiving date applied', scalar("SELECT receiving_date FROM batches WHERE batch_number='OPEN-IMP-001-A'") == '2023-01-15')
+check('historical date source recorded', scalar("SELECT receiving_date_source FROM batches WHERE batch_number='OPEN-IMP-001-A'") == 'HISTORICAL_BIN')
 check('bin stock balance created', scalar('''SELECT mls.quantity FROM material_location_stock mls
  JOIN materials m ON m.id=mls.material_id JOIN locations l ON l.id=mls.location_id
  WHERE m.item_code=? AND l.code=?''', ('IMP-001','WH-IMP-A-01')) == 250)
@@ -78,14 +89,20 @@ check('repeated import updates bin balance', scalar('''SELECT mls.quantity FROM 
  JOIN materials m ON m.id=mls.material_id JOIN locations l ON l.id=mls.location_id
  WHERE m.item_code=? AND l.code=?''', ('IMP-001','WH-IMP-A-01')) == 300)
 
-# Multiple bins and comma-formatted quantity.
+# Multiple bins, comma-formatted quantity and explicit date precedence.
 c, r = call('POST', '/api/import/stock', admin, {'rows':[{
     'material_code':'IMP-001','warehouse_code':'WH-IMP','batch_number':'OPEN-IMP-001-B',
-    'quantity':'1,250.50','bin_location':'WH-IMP-A-02'}]})
+    'quantity':'1,250.50','bin_location':'WH-IMP-A-02','receiving_date':'01/12/2022'}]})
 check('comma-formatted quantity accepted', c == 200 and r['created'] == 1, r)
+check('explicit receiving date applied', scalar("SELECT receiving_date FROM batches WHERE batch_number='OPEN-IMP-001-B'") == '2022-12-01')
+check('explicit date source recorded', scalar("SELECT receiving_date_source FROM batches WHERE batch_number='OPEN-IMP-001-B'") == 'EXPLICIT')
 check('second bin has independent balance', abs(scalar('''SELECT mls.quantity FROM material_location_stock mls
  JOIN materials m ON m.id=mls.material_id JOIN locations l ON l.id=mls.location_id
  WHERE m.item_code=? AND l.code=?''', ('IMP-001','WH-IMP-A-02')) - 1250.5) < 0.0001)
+
+# Reconciliation is safe and dry-run by default.
+c, r = call('POST', '/api/import/stock/reconcile-dates', admin, {'apply':False})
+check('date reconciliation defaults to dry run', c == 200 and r.get('mode') == 'DRY_RUN', r)
 
 # Required validation cases plus one valid row in the same request.
 c, r = call('POST', '/api/import/stock', admin, {'rows':[
