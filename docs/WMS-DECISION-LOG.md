@@ -133,6 +133,50 @@ Production backups are uploaded through a GitHub Actions workflow to Backblaze B
 
 ---
 
+## DEC-009 — SQLite production recovery requires an isolated, rollback-safe procedure
+
+**Status:** Accepted on 2026-07-25.
+
+**Context:**
+
+A production deletion incident and subsequent empty active database caused authentication failure. Multiple database copies existed, and choosing or replacing one without evidence could have caused further loss.
+
+**Decision:**
+
+Any production SQLite restoration must use the following controlled sequence:
+
+1. Diagnose candidates read-only.
+2. Record source path, size, checksum, integrity, schema/migration state, and key record counts.
+3. Create independent safety copies of both the active database and selected source.
+4. Stop only the WMS application process and avoid touching unrelated services.
+5. Preserve the active DB/WAL/SHM files by moving them into a protected rollback directory; do not delete them.
+6. Restore the selected source with restrictive permissions.
+7. Validate checksum, integrity, and key counts before application startup.
+8. Run reviewed migrations only; never seed or reset accounts as part of restoration.
+9. Restart Passenger and validate health, authentication, migrations, and business counts.
+10. Retain the rollback directory until an explicit reviewed retention decision.
+
+**Alternatives considered:**
+
+- Resetting only the administrator account: rejected because the active database contained broader missing data.
+- Seeding production: rejected because it could create demo data and overwrite or obscure real recovery state.
+- Copying individual user rows: rejected because the complete validated database was the safer consistent recovery unit.
+
+**Consequences:**
+
+- Recovery takes longer but has a clear rollback path and evidence trail.
+- WAL/SHM handling is treated as part of the database state.
+- Candidate database filenames alone are insufficient; integrity and business counts must be checked.
+- Restore drills and runtime environment verification become required follow-up controls.
+
+**Evidence:**
+
+- Incident: `INC-2026-07-25-01`.
+- Selected source checksum: `02745ba0c34386f7aaab23538dda9ab4ec5b947c9e64f1a1b50b9fb9224c2df4`.
+- Final validation: 9 users, 9,746 materials, 12 migrations, HTTP 200 health, successful administrator login.
+
+---
+
 ## Template
 
 ```markdown
