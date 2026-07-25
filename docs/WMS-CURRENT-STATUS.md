@@ -13,10 +13,21 @@ Last updated: 2026-07-25
 - Current deployed commit: `579b5091cf99ea3c4dfa3f5531202eab546b3a88`
 - Health endpoint: healthy, returning `{"status":"ok","service":"wms"}`
 - Database migrations: up to date, 12 recorded
+- Administrator authentication: restored and user-confirmed successful
 
 ## Current production data state after recovery
 
-Latest confirmed dashboard values:
+Latest confirmed database values:
+
+- Users: 9
+- Roles: 11
+- Permissions: 35
+- Materials: 9,746
+- Warehouses: 1
+- Migrations: 12 recorded
+- Database integrity: `ok`
+
+Latest confirmed dashboard values before the final authentication recovery:
 
 - Materials: 9,746
 - Empty bins: 1,245
@@ -25,16 +36,48 @@ Latest confirmed dashboard values:
 
 The values above reflect the recovered database state and must not be assumed to represent intended final operational stock.
 
-## Current blocking issue
+## Authentication recovery completed
 
-Administrator login currently fails with `Invalid email or password` after the database recovery and deployment verification.
+The login failure was traced to the active production database being structurally valid but functionally empty:
 
-Required approach:
+- `users = 0`
+- `roles = 0`
+- `materials = 0`
+- several expected operational tables were absent
 
-1. Read-only inspection of the `users` table schema and non-secret account fields.
-2. Confirm which administrator account records exist and whether they are active.
-3. Inspect authentication code and historical account setup before proposing any mutation.
-4. Do not run seed or reset-admin commands.
+Read-only discovery found multiple valid recovery copies. The selected source was:
+
+`/home/u716763642/wms-final-live-copy-20260725-090240/wms.db`
+
+Selected-source evidence:
+
+- SHA-256: `02745ba0c34386f7aaab23538dda9ab4ec5b947c9e64f1a1b50b9fb9224c2df4`
+- SQLite integrity check: `ok`
+- Users: 9
+- Roles: 11
+- Permissions: 35
+- Materials: 9,746
+- Warehouses: 1
+- Schema migrations before restore: 10
+
+Recovery procedure completed:
+
+1. Created protected rollback copies.
+2. Stopped only the WMS Passenger process.
+3. Moved the empty production DB/WAL/SHM files into the safety directory.
+4. Restored the selected recovery source to `data/wms.db`.
+5. Validated checksum, integrity, and record counts.
+6. Ran `npm run migrate` only; no seed or reset command was used.
+7. Confirmed `Migrations: up to date (12 recorded)`.
+8. Restarted Passenger.
+9. Confirmed `/healthz` returned HTTP 200.
+10. User confirmed successful login with the existing administrator account.
+
+Safety/rollback directory retained:
+
+`/home/u716763642/wms-pre-auth-restore-20260725-112132`
+
+Do not delete this directory until a later reviewed retention decision.
 
 ## Recently completed work
 
@@ -42,11 +85,11 @@ Required approach:
 
 - Accidental deletion of `data/wms.db`, `data/wms.db-wal`, and `data/wms.db-shm` occurred.
 - Database recovered from an open process descriptor under `/proc/<pid>/fd`.
-- `PRAGMA integrity_check` passed.
-- `PRAGMA quick_check` passed.
-- Recovered database was restored to the production path.
+- Subsequent verification found the active production database had become empty.
+- A validated final live copy was restored through a controlled rollback-safe procedure.
+- `PRAGMA integrity_check` passed before and after restoration.
 - Passenger was restarted.
-- Health endpoint and application availability were verified.
+- Health endpoint and administrator login were verified.
 
 ### Opening stock historical-date hardening
 
@@ -82,10 +125,11 @@ CI Run #145 succeeded before merge.
 
 ## Known remaining work
 
-- Resolve administrator authentication safely.
-- Run and review opening-stock date reconciliation in dry-run mode only after authentication is restored.
+- Run and review opening-stock date reconciliation in dry-run mode only.
 - Apply reconciliation only after explicit review and approval.
 - Complete and validate web/mobile parity gaps where still outstanding.
+- Verify production environment variables through the Hostinger runtime configuration; SSH shell variables appeared empty during the recovery session even though migrations and Passenger startup succeeded.
+- Establish a tested automated restore drill and clearer database-file protection controls.
 - Ensure every future deployment and incident updates the project memory files required by `CLAUDE.md`.
 
 ## Production configuration invariants
@@ -97,6 +141,8 @@ ALLOW_AUTO_SEED=0
 PRODUCTION_INITIALIZATION_ENABLED=false
 DB_PATH=/home/u716763642/domains/wms.kynox.io/nodejs/data/wms.db
 ```
+
+The variables above are required runtime invariants. Their absence in an interactive SSH shell does not by itself prove they are absent from Passenger, but the hosting configuration must be verified before future risky operations.
 
 ## Commands forbidden in production
 
