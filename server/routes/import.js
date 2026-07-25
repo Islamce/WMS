@@ -72,6 +72,44 @@ function movementRecord(raw, movementType, filename, rowNumber) {
   return rec;
 }
 
+function resolveReceivingDate(materialCode, warehouseCode, binLocation, explicitValue) {
+  const explicit = parseDate(explicitValue);
+  if (explicit) return { date: explicit.slice(0, 10), source: 'EXPLICIT' };
+
+  const searches = [
+    {
+      source: 'HISTORICAL_BIN',
+      sql: `SELECT MIN(movement_date) AS receiving_date FROM stock_movement_history
+        WHERE movement_type='RECEIPT' AND material_code=? AND warehouse_code=? AND bin_location=?`,
+      params: [materialCode, warehouseCode, binLocation],
+    },
+    {
+      source: 'HISTORICAL_WAREHOUSE',
+      sql: `SELECT MIN(movement_date) AS receiving_date FROM stock_movement_history
+        WHERE movement_type='RECEIPT' AND material_code=? AND warehouse_code=?`,
+      params: [materialCode, warehouseCode],
+    },
+    {
+      source: 'HISTORICAL_MATERIAL',
+      sql: `SELECT MIN(movement_date) AS receiving_date FROM stock_movement_history
+        WHERE movement_type='RECEIPT' AND material_code=?`,
+      params: [materialCode],
+    },
+  ];
+
+  for (const search of searches) {
+    const row = db.prepare(search.sql).get(...search.params);
+    if (row && row.receiving_date) return { date: row.receiving_date, source: search.source };
+  }
+  return { date: new Date().toISOString().slice(0, 10), source: 'ESTIMATED_IMPORT_DATE' };
+}
+
+function transactionDateColumn() {
+  const columns = new Set(db.prepare('PRAGMA table_info(stock_transactions)').all().map((c) => c.name));
+  for (const name of ['transaction_date', 'created_at', 'timestamp']) if (columns.has(name)) return name;
+  return null;
+}
+
 router.get('/movements/summary', (req, res) => {
   if (!canImportMovements(req.user)) return res.status(403).json({ error: 'You do not have permission to view movement history.' });
   const totals = db.prepare(`SELECT movement_type, COUNT(*) rows, SUM(quantity) quantity,
@@ -147,6 +185,53 @@ router.post('/movements/chunk', (req, res) => {
   } catch (err) { res.status(400).json({ error: err.message }); }
 });
 
+router.post('/stock/reconcile-dates', (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Administrator permission is required.' });
+  const apply = req.body && req.body.apply === true;
+  const rows = db.prepare(`SELECT id, material_code, warehouse_code, bin_location, batch_number,
+    receiving_date, fifo_date, receiving_date_source
+    FROM batches WHERE remaining_quantity > 0
+    ORDER BY id`).all();
+  const txDateColumn = transactionDateColumn();
+  const proposals = [];
+
+  for (const batch of rows) {
+    const resolved = resolveReceivingDate(batch.material_code, batch.warehouse_code, batch.bin_location, null);
+    if (resolved.source === 'ESTIMATED_IMPORT_DATE') continue;
+    if (batch.receiving_date === resolved.date && batch.receiving_date_source === resolved.source) continue;
+    proposals.push({
+      batch_id: batch.id,
+      batch_number: batch.batch_number,
+      material_code: batch.material_code,
+      warehouse_code: batch.warehouse_code,
+      bin_location: batch.bin_location,
+      current_date: batch.receiving_date,
+      proposed_date: resolved.date,
+      date_source: resolved.source,
+    });
+  }
+
+  if (apply && proposals.length) {
+    db.transaction(() => {
+      const updateBatch = db.prepare(`UPDATE batches SET receiving_date=?, fifo_date=?, receiving_date_source=? WHERE id=?`);
+      const updateTx = txDateColumn
+        ? db.prepare(`UPDATE stock_transactions SET ${txDateColumn}=? WHERE notes LIKE ?`)
+        : null;
+      for (const proposal of proposals) {
+        updateBatch.run(proposal.proposed_date, proposal.proposed_date, proposal.date_source, proposal.batch_id);
+        if (updateTx) updateTx.run(proposal.proposed_date, `Opening stock import — batch ${proposal.batch_number}%`);
+      }
+    })();
+  }
+
+  res.json({
+    mode: apply ? 'APPLIED' : 'DRY_RUN',
+    proposed_updates: proposals.length,
+    transaction_date_column: txDateColumn,
+    changes: proposals.slice(0, 1000),
+  });
+});
+
 const ENTITIES = {
   materials: {
     permission: 'materials', columns: ['item_code', 'description', 'unit', 'plant', 'material_type', 'material_group', 'price', 'currency'],
@@ -170,7 +255,7 @@ const ENTITIES = {
   'movement-types': { permission: 'movement_types_master', columns: ['code', 'description', 'direction', 'cost_object'], run(rows) { const f = db.prepare('SELECT id FROM movement_types WHERE code=?'); const i = db.prepare('INSERT INTO movement_types(code,description,direction,cost_object) VALUES(@code,@description,@direction,@cost_object)'); const u = db.prepare('UPDATE movement_types SET description=@description,direction=@direction,cost_object=@cost_object WHERE code=@code'); return applyRows(rows, (r) => { const rec = { code: s(r.code), description: s(r.description), direction: s(r.direction).toUpperCase() || 'ISSUE', cost_object: s(r.cost_object) || null }; if (!rec.code || !rec.description) return { error: 'code and description are required' }; if (!['ISSUE', 'RECEIPT', 'TRANSFER', 'REVERSAL'].includes(rec.direction)) return { error: 'invalid direction' }; if (f.get(rec.code)) { u.run(rec); return { status: 'updated', message: rec.code }; } i.run(rec); return { status: 'created', message: rec.code }; }); } },
   stock: {
     permission: 'goods_receipt',
-    columns: ['material_code', 'warehouse_code', 'batch_number', 'quantity', 'bin_location', 'expiry_date', 'manufacturing_date', 'quality_status', 'po_number'],
+    columns: ['material_code', 'warehouse_code', 'batch_number', 'quantity', 'bin_location', 'receiving_date', 'expiry_date', 'manufacturing_date', 'quality_status', 'po_number'],
     run(rows, user) {
       const mat = db.prepare('SELECT id,item_code,description FROM materials WHERE item_code=?');
       const wh = db.prepare('SELECT 1 FROM warehouses WHERE warehouse_code=?');
@@ -179,17 +264,28 @@ const ENTITIES = {
         WHERE is_active=1 AND (full_bin_location=? OR bin_code=?)`);
       const location = db.prepare('SELECT id FROM locations WHERE code=?');
       const insertLocation = db.prepare('INSERT INTO locations(code) VALUES(?)');
-      const fb = db.prepare('SELECT id FROM batches WHERE material_id=? AND batch_number=? AND warehouse_code=? AND bin_location=?');
-      const ib = db.prepare(`INSERT INTO batches(batch_number,material_id,material_code,material_description,po_number,receiving_date,manufacturing_date,expiry_date,received_quantity,remaining_quantity,warehouse_code,bin_location,quality_status,fifo_date,fefo_date) VALUES(@batch_number,@material_id,@material_code,@material_description,@po_number,date('now'),@manufacturing_date,@expiry_date,@quantity,@quantity,@warehouse_code,@bin_location,@quality_status,date('now'),@expiry_date)`);
-      const top = db.prepare('UPDATE batches SET received_quantity=received_quantity+@quantity,remaining_quantity=remaining_quantity+@quantity WHERE id=@id');
+      const fb = db.prepare('SELECT id,receiving_date,receiving_date_source FROM batches WHERE material_id=? AND batch_number=? AND warehouse_code=? AND bin_location=?');
+      const ib = db.prepare(`INSERT INTO batches(batch_number,material_id,material_code,material_description,po_number,receiving_date,manufacturing_date,expiry_date,received_quantity,remaining_quantity,warehouse_code,bin_location,quality_status,fifo_date,fefo_date,receiving_date_source)
+        VALUES(@batch_number,@material_id,@material_code,@material_description,@po_number,@receiving_date,@manufacturing_date,@expiry_date,@quantity,@quantity,@warehouse_code,@bin_location,@quality_status,@receiving_date,@expiry_date,@receiving_date_source)`);
+      const top = db.prepare(`UPDATE batches SET received_quantity=received_quantity+@quantity,
+        remaining_quantity=remaining_quantity+@quantity,
+        receiving_date=CASE WHEN receiving_date IS NULL OR date(@receiving_date)<date(receiving_date) THEN @receiving_date ELSE receiving_date END,
+        fifo_date=CASE WHEN fifo_date IS NULL OR date(@receiving_date)<date(fifo_date) THEN @receiving_date ELSE fifo_date END,
+        receiving_date_source=CASE WHEN receiving_date IS NULL OR date(@receiving_date)<date(receiving_date) THEN @receiving_date_source ELSE receiving_date_source END
+        WHERE id=@id`);
       const upsertStock = db.prepare(`INSERT INTO material_location_stock(material_id,location_id,quantity)
         VALUES(@material_id,@location_id,@quantity)
         ON CONFLICT(material_id,location_id) DO UPDATE SET
           quantity=material_location_stock.quantity+excluded.quantity,
           updated_at=datetime('now')`);
-      const insertTransaction = db.prepare(`INSERT INTO stock_transactions
-        (transaction_type,material_id,location_id,quantity,user_id,notes)
-        VALUES('IN',@material_id,@location_id,@quantity,@user_id,@notes)`);
+      const txDateColumn = transactionDateColumn();
+      const insertTransaction = txDateColumn
+        ? db.prepare(`INSERT INTO stock_transactions
+          (transaction_type,material_id,location_id,quantity,user_id,notes,${txDateColumn})
+          VALUES('IN',@material_id,@location_id,@quantity,@user_id,@notes,@receiving_date)`)
+        : db.prepare(`INSERT INTO stock_transactions
+          (transaction_type,material_id,location_id,quantity,user_id,notes)
+          VALUES('IN',@material_id,@location_id,@quantity,@user_id,@notes)`);
 
       return applyRows(rows, (r) => {
         const materialCode = s(r.material_code);
@@ -212,14 +308,37 @@ const ENTITIES = {
         let locationRow = location.get(canonicalBin);
         if (!locationRow) locationRow = { id: Number(insertLocation.run(canonicalBin).lastInsertRowid) };
 
+        const receiving = resolveReceivingDate(m.item_code, warehouse_code, canonicalBin, r.receiving_date);
         const batch_number = s(r.batch_number) || `OPEN-${m.item_code}-${warehouse_code}-${canonicalBin}`;
         const existing = fb.get(m.id, batch_number, warehouse_code, canonicalBin);
-        if (existing) top.run({ id: existing.id, quantity });
-        else ib.run({ batch_number, material_id: m.id, material_code: m.item_code, material_description: m.description, po_number: s(r.po_number) || null, manufacturing_date: s(r.manufacturing_date) || null, expiry_date: s(r.expiry_date) || null, quantity, warehouse_code, bin_location: canonicalBin, quality_status: s(r.quality_status).toUpperCase() || 'RELEASED' });
+        const batchData = {
+          id: existing && existing.id,
+          batch_number,
+          material_id: m.id,
+          material_code: m.item_code,
+          material_description: m.description,
+          po_number: s(r.po_number) || null,
+          receiving_date: receiving.date,
+          receiving_date_source: receiving.source,
+          manufacturing_date: s(r.manufacturing_date) || null,
+          expiry_date: s(r.expiry_date) || null,
+          quantity,
+          warehouse_code,
+          bin_location: canonicalBin,
+          quality_status: s(r.quality_status).toUpperCase() || 'RELEASED',
+        };
+        if (existing) top.run(batchData); else ib.run(batchData);
 
         upsertStock.run({ material_id: m.id, location_id: locationRow.id, quantity });
-        insertTransaction.run({ material_id: m.id, location_id: locationRow.id, quantity, user_id: user.id, notes: `Opening stock import — batch ${batch_number}` });
-        return { status: existing ? 'updated' : 'created', message: `${m.item_code} +${quantity} at ${canonicalBin}` };
+        insertTransaction.run({
+          material_id: m.id,
+          location_id: locationRow.id,
+          quantity,
+          user_id: user.id,
+          receiving_date: receiving.date,
+          notes: `Opening stock import — batch ${batch_number}; receiving_date=${receiving.date}; date_source=${receiving.source}`,
+        });
+        return { status: existing ? 'updated' : 'created', message: `${m.item_code} +${quantity} at ${canonicalBin}; receiving ${receiving.date} (${receiving.source})` };
       });
     },
   },
