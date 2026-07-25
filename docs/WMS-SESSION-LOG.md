@@ -2,6 +2,110 @@
 
 This is the chronological operational memory for the project. It records durable summaries of conversations and work, not secrets or necessarily verbatim transcripts.
 
+## 2026-07-25 — Production database and authentication recovery completed
+
+**Objective:**
+
+Restore the correct production database and administrator access without seeding, resetting accounts, or risking the recovered data.
+
+**Starting state:**
+
+- `/healthz` was healthy.
+- Administrator login failed with `Invalid email or password`.
+- The active production `users` table contained zero rows.
+- Production commands `npm run seed` and `reset-admin` remained prohibited.
+
+**Conversation/request summary:**
+
+- Performed read-only inspection of the users schema and safe account fields.
+- Determined that the active production database was empty, not that the password was incorrect.
+- Searched all SQLite files under the account for candidate recovery copies.
+- Compared candidate databases for integrity, users, roles, permissions, materials, warehouses, migrations, and timestamps.
+- Selected a validated final live copy and executed a rollback-safe restoration.
+- User confirmed successful login after restart.
+
+**Evidence/results:**
+
+Active empty database before restoration:
+
+- integrity: `ok`
+- users: 0
+- roles: 0
+- materials: 0
+- warehouses: 0
+
+Selected source:
+
+`/home/u716763642/wms-final-live-copy-20260725-090240/wms.db`
+
+- SHA-256: `02745ba0c34386f7aaab23538dda9ab4ec5b947c9e64f1a1b50b9fb9224c2df4`
+- integrity: `ok`
+- users: 9
+- roles: 11
+- permissions: 35
+- materials: 9,746
+- warehouses: 1
+- migrations before restore: 10
+
+Safety directory:
+
+`/home/u716763642/wms-pre-auth-restore-20260725-112132`
+
+Safety files included:
+
+- `current-empty-production.db`
+- `production-empty-before-restore.db`
+- `production-empty-before-restore.db-wal`
+- `production-empty-before-restore.db-shm`
+- `selected-recovery-source.db`
+
+**Commands/actions:**
+
+- Used read-only SQLite/Node inspection only during diagnosis.
+- Created SQLite and file-level safety copies.
+- Verified integrity and checksums.
+- Stopped only the WMS Passenger process.
+- Moved the empty active DB/WAL/SHM files into the safety directory.
+- Copied the selected source to `data/wms.db` and set mode `600`.
+- Ran `npm run migrate`; result: `Migrations: up to date (12 recorded)`.
+- Restarted Passenger via `tmp/restart.txt`.
+- Confirmed `/healthz` returned HTTP 200 and `{"status":"ok","service":"wms"}`.
+
+**Decisions:**
+
+- Did not run seed or reset-admin.
+- Restored the complete validated database rather than copying individual user records.
+- Retained all displaced database and WAL files for rollback.
+- Kept opening-stock reconciliation unapplied.
+
+**Risks/incidents:**
+
+- Interactive SSH variables `NODE_ENV`, `SKIP_AUTO_SEED`, `ALLOW_AUTO_SEED`, and `DB_PATH` printed empty. This does not prove Passenger lacks them, but Hostinger runtime configuration needs verification.
+- The recovered state has zero batches and stock transactions; intended operational stock cannot be inferred from material-master count alone.
+
+**Production state:**
+
+- health: healthy
+- database integrity: `ok`
+- users: 9
+- materials: 9,746
+- migrations: 12
+- administrator login: user-confirmed successful
+- reconciliation: not applied
+
+**Remaining work:**
+
+- Preserve the safety directory until a reviewed retention decision.
+- Verify Passenger/runtime environment variables.
+- Perform opening-stock reconciliation dry-run only and review the output.
+- Establish a repeatable restore drill and stronger DB-file protection.
+
+**Exact next step:**
+
+Run the authenticated opening-stock date reconciliation endpoint with `apply: false`, capture the complete result, and review it before any apply operation.
+
+---
+
 ## 2026-07-25 — Project memory system and authentication follow-up
 
 **Objective:**
@@ -24,10 +128,10 @@ Prevent repeated loss of context between AI sessions and continue production rec
 - Added mandatory AI operating instructions and project-memory documents on branch `docs/project-memory-and-runbook`.
 - Recorded production safeguards, incidents, decisions, current status, and future documentation protocol.
 
-**Next operational step:**
+**Result:**
 
-- Inspect the production users table schema and non-secret account fields read-only.
-- Do not seed, reset accounts, or modify the database until the evidence is reviewed.
+- PR #41 merged with durable project-memory files.
+- The authentication follow-up was later resolved in the recovery session recorded above.
 
 ---
 
@@ -43,7 +147,7 @@ Prevent repeated loss of context between AI sessions and continue production rec
 - `npm run migrate` result: `Migrations: up to date (12 recorded).`
 - Health response: `{"status":"ok","service":"wms"}`
 
-**Result:** Deployment technically healthy. Reconciliation not applied. Login failure discovered afterward.
+**Result:** Deployment technically healthy. Reconciliation not applied. Login failure discovered afterward and later resolved.
 
 ---
 
@@ -60,7 +164,7 @@ Prevent repeated loss of context between AI sessions and continue production rec
 - Health check passed.
 - Dashboard showed 9,746 materials, 1,245 empty bins, zero occupied bins, and zero stock.
 
-**Result:** Application and database recovered; authentication follow-up remains open.
+**Result:** Initial recovery restored application availability. A later empty active database and authentication failure required the controlled restoration documented above.
 
 ---
 
