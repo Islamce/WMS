@@ -121,6 +121,55 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    id: '011_opening_stock_receiving_date_source',
+    description: 'Track the provenance of opening-stock receiving dates for aging and KPI auditability.',
+    up(database) {
+      addColumnIfMissing(database, 'batches', 'receiving_date_source', "TEXT NOT NULL DEFAULT 'ESTIMATED_IMPORT_DATE'");
+      database.exec('CREATE INDEX IF NOT EXISTS idx_batches_receiving_source ON batches(receiving_date_source, receiving_date)');
+    },
+  },
+  {
+    id: '012_opening_stock_batch_registry',
+    description: 'Permanently register opening-stock batches and their exact material/bin ledger scope.',
+    up(database) {
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS opening_stock_batch_registry (
+          batch_id INTEGER PRIMARY KEY REFERENCES batches(id) ON DELETE CASCADE,
+          material_id INTEGER NOT NULL REFERENCES materials(id),
+          location_id INTEGER NOT NULL REFERENCES locations(id),
+          registered_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_opening_registry_scope
+          ON opening_stock_batch_registry(material_id, location_id);
+
+        INSERT OR IGNORE INTO opening_stock_batch_registry(batch_id, material_id, location_id)
+        SELECT b.id, b.material_id, l.id
+        FROM batches b
+        JOIN locations l ON l.code = b.bin_location
+        JOIN stock_transactions st
+          ON st.material_id = b.material_id
+         AND st.location_id = l.id
+        WHERE st.notes = 'Opening stock import — batch ' || b.batch_number
+           OR st.notes LIKE 'Opening stock import — batch ' || b.batch_number || ';%';
+
+        CREATE TRIGGER IF NOT EXISTS register_opening_stock_transaction
+        AFTER INSERT ON stock_transactions
+        WHEN NEW.notes LIKE 'Opening stock import — batch %'
+        BEGIN
+          INSERT OR IGNORE INTO opening_stock_batch_registry(batch_id, material_id, location_id)
+          SELECT b.id, NEW.material_id, NEW.location_id
+          FROM batches b
+          JOIN locations l ON l.code = b.bin_location AND l.id = NEW.location_id
+          WHERE b.material_id = NEW.material_id
+            AND (NEW.notes = 'Opening stock import — batch ' || b.batch_number
+              OR NEW.notes LIKE 'Opening stock import — batch ' || b.batch_number || ';%')
+          ORDER BY b.id DESC
+          LIMIT 1;
+        END;
+      `);
+    },
+  },
 ];
 
 function ensureTable() {

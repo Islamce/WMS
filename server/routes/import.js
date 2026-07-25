@@ -5,14 +5,17 @@ const express = require('express');
 const crypto = require('crypto');
 const db = require('./../db/connection');
 const { authenticate } = require('./../middleware/auth');
-const { recordMovement } = require('./../services/ledger');
 
 const router = express.Router();
 router.use(authenticate);
 
 const MAX_ROWS = 5000;
 const s = (v) => (v == null ? '' : String(v).trim());
-const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+const num = (v) => {
+  const normalized = typeof v === 'string' ? v.replace(/,/g, '').trim() : v;
+  const n = Number(normalized);
+  return Number.isFinite(n) ? n : 0;
+};
 const normalizeKey = (k) => s(k).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
 const normalizeRow = (row) => Object.fromEntries(Object.entries(row || {}).map(([k, v]) => [normalizeKey(k), v]));
 
@@ -69,6 +72,44 @@ function movementRecord(raw, movementType, filename, rowNumber) {
   return rec;
 }
 
+function resolveReceivingDate(materialCode, warehouseCode, binLocation, explicitValue) {
+  const explicit = parseDate(explicitValue);
+  if (explicit) return { date: explicit.slice(0, 10), source: 'EXPLICIT' };
+
+  const searches = [
+    {
+      source: 'HISTORICAL_BIN',
+      sql: `SELECT MIN(movement_date) AS receiving_date FROM stock_movement_history
+        WHERE movement_type='RECEIPT' AND material_code=? AND warehouse_code=? AND bin_location=?`,
+      params: [materialCode, warehouseCode, binLocation],
+    },
+    {
+      source: 'HISTORICAL_WAREHOUSE',
+      sql: `SELECT MIN(movement_date) AS receiving_date FROM stock_movement_history
+        WHERE movement_type='RECEIPT' AND material_code=? AND warehouse_code=?`,
+      params: [materialCode, warehouseCode],
+    },
+    {
+      source: 'HISTORICAL_MATERIAL',
+      sql: `SELECT MIN(movement_date) AS receiving_date FROM stock_movement_history
+        WHERE movement_type='RECEIPT' AND material_code=?`,
+      params: [materialCode],
+    },
+  ];
+
+  for (const search of searches) {
+    const row = db.prepare(search.sql).get(...search.params);
+    if (row && row.receiving_date) return { date: row.receiving_date, source: search.source };
+  }
+  return { date: new Date().toISOString().slice(0, 10), source: 'ESTIMATED_IMPORT_DATE' };
+}
+
+function transactionDateColumn() {
+  const columns = new Set(db.prepare('PRAGMA table_info(stock_transactions)').all().map((c) => c.name));
+  for (const name of ['transaction_date', 'created_at', 'timestamp']) if (columns.has(name)) return name;
+  return null;
+}
+
 router.get('/movements/summary', (req, res) => {
   if (!canImportMovements(req.user)) return res.status(403).json({ error: 'You do not have permission to view movement history.' });
   const totals = db.prepare(`SELECT movement_type, COUNT(*) rows, SUM(quantity) quantity,
@@ -112,7 +153,7 @@ router.post('/movements/chunk', (req, res) => {
     const errIns = db.prepare(`INSERT INTO stock_movement_import_errors
       (import_batch_id, source_row_number, external_id, error_code, error_message, raw_row_json)
       VALUES (?, ?, ?, ?, ?, ?)`);
-    let inserted = 0, duplicates = 0, invalid = 0;
+    let inserted = 0; let duplicates = 0; let invalid = 0;
     const offset = Number(body.row_offset) || 0;
     rows.forEach((raw, i) => {
       const rowNo = offset + i + 2;
@@ -144,6 +185,53 @@ router.post('/movements/chunk', (req, res) => {
   } catch (err) { res.status(400).json({ error: err.message }); }
 });
 
+router.post('/stock/reconcile-dates', (req, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Administrator permission is required.' });
+  const apply = req.body && req.body.apply === true;
+  const rows = db.prepare(`SELECT id, material_code, warehouse_code, bin_location, batch_number,
+    receiving_date, fifo_date, receiving_date_source
+    FROM batches WHERE remaining_quantity > 0
+    ORDER BY id`).all();
+  const txDateColumn = transactionDateColumn();
+  const proposals = [];
+
+  for (const batch of rows) {
+    const resolved = resolveReceivingDate(batch.material_code, batch.warehouse_code, batch.bin_location, null);
+    if (resolved.source === 'ESTIMATED_IMPORT_DATE') continue;
+    if (batch.receiving_date === resolved.date && batch.receiving_date_source === resolved.source) continue;
+    proposals.push({
+      batch_id: batch.id,
+      batch_number: batch.batch_number,
+      material_code: batch.material_code,
+      warehouse_code: batch.warehouse_code,
+      bin_location: batch.bin_location,
+      current_date: batch.receiving_date,
+      proposed_date: resolved.date,
+      date_source: resolved.source,
+    });
+  }
+
+  if (apply && proposals.length) {
+    db.transaction(() => {
+      const updateBatch = db.prepare(`UPDATE batches SET receiving_date=?, fifo_date=?, receiving_date_source=? WHERE id=?`);
+      const updateTx = txDateColumn
+        ? db.prepare(`UPDATE stock_transactions SET ${txDateColumn}=? WHERE notes LIKE ?`)
+        : null;
+      for (const proposal of proposals) {
+        updateBatch.run(proposal.proposed_date, proposal.proposed_date, proposal.date_source, proposal.batch_id);
+        if (updateTx) updateTx.run(proposal.proposed_date, `Opening stock import — batch ${proposal.batch_number}%`);
+      }
+    })();
+  }
+
+  res.json({
+    mode: apply ? 'APPLIED' : 'DRY_RUN',
+    proposed_updates: proposals.length,
+    transaction_date_column: txDateColumn,
+    changes: proposals.slice(0, 1000),
+  });
+});
+
 const ENTITIES = {
   materials: {
     permission: 'materials', columns: ['item_code', 'description', 'unit', 'plant', 'material_type', 'material_group', 'price', 'currency'],
@@ -154,26 +242,123 @@ const ENTITIES = {
       const upd = db.prepare(`UPDATE materials SET plant=@plant,description=@description,unit=@unit,price=@price,currency=@currency,
         material_type=@material_type,material_group=@material_group WHERE item_code=@item_code`);
       return applyRows(rows, (r) => {
-        const item_code=s(r.item_code); if (!item_code || !s(r.description)) return {error:'item_code and description are required'};
-        const rec={plant:s(r.plant),item_code,description:s(r.description),unit:s(r.unit)||'EA',price:num(r.price),currency:s(r.currency)||'USD',material_type:s(r.material_type),material_group:s(r.material_group)};
-        if(find.get(item_code)){upd.run(rec);return{status:'updated',message:item_code}} ins.run(rec);return{status:'created',message:item_code};
+        const item_code = s(r.item_code); if (!item_code || !s(r.description)) return { error: 'item_code and description are required' };
+        const rec = { plant: s(r.plant), item_code, description: s(r.description), unit: s(r.unit) || 'EA', price: num(r.price), currency: s(r.currency) || 'USD', material_type: s(r.material_type), material_group: s(r.material_group) };
+        if (find.get(item_code)) { upd.run(rec); return { status: 'updated', message: item_code }; }
+        ins.run(rec); return { status: 'created', message: item_code };
       });
     },
   },
-  locations: { permission:'locations', columns:['code'], run(rows){ const f=db.prepare('SELECT id FROM locations WHERE code=?'); const i=db.prepare('INSERT INTO locations(code) VALUES(?)'); return applyRows(rows,r=>{const code=s(r.code);if(!code)return{error:'code is required'};if(f.get(code))return{status:'skipped',message:`exists: ${code}`};i.run(code);return{status:'created',message:code};});}},
-  warehouses: { permission:'warehouses_master', columns:['warehouse_code','warehouse_name','plant','storage_location','warehouse_type'], run(rows){ const f=db.prepare('SELECT id FROM warehouses WHERE warehouse_code=?'); const i=db.prepare('INSERT INTO warehouses(warehouse_code,warehouse_name,plant,storage_location,warehouse_type) VALUES(@warehouse_code,@warehouse_name,@plant,@storage_location,@warehouse_type)'); const u=db.prepare('UPDATE warehouses SET warehouse_name=@warehouse_name,plant=@plant,storage_location=@storage_location,warehouse_type=@warehouse_type WHERE warehouse_code=@warehouse_code'); return applyRows(rows,r=>{const rec={warehouse_code:s(r.warehouse_code),warehouse_name:s(r.warehouse_name),plant:s(r.plant)||null,storage_location:s(r.storage_location)||null,warehouse_type:s(r.warehouse_type)||null};if(!rec.warehouse_code||!rec.warehouse_name)return{error:'warehouse_code and warehouse_name are required'};if(f.get(rec.warehouse_code)){u.run(rec);return{status:'updated',message:rec.warehouse_code}}i.run(rec);return{status:'created',message:rec.warehouse_code};});}},
-  bins: { permission:'bins_master', columns:['warehouse_code','bin_code','full_bin_location','zone','rack','level','column_number','capacity'], run(rows){ const wh=db.prepare('SELECT 1 FROM warehouses WHERE warehouse_code=?'); const f=db.prepare('SELECT id FROM bin_locations WHERE warehouse_code=? AND full_bin_location=?'); const i=db.prepare('INSERT INTO bin_locations(warehouse_code,zone,rack,line_or_aisle,level,column_number,bin_code,full_bin_location,capacity) VALUES(@warehouse_code,@zone,@rack,@line_or_aisle,@level,@column_number,@bin_code,@full_bin_location,@capacity)'); const u=db.prepare('UPDATE bin_locations SET zone=@zone,rack=@rack,level=@level,column_number=@column_number,bin_code=@bin_code,capacity=@capacity WHERE warehouse_code=@warehouse_code AND full_bin_location=@full_bin_location'); return applyRows(rows,r=>{const warehouse_code=s(r.warehouse_code),bin_code=s(r.bin_code)||s(r.full_bin_location),full_bin_location=s(r.full_bin_location)||(warehouse_code&&bin_code?`${warehouse_code}-${bin_code}`:'');if(!warehouse_code||!full_bin_location)return{error:'warehouse_code and bin_code/full_bin_location are required'};if(!wh.get(warehouse_code))return{error:`unknown warehouse ${warehouse_code}`};const rec={warehouse_code,zone:s(r.zone)||null,rack:s(r.rack)||null,line_or_aisle:s(r.line_or_aisle)||null,level:s(r.level)||null,column_number:s(r.column_number)||null,bin_code,full_bin_location,capacity:num(r.capacity)};if(f.get(warehouse_code,full_bin_location)){u.run(rec);return{status:'updated',message:full_bin_location}}i.run(rec);return{status:'created',message:full_bin_location};});}},
-  'movement-types': { permission:'movement_types_master', columns:['code','description','direction','cost_object'], run(rows){const f=db.prepare('SELECT id FROM movement_types WHERE code=?');const i=db.prepare('INSERT INTO movement_types(code,description,direction,cost_object) VALUES(@code,@description,@direction,@cost_object)');const u=db.prepare('UPDATE movement_types SET description=@description,direction=@direction,cost_object=@cost_object WHERE code=@code');return applyRows(rows,r=>{const rec={code:s(r.code),description:s(r.description),direction:s(r.direction).toUpperCase()||'ISSUE',cost_object:s(r.cost_object)||null};if(!rec.code||!rec.description)return{error:'code and description are required'};if(!['ISSUE','RECEIPT','TRANSFER','REVERSAL'].includes(rec.direction))return{error:'invalid direction'};if(f.get(rec.code)){u.run(rec);return{status:'updated',message:rec.code}}i.run(rec);return{status:'created',message:rec.code};});}},
-  stock: { permission:'goods_receipt', columns:['material_code','warehouse_code','batch_number','quantity','bin_location','expiry_date','manufacturing_date','quality_status','po_number'], run(rows,user){const mat=db.prepare('SELECT id,item_code,description FROM materials WHERE item_code=?');const wh=db.prepare('SELECT 1 FROM warehouses WHERE warehouse_code=?');const fb=db.prepare('SELECT id FROM batches WHERE material_id=? AND batch_number=? AND warehouse_code=?');const ib=db.prepare(`INSERT INTO batches(batch_number,material_id,material_code,material_description,po_number,receiving_date,manufacturing_date,expiry_date,received_quantity,remaining_quantity,warehouse_code,bin_location,quality_status,fifo_date,fefo_date) VALUES(@batch_number,@material_id,@material_code,@material_description,@po_number,date('now'),@manufacturing_date,@expiry_date,@quantity,@quantity,@warehouse_code,@bin_location,@quality_status,date('now'),@expiry_date)`);const top=db.prepare('UPDATE batches SET received_quantity=received_quantity+@quantity,remaining_quantity=remaining_quantity+@quantity WHERE id=@id');return applyRows(rows,r=>{const m=mat.get(s(r.material_code));if(!m)return{error:`unknown material ${s(r.material_code)}`};const warehouse_code=s(r.warehouse_code);if(!warehouse_code||!wh.get(warehouse_code))return{error:`unknown warehouse ${warehouse_code}`};const quantity=num(r.quantity);if(quantity<=0)return{error:'quantity must be greater than zero'};const batch_number=s(r.batch_number)||`OPEN-${m.item_code}-${warehouse_code}`,existing=fb.get(m.id,batch_number,warehouse_code);if(existing)top.run({id:existing.id,quantity});else ib.run({batch_number,material_id:m.id,material_code:m.item_code,material_description:m.description,po_number:s(r.po_number)||null,manufacturing_date:s(r.manufacturing_date)||null,expiry_date:s(r.expiry_date)||null,quantity,warehouse_code,bin_location:s(r.bin_location)||null,quality_status:s(r.quality_status).toUpperCase()||'RELEASED'});recordMovement({type:'IN',materialId:m.id,warehouseCode:warehouse_code,quantity,userId:user.id,notes:`Opening stock import — batch ${batch_number}`});return{status:existing?'updated':'created',message:`${m.item_code} +${quantity}`};});}},
+  locations: { permission: 'locations', columns: ['code'], run(rows) { const f = db.prepare('SELECT id FROM locations WHERE code=?'); const i = db.prepare('INSERT INTO locations(code) VALUES(?)'); return applyRows(rows, (r) => { const code = s(r.code); if (!code) return { error: 'code is required' }; if (f.get(code)) return { status: 'skipped', message: `exists: ${code}` }; i.run(code); return { status: 'created', message: code }; }); } },
+  warehouses: { permission: 'warehouses_master', columns: ['warehouse_code', 'warehouse_name', 'plant', 'storage_location', 'warehouse_type'], run(rows) { const f = db.prepare('SELECT id FROM warehouses WHERE warehouse_code=?'); const i = db.prepare('INSERT INTO warehouses(warehouse_code,warehouse_name,plant,storage_location,warehouse_type) VALUES(@warehouse_code,@warehouse_name,@plant,@storage_location,@warehouse_type)'); const u = db.prepare('UPDATE warehouses SET warehouse_name=@warehouse_name,plant=@plant,storage_location=@storage_location,warehouse_type=@warehouse_type WHERE warehouse_code=@warehouse_code'); return applyRows(rows, (r) => { const rec = { warehouse_code: s(r.warehouse_code), warehouse_name: s(r.warehouse_name), plant: s(r.plant) || null, storage_location: s(r.storage_location) || null, warehouse_type: s(r.warehouse_type) || null }; if (!rec.warehouse_code || !rec.warehouse_name) return { error: 'warehouse_code and warehouse_name are required' }; if (f.get(rec.warehouse_code)) { u.run(rec); return { status: 'updated', message: rec.warehouse_code }; } i.run(rec); return { status: 'created', message: rec.warehouse_code }; }); } },
+  bins: { permission: 'bins_master', columns: ['warehouse_code', 'bin_code', 'full_bin_location', 'zone', 'rack', 'level', 'column_number', 'capacity'], run(rows) { const wh = db.prepare('SELECT 1 FROM warehouses WHERE warehouse_code=?'); const f = db.prepare('SELECT id FROM bin_locations WHERE warehouse_code=? AND full_bin_location=?'); const i = db.prepare('INSERT INTO bin_locations(warehouse_code,zone,rack,line_or_aisle,level,column_number,bin_code,full_bin_location,capacity) VALUES(@warehouse_code,@zone,@rack,@line_or_aisle,@level,@column_number,@bin_code,@full_bin_location,@capacity)'); const u = db.prepare('UPDATE bin_locations SET zone=@zone,rack=@rack,level=@level,column_number=@column_number,bin_code=@bin_code,capacity=@capacity WHERE warehouse_code=@warehouse_code AND full_bin_location=@full_bin_location'); return applyRows(rows, (r) => { const warehouse_code = s(r.warehouse_code); const bin_code = s(r.bin_code) || s(r.full_bin_location); const full_bin_location = s(r.full_bin_location) || (warehouse_code && bin_code ? `${warehouse_code}-${bin_code}` : ''); if (!warehouse_code || !full_bin_location) return { error: 'warehouse_code and bin_code/full_bin_location are required' }; if (!wh.get(warehouse_code)) return { error: `unknown warehouse ${warehouse_code}` }; const rec = { warehouse_code, zone: s(r.zone) || null, rack: s(r.rack) || null, line_or_aisle: s(r.line_or_aisle) || null, level: s(r.level) || null, column_number: s(r.column_number) || null, bin_code, full_bin_location, capacity: num(r.capacity) }; if (f.get(warehouse_code, full_bin_location)) { u.run(rec); return { status: 'updated', message: full_bin_location }; } i.run(rec); return { status: 'created', message: full_bin_location }; }); } },
+  'movement-types': { permission: 'movement_types_master', columns: ['code', 'description', 'direction', 'cost_object'], run(rows) { const f = db.prepare('SELECT id FROM movement_types WHERE code=?'); const i = db.prepare('INSERT INTO movement_types(code,description,direction,cost_object) VALUES(@code,@description,@direction,@cost_object)'); const u = db.prepare('UPDATE movement_types SET description=@description,direction=@direction,cost_object=@cost_object WHERE code=@code'); return applyRows(rows, (r) => { const rec = { code: s(r.code), description: s(r.description), direction: s(r.direction).toUpperCase() || 'ISSUE', cost_object: s(r.cost_object) || null }; if (!rec.code || !rec.description) return { error: 'code and description are required' }; if (!['ISSUE', 'RECEIPT', 'TRANSFER', 'REVERSAL'].includes(rec.direction)) return { error: 'invalid direction' }; if (f.get(rec.code)) { u.run(rec); return { status: 'updated', message: rec.code }; } i.run(rec); return { status: 'created', message: rec.code }; }); } },
+  stock: {
+    permission: 'goods_receipt',
+    columns: ['material_code', 'warehouse_code', 'batch_number', 'quantity', 'bin_location', 'receiving_date', 'expiry_date', 'manufacturing_date', 'quality_status', 'po_number'],
+    run(rows, user) {
+      const mat = db.prepare('SELECT id,item_code,description FROM materials WHERE item_code=?');
+      const wh = db.prepare('SELECT 1 FROM warehouses WHERE warehouse_code=?');
+      const bin = db.prepare(`SELECT id, warehouse_code, bin_code, full_bin_location
+        FROM bin_locations
+        WHERE is_active=1 AND (full_bin_location=? OR bin_code=?)`);
+      const location = db.prepare('SELECT id FROM locations WHERE code=?');
+      const insertLocation = db.prepare('INSERT INTO locations(code) VALUES(?)');
+      const fb = db.prepare('SELECT id,receiving_date,receiving_date_source FROM batches WHERE material_id=? AND batch_number=? AND warehouse_code=? AND bin_location=?');
+      const ib = db.prepare(`INSERT INTO batches(batch_number,material_id,material_code,material_description,po_number,receiving_date,manufacturing_date,expiry_date,received_quantity,remaining_quantity,warehouse_code,bin_location,quality_status,fifo_date,fefo_date,receiving_date_source)
+        VALUES(@batch_number,@material_id,@material_code,@material_description,@po_number,@receiving_date,@manufacturing_date,@expiry_date,@quantity,@quantity,@warehouse_code,@bin_location,@quality_status,@receiving_date,@expiry_date,@receiving_date_source)`);
+      const top = db.prepare(`UPDATE batches SET received_quantity=received_quantity+@quantity,
+        remaining_quantity=remaining_quantity+@quantity,
+        receiving_date=CASE WHEN receiving_date IS NULL OR date(@receiving_date)<date(receiving_date) THEN @receiving_date ELSE receiving_date END,
+        fifo_date=CASE WHEN fifo_date IS NULL OR date(@receiving_date)<date(fifo_date) THEN @receiving_date ELSE fifo_date END,
+        receiving_date_source=CASE WHEN receiving_date IS NULL OR date(@receiving_date)<date(receiving_date) THEN @receiving_date_source ELSE receiving_date_source END
+        WHERE id=@id`);
+      const upsertStock = db.prepare(`INSERT INTO material_location_stock(material_id,location_id,quantity)
+        VALUES(@material_id,@location_id,@quantity)
+        ON CONFLICT(material_id,location_id) DO UPDATE SET
+          quantity=material_location_stock.quantity+excluded.quantity,
+          updated_at=datetime('now')`);
+      const txDateColumn = transactionDateColumn();
+      const insertTransaction = txDateColumn
+        ? db.prepare(`INSERT INTO stock_transactions
+          (transaction_type,material_id,location_id,quantity,user_id,notes,${txDateColumn})
+          VALUES('IN',@material_id,@location_id,@quantity,@user_id,@notes,@receiving_date)`)
+        : db.prepare(`INSERT INTO stock_transactions
+          (transaction_type,material_id,location_id,quantity,user_id,notes)
+          VALUES('IN',@material_id,@location_id,@quantity,@user_id,@notes)`);
+
+      return applyRows(rows, (r) => {
+        const materialCode = s(r.material_code);
+        const m = mat.get(materialCode);
+        if (!m) return { error: `unknown material ${materialCode}` };
+
+        const warehouse_code = s(r.warehouse_code);
+        if (!warehouse_code || !wh.get(warehouse_code)) return { error: `unknown warehouse ${warehouse_code}` };
+
+        const bin_location = s(r.bin_location);
+        if (!bin_location) return { error: 'bin_location is required' };
+        const resolvedBin = bin.get(bin_location, bin_location);
+        if (!resolvedBin) return { error: `unknown bin ${bin_location}` };
+        if (resolvedBin.warehouse_code !== warehouse_code) return { error: `bin ${bin_location} does not belong to warehouse ${warehouse_code}` };
+
+        const quantity = num(r.quantity);
+        if (!(quantity > 0)) return { error: 'quantity must be a valid number greater than zero' };
+
+        const canonicalBin = s(resolvedBin.full_bin_location) || s(resolvedBin.bin_code);
+        let locationRow = location.get(canonicalBin);
+        if (!locationRow) locationRow = { id: Number(insertLocation.run(canonicalBin).lastInsertRowid) };
+
+        const receiving = resolveReceivingDate(m.item_code, warehouse_code, canonicalBin, r.receiving_date);
+        const batch_number = s(r.batch_number) || `OPEN-${m.item_code}-${warehouse_code}-${canonicalBin}`;
+        const existing = fb.get(m.id, batch_number, warehouse_code, canonicalBin);
+        const batchData = {
+          id: existing && existing.id,
+          batch_number,
+          material_id: m.id,
+          material_code: m.item_code,
+          material_description: m.description,
+          po_number: s(r.po_number) || null,
+          receiving_date: receiving.date,
+          receiving_date_source: receiving.source,
+          manufacturing_date: s(r.manufacturing_date) || null,
+          expiry_date: s(r.expiry_date) || null,
+          quantity,
+          warehouse_code,
+          bin_location: canonicalBin,
+          quality_status: s(r.quality_status).toUpperCase() || 'RELEASED',
+        };
+        if (existing) top.run(batchData); else ib.run(batchData);
+
+        upsertStock.run({ material_id: m.id, location_id: locationRow.id, quantity });
+        insertTransaction.run({
+          material_id: m.id,
+          location_id: locationRow.id,
+          quantity,
+          user_id: user.id,
+          receiving_date: receiving.date,
+          notes: `Opening stock import — batch ${batch_number}; receiving_date=${receiving.date}; date_source=${receiving.source}`,
+        });
+        return { status: existing ? 'updated' : 'created', message: `${m.item_code} +${quantity} at ${canonicalBin}; receiving ${receiving.date} (${receiving.source})` };
+      });
+    },
+  },
 };
 
 function applyRows(rows, handler) {
-  const results=[]; let created=0,updated=0,skipped=0,errors=0;
-  db.transaction(()=>{rows.forEach((r,i)=>{let out;try{out=handler(r)||{}}catch(e){out={error:e.message}}if(out.error){errors++;results.push({row:i+1,status:'error',message:out.error})}else if(out.status==='updated'){updated++;results.push({row:i+1,status:'updated',message:out.message})}else if(out.status==='skipped'){skipped++;results.push({row:i+1,status:'skipped',message:out.message})}else{created++;results.push({row:i+1,status:'created',message:out.message})}})})();
-  return {created,updated,skipped,errors,results};
+  const results = []; let created = 0; let updated = 0; let skipped = 0; let errors = 0;
+  db.transaction(() => {
+    rows.forEach((r, i) => {
+      const out = handler(r) || {};
+      if (out.error) { errors++; results.push({ row: i + 1, status: 'error', message: out.error }); }
+      else if (out.status === 'updated') { updated++; results.push({ row: i + 1, status: 'updated', message: out.message }); }
+      else if (out.status === 'skipped') { skipped++; results.push({ row: i + 1, status: 'skipped', message: out.message }); }
+      else { created++; results.push({ row: i + 1, status: 'created', message: out.message }); }
+    });
+  })();
+  return { created, updated, skipped, errors, results };
 }
 
-router.get('/meta',(req,res)=>{const entities=Object.entries(ENTITIES).filter(([,d])=>req.user.role==='admin'||req.user.permissions.includes(d.permission)).map(([key,d])=>({key,columns:d.columns}));res.json({entities});});
-router.post('/:entity',(req,res)=>{const def=ENTITIES[req.params.entity];if(!def)return res.status(404).json({error:'Unknown import type.'});if(req.user.role!=='admin'&&!req.user.permissions.includes(def.permission))return res.status(403).json({error:'You do not have permission to import this data.'});const rows=Array.isArray(req.body.rows)?req.body.rows:[];if(!rows.length)return res.status(400).json({error:'No rows to import.'});if(rows.length>MAX_ROWS)return res.status(400).json({error:`Maximum ${MAX_ROWS} rows per import.`});try{const result=def.run(rows,req.user);res.json({message:`${result.created} created, ${result.updated} updated, ${result.skipped} skipped, ${result.errors} errors.`,...result});}catch(err){res.status(500).json({error:err.message});}});
+router.get('/meta', (req, res) => { const entities = Object.entries(ENTITIES).filter(([, d]) => req.user.role === 'admin' || req.user.permissions.includes(d.permission)).map(([key, d]) => ({ key, columns: d.columns })); res.json({ entities }); });
+router.post('/:entity', (req, res) => { const def = ENTITIES[req.params.entity]; if (!def) return res.status(404).json({ error: 'Unknown import type.' }); if (req.user.role !== 'admin' && !req.user.permissions.includes(def.permission)) return res.status(403).json({ error: 'You do not have permission to import this data.' }); const rows = Array.isArray(req.body.rows) ? req.body.rows : []; if (!rows.length) return res.status(400).json({ error: 'No rows to import.' }); if (rows.length > MAX_ROWS) return res.status(400).json({ error: `Maximum ${MAX_ROWS} rows per import.` }); try { const result = def.run(rows, req.user); res.json({ message: `${result.created} created, ${result.updated} updated, ${result.skipped} skipped, ${result.errors} errors.`, ...result }); } catch (err) { res.status(500).json({ error: err.message }); } });
 
 module.exports = router;
