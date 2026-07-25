@@ -121,6 +121,14 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    id: '011_opening_stock_receiving_date_source',
+    description: 'Track the provenance of opening-stock receiving dates for aging and KPI auditability.',
+    up(database) {
+      addColumnIfMissing(database, 'batches', 'receiving_date_source', "TEXT NOT NULL DEFAULT 'ESTIMATED_IMPORT_DATE'");
+      database.exec('CREATE INDEX IF NOT EXISTS idx_batches_receiving_source ON batches(receiving_date_source, receiving_date)');
+    },
+  },
 ];
 
 function ensureTable() {
