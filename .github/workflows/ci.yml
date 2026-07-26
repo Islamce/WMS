@@ -36,6 +36,11 @@ jobs:
 
       - name: Upload E2E diagnostic log
         if: always()
+        # Best-effort diagnostic upload — must never fail the job. When the
+        # account's Actions artifact storage quota is exhausted, CreateArtifact
+        # errors out; that is an infrastructure condition, not a test failure,
+        # so it should not gate the build.
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: wms-e2e-diagnostic
