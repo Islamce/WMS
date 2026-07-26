@@ -80,15 +80,21 @@ check('IN transaction uses same bin location', scalar('''SELECT COUNT(*) FROM st
  JOIN materials m ON m.id=st.material_id JOIN locations l ON l.id=st.location_id
  WHERE m.item_code=? AND l.code=? AND st.transaction_type='IN' AND st.quantity=250''', ('IMP-001','WH-IMP-A-01')) == 1)
 
-# Repeated import/update is additive and remains atomic.
+# Repeated opening-stock import is idempotent and creates no side effects.
+before_transactions = scalar("""SELECT COUNT(*) FROM stock_transactions st
+ JOIN materials m ON m.id=st.material_id
+ WHERE m.item_code='IMP-001'""")
 c, r = call('POST', '/api/import/stock', admin, {'rows':[{
     'material_code':'IMP-001','warehouse_code':'WH-IMP','batch_number':'OPEN-IMP-001-A',
     'quantity':'50','bin_location':'WH-IMP-A-01'}]})
-check('repeated import updates batch', c == 200 and r['updated'] == 1, r)
-check('repeated import updates batch quantity', scalar("SELECT remaining_quantity FROM batches WHERE batch_number='OPEN-IMP-001-A'") == 300)
-check('repeated import updates bin balance', scalar('''SELECT mls.quantity FROM material_location_stock mls
+check('repeated opening stock is skipped', c == 200 and r['skipped'] == 1 and r['updated'] == 0 and r['errors'] == 0, r)
+check('repeated opening stock preserves batch quantity', scalar("SELECT remaining_quantity FROM batches WHERE batch_number='OPEN-IMP-001-A'") == 250)
+check('repeated opening stock preserves bin balance', scalar('''SELECT mls.quantity FROM material_location_stock mls
  JOIN materials m ON m.id=mls.material_id JOIN locations l ON l.id=mls.location_id
- WHERE m.item_code=? AND l.code=?''', ('IMP-001','WH-IMP-A-01')) == 300)
+ WHERE m.item_code=? AND l.code=?''', ('IMP-001','WH-IMP-A-01')) == 250)
+check('repeated opening stock creates no transaction', scalar("""SELECT COUNT(*) FROM stock_transactions st
+ JOIN materials m ON m.id=st.material_id
+ WHERE m.item_code='IMP-001'""") == before_transactions)
 
 # Multiple bins, comma-formatted quantity and explicit date precedence.
 c, r = call('POST', '/api/import/stock', admin, {'rows':[{
