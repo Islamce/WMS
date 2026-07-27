@@ -1,6 +1,6 @@
 # WMS Current Status
 
-Last updated: 2026-07-25
+Last updated: 2026-07-27
 
 ## Executive status
 
@@ -10,9 +10,10 @@ Last updated: 2026-07-25
 - Production app path: `~/domains/wms.kynox.io/nodejs`
 - Production database: SQLite at `data/wms.db` using WAL mode
 - Production runtime: Node `v20.19.4`, npm `10.8.2`
-- Current deployed commit: `579b5091cf99ea3c4dfa3f5531202eab546b3a88`
-- Health endpoint: healthy, returning `{"status":"ok","service":"wms"}`
-- Database migrations: up to date, 12 recorded
+- Current deployed commit (last confirmed on production): `579b5091cf99ea3c4dfa3f5531202eab546b3a88`
+- `main` branch head (not yet confirmed deployed): `a0377b80df85f7702cd7ee8c3372b9841948b56d` (PR #43 merge — opening-stock import idempotency fix, plus a CI reliability fix for GitHub Actions artifact-quota failures)
+- Health endpoint: healthy, returning `{"status":"ok","service":"wms"}` (as of the 2026-07-25 recovery check; not re-verified 2026-07-27)
+- Database migrations: up to date, 12 recorded (as of last confirmed check)
 
 ## Current production data state after recovery
 
@@ -87,6 +88,8 @@ CI Run #145 succeeded before merge.
 - Apply reconciliation only after explicit review and approval.
 - Complete and validate web/mobile parity gaps where still outstanding.
 - Ensure every future deployment and incident updates the project memory files required by `CLAUDE.md`.
+- **Open advisory (2026-07-27):** production may have been operated against an isolated database copy on the `hotfix/opening-stock-idempotency` branch for PR #43 verification. Production's deployed application code must be reconciled to the current `main` head (`a0377b8`) through the reviewed deployment process in `WMS-PRODUCTION-RUNBOOK.md` — do not assume production already reflects PR #43 or any later merge until confirmed.
+- Deploy PR #43 (opening-stock import idempotency) to production once the administrator-login incident and branch reconciliation above are addressed or explicitly deprioritized.
 
 ## Production configuration invariants
 
