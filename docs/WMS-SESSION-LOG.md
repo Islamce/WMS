@@ -2,7 +2,59 @@
 
 This is the chronological operational memory for the project. It records durable summaries of conversations and work, not secrets or necessarily verbatim transcripts.
 
+## 2026-07-27 — Phase 1: unified source of truth, and correction of a stale status claim
+
+**Objective:** Establish one agreed source of truth across GitHub, production documentation, and AI context before any further production work. Read-only; no production command was run.
+
+**Starting state:**
+
+- `main` at `b9ec782` (verified). Working tree clean.
+- PR #42 open and stale; PR #43 and #44 merged; Issues #37 and #40 open.
+
+**Verified (repo) evidence:**
+
+| Fact | Value | Method |
+| --- | --- | --- |
+| `origin/main` | `b9ec782dddfd3e57dbb3448f9906b340427bb2f4` | `git rev-parse origin/main` |
+| Migrations in code | 12, latest `012_opening_stock_batch_registry` | `server/db/migrations.js` |
+| PR #43 fix present on `main` | yes (`server/routes/import.js`) | source inspection |
+| Temporary debug endpoint | absent | repository search |
+| E2E inventory | 21 suites, 397 assertions | `tests/run.sh`, `tests/e2e/*.py` |
+| CI on `main` | run #155 on `b9ec782`, success | Actions API |
+| Latest offsite backup | run #11, `2026-07-27T06:03:54Z`, success | Actions API |
+| Backup history | 8 consecutive successes (#4–#11); #2 failed 2026-07-20, fixed by #3 | Actions API |
+
+**Could NOT be verified — no production access:**
+
+The working environment has no SSH client and no credentials (`command -v ssh` returns nothing; `~/.ssh` is empty). Production commit, database path and identity, live migration count, administrator-login state, and production-initialization lock state therefore remain **Unverified** and were explicitly reported as such rather than assumed.
+
+**Conflicts found and resolved in this entry:**
+
+1. **Administrator authentication (material).** `main` stated login was an open blocking issue. Open PR #42 carried better, newer evidence: the failure was caused by the active production database being empty (`users = 0`), was resolved by a validated restore, and the operator confirmed a successful login. `main` was stale.
+2. Issue #40 states the database default is `server/data/wms.db`. Code on `main` resolves an unset `DB_PATH` to `<app>/data/wms.db`, matching the `CLAUDE.md` invariant. The issue text is inaccurate for current code.
+3. Zero dashboard stock was recorded without context. The validated recovery source itself contained zero batches and zero stock transactions, so zero stock is consistent rather than evidence of further loss.
+4. Production is three merges behind `main` and is not known to contain the PR #43 idempotency fix.
+5. Runtime environment variables reported empty in an interactive SSH shell during the recovery session; unresolved (see the new finding below).
+
+**New finding — auto-seed hazard (hypothesis, code-verified, production-unverified):**
+
+Tracing `server/index.js` against `server/config.js`: if `SKIP_AUTO_SEED` is not `1`, the database has zero users, and `NODE_ENV` is not exactly `production`, the production guard does not trigger and the application calls `seed()`, creating demo data and a default administrator with `must_change_password = 1`. This is a single mechanism consistent with **both** symptoms in Issue #40 — an unexpectedly empty database and a recurring default administrator — without anyone invoking `reset-admin`. Recorded in `WMS-CURRENT-STATUS.md` and `INC-2026-07-25-01`; must be confirmed or excluded against the Passenger runtime before any restart or deployment.
+
+**Correction of a prior entry in this log:**
+
+The 2026-07-27 PR #43 entry below states that administrator login was "still open". Per conflict 1 that claim was **stale when written**; it was inherited from `main` without reconciling against open PR #42. The authentication issue was resolved on 2026-07-25. `DEC-010` was added to prevent recurrence.
+
+**Actions:** Closed PR #42 as superseded (stale base, conflicting, unmergeable) and replaced it with a single reconciliation PR opened from current `main` carrying its evidence plus the corrections above.
+
+**Production state:** Unchanged. Production changed: no. Database changed: no.
+
+**Exact next step:** Operator performs read-only verification of the production commit, branch, `.env` values, database path, initialization-lock location, and — decisively — the environment as the **Passenger process** sees it. No restart or deployment until the auto-seed question is settled.
+
+---
+
 ## 2026-07-27 — PR #43 review, CI-quota fix, and merge (opening-stock idempotency)
+
+> **Correction (2026-07-27, later session):** the "Remaining work / open advisory" note below repeats a stale claim that administrator login was still failing. That was resolved on 2026-07-25; see the entry above and `INC-2026-07-25-01`. The rest of this entry stands.
 
 **Objective:** Review, verify, and merge PR #43 (`hotfix/opening-stock-idempotency` → `main`), submitted by another agent, which stops opening-stock CSV imports from silently increasing on-hand quantity when the same material/batch/warehouse is re-imported.
 
