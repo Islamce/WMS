@@ -2,6 +2,52 @@
 
 This is the chronological operational memory for the project. It records durable summaries of conversations and work, not secrets or necessarily verbatim transcripts.
 
+## 2026-07-27 — Credential safety hardening (remaining code asks in Issue #40)
+
+**Objective:** Close the remaining code-hardening items in Issue #40 — `reset-admin` safety, credential audit logging, and force-change semantics. Repository-side only; no production access, no production command.
+
+**Starting state:** `main` at `152a32f`, clean tree, CI green, no open PRs.
+
+**Defects found while reading the credential paths (all real, all fixed here):**
+
+1. **Administrator password reset did not set `must_change_password`.** An administrator knows the interim password, so the account was not solely the user's — yet nothing forced a change. The flag was only ever set by `reset-admin` and the seed.
+2. **No credential change was audited.** Neither the administrator reset nor the self-service change wrote an audit record, so "who changed this credential, and when" was unanswerable — exactly the question Issue #40 exists to answer.
+3. **`reset-admin` defaulted to publicly known credentials.** A bare `npm run reset-admin` installed `admin@example.com` / `Admin@123456` with no production guard and no confirmation. Run during a deploy or by reflex, this alone reproduces the reported symptom.
+4. **`reset-admin` could seed.** When the roles table was empty it ran the **full demo seed** — so a command named "reset-admin" could write a demo dataset into an empty production database. This is a second, independent path to the same class of incident as `INC-2026-07-25-01`.
+
+Item 4 is worth emphasising: it was reachable exactly when the database looked empty, which is the state the 2026-07-25 incident left production in.
+
+**Changes:**
+
+| File | Change |
+| --- | --- |
+| `scripts/reset-admin.js` | Production requires explicit email, explicit password, and the exact phrase `RESET ADMIN PASSWORD`. Built-in defaults refused. Never seeds — an empty roles table now refuses and points at read-only diagnosis. Writes an audit record. |
+| `server/routes/users.js` | Administrator reset sets `must_change_password = 1` and is audited. |
+| `server/routes/auth.js` | Self-service change is audited; it remains the only path that clears the flag. |
+| `tests/e2e/password_test.py` | Extended from 10 to 25 checks: credential lifecycle, audit presence, secret-leak assertions, and the `reset-admin` refusal matrix. |
+
+**Evidence:**
+
+- `password_test.py`: **25 passed, 0 failed**.
+- Full suite (`npm test`): **ALL TEST SUITES PASSED**.
+- ESLint: no new problems (one pre-existing unused-import warning in `users.js`, untouched).
+- Audit records are asserted **not** to contain the passwords used in the test, nor any bcrypt hash prefix.
+
+**Decisions:** `DEC-012` — credential lifecycle and audit rules.
+
+**Important scope note:** `reset-admin` remains **forbidden in production** by `CLAUDE.md`. This hardening is defence in depth for when that rule is broken; it is not permission to run it.
+
+**Production state:** unchanged. Production changed: no. Database changed: no.
+
+**Remaining work on Issue #40:**
+
+- The cross-table stock consistency audit (batches vs `material_location_stock` vs `stock_transactions` vs dashboard KPIs) is **not** done and needs real data plus production access.
+- Confirming whether the auto-seed path actually fired in production still needs the Passenger runtime read-out.
+
+**Exact next step:** deploy `main` to production so both safety fixes are live, then read the `[db] …` identity line from the boot log.
+
+---
+
 ## 2026-07-27 — Auto-seed hazard reproduced and fixed (P0 code hardening)
 
 **Objective:** Close the auto-seed hazard identified in the Phase 1 review before any deployment or restart of production. Repository-side only; no production access and no production command.

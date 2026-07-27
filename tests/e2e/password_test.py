@@ -4,7 +4,7 @@
  2. Wrong current password is rejected; too-short new password is rejected.
  3. Admin can reset another user's password; non-admin cannot.
 """
-import json, urllib.request, urllib.error, os, sys
+import json, urllib.request, urllib.error, os, subprocess, sys
 
 B = "http://localhost:3000"
 os.environ['no_proxy'] = 'localhost,127.0.0.1'
@@ -59,6 +59,56 @@ check('non-admin cannot reset (403)', c == 403, (c, r))
 # too-short reset rejected
 c, r = call('PATCH', f'/api/users/{picker_id}/password', admin, {'new_password': 'x'})
 check('admin reset rejects short password', c == 400, (c, r))
+
+# ===== 4. Credential lifecycle + audit (issue #40) =====
+# An admin knows the interim password, so the account is not solely the user's
+# until they change it. The force-change flag is what makes that true.
+c, r = call('PATCH', f'/api/users/{picker_id}/password', admin, {'new_password': 'Interim777'})
+check('admin reset succeeds (lifecycle)', c == 200, (c, r))
+_, me = call('POST', '/api/auth/login', body={'email': 'picker@example.com', 'password': 'Interim777'})
+check('admin reset forces a password change',
+      me.get('user', {}).get('must_change_password') is True, me)
+
+# The self-service change is what clears it.
+ptok = me.get('token')
+c, r = call('PATCH', '/api/auth/password', ptok, {'current_password': 'Interim777', 'new_password': 'Mine55555'})
+check('self change after admin reset succeeds', c == 200, (c, r))
+_, me2 = call('POST', '/api/auth/login', body={'email': 'picker@example.com', 'password': 'Mine55555'})
+check('self change clears the force-change flag',
+      me2.get('user', {}).get('must_change_password') is False, me2)
+
+# Both events are audited, and neither stores the password or its hash.
+_, aud = call('GET', '/api/master/audit?limit=100&entity_type=User', admin)
+rows = aud.get('audit') or []
+actions = [x.get('action') for x in rows]
+check('admin reset is audited', 'PASSWORD_RESET_BY_ADMIN' in actions, actions[:12])
+check('self change is audited', 'PASSWORD_CHANGED_BY_SELF' in actions, actions[:12])
+blob = json.dumps(rows)
+for secret in ('Interim777', 'Mine55555', '$2a$', '$2b$'):
+    check(f'audit trail does not contain {secret!r}', secret not in blob)
+
+# ===== 5. reset-admin refuses unsafe production use (issue #40) =====
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+def reset_admin(args, production=True):
+    env = dict(os.environ)
+    env['NODE_ENV'] = 'production' if production else 'development'
+    env.setdefault('JWT_SECRET', 'x' * 48)
+    return subprocess.run(['node', 'scripts/reset-admin.js', *args], cwd=ROOT,
+                          capture_output=True, text=True, env=env)
+
+r = reset_admin([])
+check('reset-admin refuses bare invocation in production', r.returncode != 0, r.stdout[-200:])
+r = reset_admin(['admin@example.com', 'Str0ngPass1', 'RESET ADMIN PASSWORD'])
+check('reset-admin refuses the default email in production', r.returncode != 0, r.stdout[-200:])
+r = reset_admin(['real@corp.com', 'Admin@123456', 'RESET ADMIN PASSWORD'])
+check('reset-admin refuses the default password in production', r.returncode != 0, r.stdout[-200:])
+r = reset_admin(['real@corp.com', 'Str0ngPass1'])
+check('reset-admin refuses without typed confirmation', r.returncode != 0, r.stdout[-200:])
+r = reset_admin(['real@corp.com', 'Str0ngPass1', 'reset admin password'])
+check('reset-admin confirmation is case-sensitive', r.returncode != 0, r.stdout[-200:])
+check('refusal never prints the supplied password',
+      'Str0ngPass1' not in (r.stdout + r.stderr))
 
 print(f"\n===== RESULT: {passed} passed, {failed} failed =====")
 if fails: print("Failed:", fails)
