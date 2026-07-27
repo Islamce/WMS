@@ -48,6 +48,86 @@ Item 4 is worth emphasising: it was reachable exactly when the database looked e
 
 ---
 
+## 2026-07-27 — Unified AI handoff and V1.0 closure plan
+
+**Objective:** Convert the WMS project-management report into a durable, mandatory operating prompt shared by Claude, ChatGPT, Copilot, Codex, and human maintainers, with an ordered production-stabilization and V1.0 closure plan.
+
+**Starting state:**
+
+- Work began from `main @ b9ec782`.
+- During review, `main` advanced through PR #45 and PR #46 to `152a32f0fd0a2ec7e21e2a10c2ad55f602976678`.
+- The documentation branch was reset to the latest `main` before the final files were reapplied, preventing stale authentication and auto-seed information from being reintroduced.
+- Production was not accessed.
+
+**Conversation/request summary:**
+
+- The owner requested a WMS-only report covering completed work, current system capabilities, plan progress, and remaining work.
+- The owner then requested that the report become a Claude prompt establishing unified knowledge and including the following execution steps.
+- The owner instructed `UPDATE NOW`, authorizing the repository documentation update.
+
+**Files/code inspected:**
+
+- `CLAUDE.md`
+- `docs/WMS-CURRENT-STATUS.md`
+- `docs/WMS-SESSION-LOG.md`
+- `docs/WMS-V1.0-EXECUTION-PLAN.md`
+- production-initialization route/service code
+- movement-history import tests
+- PR #42 through PR #46
+- Issue #37 and Issue #40
+
+**Commands/actions:**
+
+- Created branch `agent/unified-ai-handoff`.
+- Detected that `main` had advanced by four commits and refused to open a PR from the stale base.
+- Reset the documentation branch to `main @ 152a32f`.
+- Added `docs/WMS-UNIFIED-AI-HANDOFF.md`, containing:
+  - trust hierarchy;
+  - verified versus historical baseline rules;
+  - delivered capability map;
+  - data-protection and production-safety rules;
+  - Opening Stock, movement-history, database-recovery, lock-path, and auto-seed context;
+  - ten ordered phases from read-only reconciliation through V1.0 release;
+  - mandatory session close-out format;
+  - a read-only first assignment for every new agent.
+- Updated `CLAUDE.md` so the unified handoff is mandatory reading and so current critical context includes PR #45 authentication reconciliation and PR #46 fail-closed auto-seed hardening.
+- No application code, workflow, production configuration, or database was changed.
+
+**Evidence/results:**
+
+- New handoff commit: `a2c162a614fb0b467ea6f85bc4c5657eeb65f31b`.
+- Updated `CLAUDE.md` commit: `dc6af2aba38ecfebfa16c5e1dda9752a9b64e6f6`.
+- Branch base: `152a32f0fd0a2ec7e21e2a10c2ad55f602976678`.
+
+**Decisions:**
+
+- The handoff defines how facts are reconciled; it does not replace read-only production verification.
+- Trust order is production evidence → GitHub evidence → merged documentation → open documentation PRs → historical context → assumptions.
+- Any new agent must begin with Phase 1 and must not immediately deploy or alter the production database.
+- Feature expansion remains frozen until production-data stabilization and V1.0 closure, except for verified P0/P1 defects.
+
+**Risks/incidents:** None. Documentation-only repository changes; production was not accessed or changed.
+
+**Files/PRs/commits changed:**
+
+- Added `docs/WMS-UNIFIED-AI-HANDOFF.md`.
+- Updated `CLAUDE.md`.
+- Updated `docs/WMS-SESSION-LOG.md`.
+
+**Production state:** Unchanged and not inspected during this session.
+
+**Remaining work:**
+
+- Open a draft PR from `agent/unified-ai-handoff` to `main`.
+- Review the documentation-only diff.
+- After approval and merge, use the handoff's Phase 1 prompt for read-only production reconciliation.
+
+**Exact next step:** Open the draft documentation PR, verify that only the three intended documentation files changed, and keep it unmerged until the shared baseline is reviewed.
+
+> **Follow-up (later the same day):** this branch was rebased onto `main @ e5b79ee` to pick up PR #48 (credential hardening, `DEC-012`), and the handoff's trust hierarchy was amended — see the rebase note in the entry above this one.
+
+---
+
 ## 2026-07-27 — Auto-seed hazard reproduced and fixed (P0 code hardening)
 
 **Objective:** Close the auto-seed hazard identified in the Phase 1 review before any deployment or restart of production. Repository-side only; no production access and no production command.
