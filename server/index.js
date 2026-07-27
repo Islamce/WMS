@@ -10,32 +10,42 @@ const config = require('./config');
 // Ensure the schema exists before handling requests (idempotent).
 require('./db/migrate');
 
-// First-run bootstrap: on an empty database — e.g. a fresh git-connected
-// deploy (Hostinger Web Apps, etc.) with no shell to run `npm run seed` — create
-// the default admin, roles/permissions, movement types, warehouses/bins and demo
-// data so the app is usable immediately. No-op once any user exists; the seed is
-// idempotent. Disable by setting SKIP_AUTO_SEED=1.
-if (process.env.SKIP_AUTO_SEED !== '1') {
+// Startup database identity + first-run seed policy.
+//
+// The identity line exists because "which file is the app actually using?" was
+// the decisive question in INC-2026-07-25-01 and is an explicit ask in issue
+// #40. Logging it every boot makes a mispointed DB_PATH or an unexpectedly
+// empty database visible immediately, instead of being inferred later from
+// "the admin password reset itself".
+//
+// Auto-seed is OPT-IN (ALLOW_AUTO_SEED=1). See server/services/firstRunSeed.js
+// for why the previous NODE_ENV-keyed guard was unsafe.
+try {
+  const fs = require('fs');
+  const db = require('./db/connection');
+  const { shouldAutoSeed, emptyDatabaseWarning } = require('./services/firstRunSeed');
+
+  const { n: userCount } = db.prepare('SELECT COUNT(*) AS n FROM users').get();
+  let migrationCount = 0;
   try {
-    const db = require('./db/connection');
-    const { n } = db.prepare('SELECT COUNT(*) AS n FROM users').get();
-    if (n === 0) {
-      // Guardrail: in production an empty database usually means the persistent
-      // volume for DB_PATH is not mounted — auto-seeding would silently write a
-      // *demo* dataset over the void and mask real data loss. Refuse unless the
-      // operator explicitly opts in for a genuine first deploy.
-      if (process.env.NODE_ENV === 'production' && process.env.ALLOW_AUTO_SEED !== '1') {
-        console.warn('[WARN] Empty database detected in production and ALLOW_AUTO_SEED is not set — '
-          + 'refusing to auto-seed. If this is a fresh install, set ALLOW_AUTO_SEED=1. '
-          + 'Otherwise your persistent storage for DB_PATH is likely not mounted — do NOT ignore this.');
-      } else {
-        console.log('Empty database detected — running first-run seed…');
-        require('./db/seed').seed();
-      }
+    migrationCount = db.prepare('SELECT COUNT(*) AS n FROM schema_migrations').get().n;
+  } catch { /* table may not exist on a brand-new file */ }
+  let sizeBytes = 0;
+  try { sizeBytes = fs.statSync(config.dbPath).size; } catch { /* not yet created */ }
+
+  console.log(`[db] path=${config.dbPath} size=${sizeBytes}B users=${userCount} migrations=${migrationCount}`);
+
+  if (userCount === 0) {
+    const decision = shouldAutoSeed(process.env);
+    if (decision.allowed) {
+      console.log(`Empty database detected — running first-run seed (${decision.reason})…`);
+      require('./db/seed').seed();
+    } else {
+      console.warn(emptyDatabaseWarning(config.dbPath, decision.reason));
     }
-  } catch (err) {
-    console.error('First-run seed check failed:', err.message);
   }
+} catch (err) {
+  console.error('Startup database check failed:', err.message);
 }
 
 const app = express();

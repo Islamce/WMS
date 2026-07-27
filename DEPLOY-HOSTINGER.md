@@ -11,12 +11,17 @@ your Hostinger plan:
 | **Business / Cloud shared hosting** (older "Node.js" app in hPanel) | Path C — hPanel Node.js app | easy |
 | Premium / Single shared hosting (no Node.js) | ❌ not supported — Node.js can't run there | — |
 
-> **First-run bootstrap:** on an empty database the server auto-creates the
-> schema, the default admin, roles/permissions, warehouses/bins and demo data —
-> so git-connected deploys (Path D) work with **no shell step**. Set
-> `SKIP_AUTO_SEED=1` to turn this off. `npm run seed` still works for manual setup.
-> In `NODE_ENV=production` the auto-seed additionally requires `ALLOW_AUTO_SEED=1`
-> (a guard against silently writing demo data over a missing data volume).
+> **First-run bootstrap (opt-in):** the server always creates the schema. It
+> will additionally seed the default admin, roles/permissions, warehouses/bins
+> and demo data **only when you start it once with `ALLOW_AUTO_SEED=1`**.
+> Otherwise an empty database is left untouched and a `[CRITICAL]` warning is
+> logged. `npm run seed` remains the normal manual route.
+>
+> Seeding is opt-in on purpose. It writes a *default administrator*, so if it
+> ever fired against a live-but-empty database it would mask data loss and reset
+> the admin credentials. Making it depend on a variable being *present* (rather
+> than on `NODE_ENV` being absent) means a missing environment fails safe.
+> See `docs/WMS-INCIDENT-LOG.md` → `INC-2026-07-25-01`.
 
 > ⚠️ **If your users/passwords "disappear" after a redeploy**, your `DB_PATH`
 > points at ephemeral storage — the platform recreated the filesystem, and the

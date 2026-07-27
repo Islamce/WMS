@@ -75,9 +75,24 @@ This log records production failures, data-risk events, deployment failures, rec
 - Retained the safety directory pending a reviewed retention decision.
 - Continued prohibition of `npm run seed` and `reset-admin` in production.
 
-**Open preventive follow-up (carried to Issue #40):**
+**Preventive follow-up — auto-seed hazard (DEMONSTRATED 2026-07-27, fixed in code):**
 
-- Verify the Passenger **runtime** environment for `NODE_ENV`, `SKIP_AUTO_SEED`, `ALLOW_AUTO_SEED`, `PRODUCTION_INITIALIZATION_ENABLED`, and `DB_PATH`. Code review of `server/index.js` and `server/config.js` shows that an empty database combined with a `NODE_ENV` that is not exactly `production` would cause the application to **auto-seed demo data and a default administrator** rather than refuse to start. This is a plausible mechanism for both this incident and the recurring default-admin symptom in Issue #40, and is not yet confirmed or excluded against the live runtime.
+The suspected mechanism was reproduced. Booting the real server against a migrated-but-userless database with `NODE_ENV` unset caused it to **seed demo data and a default administrator** with `must_change_password = 1`. The old guard was opt-out and keyed on `NODE_ENV`, so a runtime that does not export `NODE_ENV` — plausible under managed Node.js/Passenger, and consistent with what this project observed — fell through to the seed branch.
+
+This is a credible mechanism for both this incident's empty database and the recurring default-admin symptom in Issue #40, requiring no one to have run `reset-admin`.
+
+Fix (merged to `main`, **not yet deployed** at time of writing):
+
+- Auto-seed is now **opt-in** via `ALLOW_AUTO_SEED=1`; absence of configuration means refuse. Safety no longer depends on a variable being present.
+- `SKIP_AUTO_SEED=1` remains an overriding kill switch.
+- The server logs a database identity line on every boot (`[db] path=… size=… users=… migrations=…`) so a mispointed `DB_PATH` or an unexpectedly empty file is visible immediately.
+- Declining to seed emits a `[CRITICAL]` warning that names the data-loss possibility and forbids seeding or resetting accounts as a first response.
+- `tests/e2e/autoseed_guard_test.py` pins the policy; it fails against the old guard and passes against the new one.
+
+**Still open:** whether the auto-seed path actually executed in this production incident. Confirming or excluding it requires reading the Passenger **runtime** environment (not an interactive SSH shell) and is the remaining evidence needed to close Issue #40.
+
+**Other open preventive follow-up:**
+
 - Establish a tested restore drill and stronger database-file protection controls.
 
 **Owner / next step:** project owner / production maintainer. Next safe step is read-only runtime-environment verification, before any restart or deployment.

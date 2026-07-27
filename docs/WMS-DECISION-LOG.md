@@ -208,6 +208,47 @@ Any production SQLite restoration must use the following controlled sequence:
 
 ---
 
+## DEC-011 — Destructive-by-omission operations must be opt-in and fail closed
+
+**Status:** Accepted on 2026-07-27.
+
+**Context:**
+
+The first-run auto-seed writes a demo dataset *and* a default administrator. Its guard was opt-out and keyed on `NODE_ENV`:
+
+```js
+if (NODE_ENV === 'production' && ALLOW_AUTO_SEED !== '1') refuse; else seed;
+```
+
+This fails **open**. A deployment whose runtime does not export `NODE_ENV` — easy under managed Node.js/Passenger, and consistent with this project's own observations — falls through to the seed branch. Reproduced on 2026-07-27: booting the real server against a migrated-but-userless database with `NODE_ENV` unset seeded demo data and a default administrator. The result is indistinguishable from "the admin password reset itself", and it masks data loss behind a healthy health check.
+
+**Decision:**
+
+- An operation that destroys or fabricates data as a side effect of *absent* configuration must be **opt-in**: it runs only when a variable is explicitly set to enable it. Absence means refuse.
+- Safety must never depend on a variable being *present* to trigger a guard. Guards depend on a variable being present to *unlock* the dangerous path.
+- Such a guard requires an executable regression test that fails against the unsafe version.
+- Refusal must be loud, name the data-loss possibility, and state what not to do first.
+
+**Alternatives considered:**
+
+- Keep opt-out but check more environment signals: rejected — it multiplies the ways a missing variable produces the unsafe outcome.
+- Infer "this is production" from data already in the database: rejected — the incident database was completely empty, indistinguishable from a fresh install, so no data-based signal discriminates.
+- Remove auto-seed entirely: rejected — genuine first installs on shell-less platforms rely on it. Opt-in preserves that path while making it deliberate.
+
+**Consequences:**
+
+- A genuine first deploy must start once with `ALLOW_AUTO_SEED=1`, or run `npm run seed`.
+- Nothing in CI, Docker, or the devcontainer depended on the implicit path; all already seed explicitly.
+- The application logs its database identity every boot, so the "which file is it actually using?" question is answered before it becomes an incident.
+
+**Evidence/links:**
+
+- `INC-2026-07-25-01`, issue #40.
+- `server/services/firstRunSeed.js`, `tests/e2e/autoseed_guard_test.py`.
+- Test fails against the previous guard (2 end-to-end cases) and passes against the new one (19/19).
+
+---
+
 ## Template
 
 ```markdown
