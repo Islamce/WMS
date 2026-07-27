@@ -37,10 +37,13 @@ When facts conflict, use this order:
 
 1. Current read-only production evidence.
 2. Current GitHub repository, PR, issue, commit, and workflow evidence.
-3. Merged project-memory documentation.
-4. Open documentation PRs.
-5. Conversation summaries and historical notes.
-6. Assumptions.
+3. Project-memory documentation — **merged and open PRs together**, most recent and best-evidenced first.
+4. Conversation summaries and historical notes.
+5. Assumptions.
+
+**Merge status does not rank a factual claim.** Rank 3 deliberately does not place merged documentation above open documentation PRs, because this project has already been damaged by that assumption: PR #42 sat open holding the correct, newer account of the 2026-07-25 recovery — administrator login resolved, root cause an empty database — while merged `main` continued to assert that login was an open blocker. A later session trusted `main` because it was merged, and propagated the stale claim forward into PR #44. PR #45 reconciled it.
+
+The lesson is recorded as `DEC-010`: **reconcile against open pull requests, not only `main`**. For a claim about production state, recency and evidence quality outrank whether someone has pressed merge. An unmerged PR carrying a checksum, a command transcript, and an operator confirmation beats a merged document carrying none.
 
 Always label findings as one of:
 
@@ -83,9 +86,11 @@ Then inspect relevant code, migrations, tests, PRs, issues, Actions runs, and Gi
 - Repository: `Islamce/WMS`
 - Default branch: `main`
 - Production URL: `https://wms.kynox.io`
-- Latest known `main` head at creation of this document: `152a32f0fd0a2ec7e21e2a10c2ad55f602976678`
+- Latest known `main` head at creation of this document: `e5b79ee36119a9ba0b7afdb3c7f49970ea077682`
+- PR #43 made Opening Stock import idempotent (repeated import no longer increases quantities).
 - PR #45 reconciled stale production/authentication documentation.
-- PR #46 changed first-run auto-seed from fail-open/opt-out behavior to explicit opt-in and added executable regression coverage.
+- PR #46 changed first-run auto-seed from fail-open/opt-out behaviour to explicit opt-in and added executable regression coverage.
+- PR #48 hardened the credential paths: `reset-admin` production guards, no hidden seed, force-change semantics, and credential auditing.
 
 The SHA above is a historical baseline only. Verify the live `main` head before every task.
 
@@ -119,14 +124,18 @@ The code on `main` now also fails closed when `ALLOW_AUTO_SEED` is absent. Produ
 
 Use these values as a management baseline, not as immutable metrics:
 
-| Area | Current estimate | Meaning |
-|---|---:|---|
-| Functional completion | 95% | Nearly all V1.0 workflows exist |
-| Technical and automated-test readiness | 90% | Strong CI, E2E, browser, mobile, security, backup, and replay coverage |
-| Production-data readiness | 65–70% | Master data was recovered, but final stock and movement reconciliation remain |
-| Overall V1.0 readiness | Approximately 84% | Release closure still requires production reconciliation, data validation, UAT, and operational sign-off |
+| Area | Initial estimate | Revised | Meaning |
+|---|---:|---:|---|
+| Functional completion | 95% | ~93% | Nearly all V1.0 workflows exist |
+| Technical and automated-test readiness | 90% | ~88% | Strong CI, E2E, browser, mobile, security, backup, and replay coverage; no unit tests on allocation/reverse-workflow, and no staging environment |
+| Production-data readiness | 65–70% | **~35%** | See below |
+| Overall V1.0 readiness | ~84% | **~65%** | Release closure still requires production reconciliation, data validation, UAT, and operational sign-off |
 
-The system is functionally enterprise-capable, but it must still prove that it is consistently operated, recoverable, monitored, and reconciled with real data.
+**Why production-data readiness was revised down.** Master data is loaded (9,746 materials, 1,245 bins), but operational data is **zero** — no batches, no stock, no stock transactions, and movement history not imported. The consequence is not cosmetic: with zero stock you cannot exercise FIFO/FEFO, allocation, picking, goods issue, reversal, reallocation or cycle counting against anything real; ABC/XYZ analytics have no consumption history and return empty; every dashboard KPI is zero.
+
+**You cannot meaningfully UAT a warehouse system that contains no stock.** Phase 7 is therefore not merely "later" — it is currently impossible, and the overall figure has to reflect that.
+
+The system is functionally enterprise-capable. It has not yet proven it is consistently operated, recoverable, monitored, and reconciled with real data. Treat both columns as management estimates, not measurements, and prefer the revised column when sequencing work.
 
 ---
 
@@ -301,6 +310,12 @@ Do not re-import current production Opening Stock until the deployed application
 
 The old first-run guard was proven to fail open: booting against a migrated-but-userless DB with `NODE_ENV` unset could seed demo data and a default administrator. PR #46 changed the policy to explicit `ALLOW_AUTO_SEED=1`, kept `SKIP_AUTO_SEED=1` as an override, added loud refusal, logged DB identity, and pinned the behavior with tests.
 
+**A second, independent path existed (PR #48).** `scripts/reset-admin.js` ran the **full demo seed** whenever the roles table was empty — so a command named "reset-admin" could write a demo dataset into an empty production database, reachable exactly when the database looks empty. It also defaulted to the published credentials `admin@example.com` / `Admin@123456` with no production guard and no confirmation, which alone reproduces the "admin password reverted to default" symptom, and left no audit record. PR #48 made it refuse default credentials, require an explicit email, password and the typed phrase `RESET ADMIN PASSWORD` in production, never seed, and write an audit record.
+
+PR #48 also fixed the credential lifecycle: an administrator reset now sets `must_change_password = 1` (the administrator knows the interim password, so the account is not solely the user's until they change it), the self-service change clears it, and both are audited without storing passwords or hashes. Recorded as `DEC-012`.
+
+Both fixes are in `main` and **neither is known to be deployed**. Until the deployed commit is verified, production may still contain both fail-open paths.
+
 Production is not known to have this fix. Before any restart or deployment, verify the current production commit and the Passenger runtime environment.
 
 ### Production initialization
@@ -357,7 +372,7 @@ Protected movement-history import. Partially implemented; close only with full a
 
 ### Issue #40
 
-Deep database consistency and recurring administrator-password-reset investigation. The auto-seed mechanism is now proven and fixed in code, but whether it executed in production remains unverified. Close Issue #40 only after reconciling `batches`, `material_location_stock`, `stock_transactions`, dashboard totals, DB path, Passenger runtime environment, seed/reset-admin exposure, and remaining password-reset hardening/audit requirements.
+Deep database consistency and recurring administrator-password-reset investigation. Two mechanisms that could fabricate data over an empty database — server auto-seed (PR #46) and `reset-admin`'s hidden full seed (PR #48) — are now proven and fixed in code, but whether either executed in production remains unverified. The code-hardening asks in Issue #40 are complete; the cross-table stock consistency audit is not. Close Issue #40 only after reconciling `batches`, `material_location_stock`, `stock_transactions`, dashboard totals, DB path, Passenger runtime environment, seed/reset-admin exposure, and remaining password-reset hardening/audit requirements.
 
 ---
 
@@ -414,7 +429,7 @@ For every phase:
 
 ### Phase 1 — Unified source of truth
 
-Read-only only. Reconcile current `main`, production SHA, Passenger runtime environment, active DB path, migrations, login, initialization lock, backup status, PR #43, PR #45, PR #46, Issue #37, Issue #40, and all documentation conflicts.
+Read-only only. Reconcile current `main`, production SHA, Passenger runtime environment, active DB path, migrations, login, initialization lock, backup status, PR #43, PR #45, PR #46, PR #48, Issue #37, Issue #40, and all documentation conflicts.
 
 Deliver a table:
 
@@ -427,7 +442,7 @@ Exit only when repository, production, DB, migrations, login, lock, backup, and 
 
 Preconditions: Phase 1 complete, backup and rollback verified, current production commit recorded, production worktree inspected, DB path and Passenger environment confirmed.
 
-Deploy through the reviewed runbook only. Verify exact commit, migrations, health, database identity log, login, key screens, browser console, and no unexpected count changes. Confirm PR #43 and PR #46 behavior are live.
+Deploy through the reviewed runbook only. Verify exact commit, migrations, health, database identity log, login, key screens, browser console, and no unexpected count changes. Confirm PR #43, PR #46 and PR #48 behaviour are live.
 
 ### Phase 3 — Database consistency audit
 
@@ -522,7 +537,7 @@ Return:
 6. Current administrator-login state.
 7. Production-initialization lock state and exact path.
 8. Latest successful backup evidence.
-9. Exact status of PR #43, PR #45, PR #46, Issue #37, and Issue #40.
+9. Exact status of PR #43, PR #45, PR #46, PR #48, Issue #37, and Issue #40.
 10. Every documentation/reality conflict.
 11. Corrected unified status table.
 12. Safest next execution step.

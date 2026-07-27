@@ -75,7 +75,11 @@ Production database files were accidentally deleted on 2026-07-25. Recovery invo
 
 Administrator authentication was restored after the validated database copy was returned, and the operator confirmed successful login. PR #45 reconciled the stale documentation that had incorrectly left authentication marked as open.
 
-The old first-run auto-seed guard was empirically proven to fail open when `NODE_ENV` was absent. PR #46 changed auto-seed to explicit opt-in (`ALLOW_AUTO_SEED=1`), added database-identity logging, and pinned the rule with an executable regression suite. Production is not known to contain this fix until its deployed commit is verified.
+The old first-run auto-seed guard was empirically proven to fail open when `NODE_ENV` was absent. PR #46 changed auto-seed to explicit opt-in (`ALLOW_AUTO_SEED=1`), added database-identity logging, and pinned the rule with an executable regression suite.
+
+PR #48 closed a second, independent path to the same failure: `scripts/reset-admin.js` ran the full demo seed whenever the roles table was empty, and defaulted to the published credentials `admin@example.com` / `Admin@123456` with no guard, no confirmation and no audit record. It now refuses default credentials, requires an explicit email, password and the typed phrase `RESET ADMIN PASSWORD` in production, never seeds, and audits. Administrator resets now set `must_change_password=1`; self-service changes clear it; both are audited without storing passwords or hashes (`DEC-012`).
+
+Production is not known to contain either fix until its deployed commit is verified.
 
 The last production commit recorded in project memory also predates PR #43's Opening Stock idempotency fix. Never re-import production Opening Stock until the deployed commit is verified to contain both PR #43 and the later fail-closed auto-seed hardening.
 
