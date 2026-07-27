@@ -6,6 +6,7 @@ const config = require('../config');
 const { authenticate, getUserPermissions } = require('../middleware/auth');
 const { loginRateLimit, recordLoginFailure, clearLoginFailures } = require('../middleware/rateLimit');
 const { isNonEmptyString, isEmail, validatePasswordPolicy } = require('../utils/validate');
+const audit = require('../services/audit');
 
 const router = express.Router();
 
@@ -118,8 +119,18 @@ router.patch('/password', authenticate, asyncHandler(async (req, res) => {
     return res.status(400).json({ error: 'Current password is incorrect.' });
   }
   const hash = await bcrypt.hash(new_password, 10);
+  // Clearing must_change_password is what makes the account solely the user's:
+  // only they know this password. Audited without the password or its hash.
   db.prepare("UPDATE users SET password_hash = ?, must_change_password = 0, updated_at = datetime('now') WHERE id = ?")
     .run(hash, req.user.id);
+  audit.record({
+    entityType: 'User',
+    entityId: req.user.id,
+    action: 'PASSWORD_CHANGED_BY_SELF',
+    newValue: { must_change_password: 0 },
+    user: req.user,
+    sourceScreen: 'account',
+  });
   res.json({ message: 'Password changed.' });
 }));
 

@@ -249,6 +249,44 @@ This fails **open**. A deployment whose runtime does not export `NODE_ENV` — e
 
 ---
 
+## DEC-012 — Credential lifecycle and audit rules
+
+**Status:** Accepted on 2026-07-27.
+
+**Context:**
+
+Issue #40 reported that the administrator password "returns to the default" with `must_change_password` set. Investigating the credential paths found three concrete weaknesses, independent of whether that specific report is explained by the auto-seed hazard in `DEC-011`:
+
+1. An administrator resetting another user's password did **not** set `must_change_password`. The administrator knows the interim password, so the account was not solely the user's, yet nothing forced a change.
+2. Neither the administrator reset nor the self-service change wrote an audit record, so there was no way to answer "who changed this credential, and when" — precisely the question issue #40 needed answered.
+3. `scripts/reset-admin.js` defaulted to publicly known credentials (`admin@example.com` / `Admin@123456`) with no arguments, no production guard, and no confirmation. Worse, when the roles table was empty it ran the **full demo seed** — so a command named "reset-admin" could write a demo dataset into an empty production database.
+
+**Decision:**
+
+- An administrator-initiated password reset **must** set `must_change_password = 1`. A self-service change **must** clear it. The flag encodes "someone other than the account holder knows this password".
+- Every credential change is recorded in the append-only audit trail. Passwords and hashes are **never** written to logs or audit records.
+- `reset-admin` in production requires an explicit email, an explicit password, and an exact typed confirmation phrase. Built-in default credentials are refused outright.
+- `reset-admin` never seeds. An empty roles table is a diagnosis trigger, not an invitation to create data.
+
+**Alternatives considered:**
+
+- Leaving the reset flag to administrator discretion: rejected — it makes the security property optional and unauditable.
+- Recording the changed hash in the audit trail for forensics: rejected — it stores credential material in a table designed to be widely readable.
+- Removing `reset-admin` entirely: rejected — genuine lock-out recovery needs it. Making it loud and deliberate preserves the capability without the footgun.
+
+**Consequences:**
+
+- Operators must pass three arguments to reset an administrator in production; this is intentional friction.
+- `reset-admin` remains **forbidden in production** by `CLAUDE.md`. This hardening is defence in depth for when that rule is broken, not permission to break it.
+- The audit trail now answers credential questions directly, which is what issue #40 needs in order to be closed on evidence.
+
+**Evidence/links:**
+
+- Issue #40, `INC-2026-07-25-01`, `DEC-011`.
+- `scripts/reset-admin.js`, `server/routes/users.js`, `server/routes/auth.js`, `tests/e2e/password_test.py` (25 checks).
+
+---
+
 ## Template
 
 ```markdown

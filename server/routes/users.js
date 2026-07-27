@@ -7,6 +7,7 @@ const bcrypt = require('bcryptjs');
 const db = require('../db/connection');
 const { authenticate, requirePermission } = require('../middleware/auth');
 const { isId, isNonEmptyString, validatePasswordPolicy } = require('../utils/validate');
+const audit = require('../services/audit');
 
 const router = express.Router();
 
@@ -80,7 +81,14 @@ router.patch('/:id/role', (req, res) => {
   res.json({ message: 'User role updated.' });
 });
 
-/** PATCH /api/users/:id/password — admin resets a user's password. */
+/**
+ * PATCH /api/users/:id/password — admin resets a user's password.
+ *
+ * Sets must_change_password=1: an administrator knows the interim password, so
+ * the account is not solely the user's until they change it (issue #40). The
+ * self-service change in /api/auth/password is what clears the flag.
+ * Audited without the password or its hash.
+ */
 router.patch('/:id/password', asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { new_password } = req.body || {};
@@ -89,9 +97,17 @@ router.patch('/:id/password', asyncHandler(async (req, res) => {
   if (!pol.ok) return res.status(400).json({ error: pol.error });
   const hash = await bcrypt.hash(new_password, 10);
   const result = db.prepare(
-    "UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?"
+    "UPDATE users SET password_hash = ?, must_change_password = 1, updated_at = datetime('now') WHERE id = ?"
   ).run(hash, id);
   if (result.changes === 0) return res.status(404).json({ error: 'User not found.' });
+  audit.record({
+    entityType: 'User',
+    entityId: Number(id),
+    action: 'PASSWORD_RESET_BY_ADMIN',
+    newValue: { must_change_password: 1 },
+    user: req.user,
+    sourceScreen: 'users',
+  });
   res.json({ message: 'Password reset.' });
 }));
 

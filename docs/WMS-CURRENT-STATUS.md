@@ -137,7 +137,7 @@ Ordered by priority. Item 1 gates the rest.
 3. **Verify the production-initialization lock**, including whether any lock file exists outside the code-expected `<app>/data/` path. A lock in the wrong location does not prove the application is locked.
 4. Deploy PR #43 (opening-stock import idempotency) through `WMS-PRODUCTION-RUNBOOK.md` once items 1–3 are settled. Do **not** re-import Opening Stock into production before this fix is confirmed deployed.
 5. Run opening-stock date reconciliation in **dry-run mode only** (`apply: false`) and review the output; apply only after explicit review and approval.
-6. Complete the cross-table stock consistency audit required by Issue #40.
+6. Complete the cross-table stock consistency audit required by Issue #40 (batches vs `material_location_stock` vs `stock_transactions` vs dashboard KPIs). Needs real data and production access. The **code**-hardening asks in Issue #40 are done: auto-seed fails closed, a database identity line is logged every boot, `reset-admin` refuses default credentials and never seeds, and every credential change is audited (`DEC-011`, `DEC-012`).
 7. Complete and validate web/mobile parity gaps where still outstanding.
 8. Ensure every future deployment and incident updates the project memory files required by `CLAUDE.md`.
 
