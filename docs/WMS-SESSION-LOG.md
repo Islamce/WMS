@@ -2,6 +2,53 @@
 
 This is the chronological operational memory for the project. It records durable summaries of conversations and work, not secrets or necessarily verbatim transcripts.
 
+## 2026-07-27 — Auto-seed hazard reproduced and fixed (P0 code hardening)
+
+**Objective:** Close the auto-seed hazard identified in the Phase 1 review before any deployment or restart of production. Repository-side only; no production access and no production command.
+
+**Starting state:** `main` at `690302d`, clean tree, CI green. The hazard was recorded as a code-verified hypothesis.
+
+**What was proven:**
+
+The mechanism was reproduced, so it is no longer a hypothesis. Booting the real server against a migrated-but-userless database with `NODE_ENV` unset caused it to **seed demo data and a default administrator** with `must_change_password = 1`.
+
+Method: the new suite was run against the **previous** `server/index.js`, where it failed exactly two end-to-end cases — "does NOT seed with no opt-in" and "does NOT seed when `NODE_ENV=development`" — and passed 19/19 against the new implementation. The test therefore catches the real defect rather than restating the new code.
+
+**Root cause:** the guard was opt-out and keyed on `NODE_ENV`, so it failed **open**. Safety depended on a variable being *present*. Any runtime that does not export `NODE_ENV` — plausible under managed Node.js/Passenger — reached the seed branch.
+
+**Changes:**
+
+| File | Change |
+| --- | --- |
+| `server/services/firstRunSeed.js` | New. Pure, testable policy: auto-seed requires explicit `ALLOW_AUTO_SEED=1`; `SKIP_AUTO_SEED=1` overrides it. Absence of configuration means refuse. Carries the operator warning text. |
+| `server/index.js` | Uses the policy instead of the inline `NODE_ENV` guard. Adds a per-boot database identity line (`[db] path=… size=… users=… migrations=…`), an explicit ask in Issue #40. |
+| `tests/e2e/autoseed_guard_test.py` | New. Policy truth table plus end-to-end boots against throwaway databases on isolated ports. |
+| `tests/run.sh` | Suite wired into Phase 1. |
+| `DEPLOY-HOSTINGER.md` | First-run bootstrap documented as opt-in, with the reason. |
+
+**Evidence:**
+
+- New suite standalone: **19 passed, 0 failed**.
+- Same suite against the old guard: **17 passed, 2 failed** (the two end-to-end cases).
+- Full suite (`npm test`): **ALL TEST SUITES PASSED**.
+- ESLint on changed files: clean.
+
+**Compatibility:** nothing depended on the implicit path — the devcontainer runs `npm run setup`, `docker-compose` documents `npm run seed`, and CI seeds explicitly. A genuine first install now starts once with `ALLOW_AUTO_SEED=1` or runs `npm run seed`.
+
+**Decisions:** `DEC-011` — destructive-by-omission operations must be opt-in and fail closed; safety may not depend on a variable being present to trigger a guard; such guards require a test that fails against the unsafe version.
+
+**Production state:** unchanged. Production changed: no. Database changed: no. **Production still runs the old fail-open guard until this is deployed.**
+
+**Remaining work:**
+
+- Read the Passenger **runtime** environment. This is now needed as *evidence for Issue #40* — whether the auto-seed path actually fired in production — rather than as a safety gate, since the deployed fix makes an unset environment fail safe.
+- Verify production's deployed commit and reconcile it to `main`.
+- Issue #40 also asks for `reset-admin` hardening (refuse default credentials in production, require typed confirmation) and audit-logging of password resets. Not done in this session.
+
+**Exact next step:** operator returns the read-only production output (commit, branch, `.env` values, database path, lock location, Passenger runtime environment). Phase 2 deployment planning follows from it.
+
+---
+
 ## 2026-07-27 — Phase 1: unified source of truth, and correction of a stale status claim
 
 **Objective:** Establish one agreed source of truth across GitHub, production documentation, and AI context before any further production work. Read-only; no production command was run.

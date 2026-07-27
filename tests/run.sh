@@ -53,6 +53,8 @@ run_suite reports_test.py
 run_suite p0_hardening_test.py
 run_suite p1_hardening_test.py
 run_suite quickwins_test.py
+# Boots its own throwaway servers on separate ports; needs no shared dataset.
+run_suite autoseed_guard_test.py
 stop_server
 
 echo ""

@@ -55,9 +55,19 @@ The login failure was **not** a credential problem. It was traced to the active 
 
 See `WMS-INCIDENT-LOG.md` → `INC-2026-07-25-01` for the full evidence chain, selected-source checksum, and rollback directory.
 
-## Open risk — auto-seed can fire on an empty database if runtime env is not set
+## Auto-seed hazard — DEMONSTRATED, fixed in code, NOT YET DEPLOYED
 
-**Status: hypothesis, code-verified, production-unverified. Directly relevant to Issue #40.**
+**Status (2026-07-27): the mechanism is proven by executable test, the fix is merged to `main`, and production is not yet known to have it.**
+
+The behaviour below was confirmed empirically, not merely by reading code. Booting the real server against a migrated-but-userless database with `NODE_ENV` unset caused it to seed demo data and a default administrator. `tests/e2e/autoseed_guard_test.py` fails against the old guard and passes against the new one, so this is now a pinned regression rather than an opinion.
+
+**Fix:** auto-seed is now **opt-in** (`ALLOW_AUTO_SEED=1`). Absence of configuration means refuse. Safety no longer depends on `NODE_ENV` being present. The server also logs a database identity line (`[db] path=… size=… users=… migrations=…`) on every boot, and prints a `[CRITICAL]` warning when it declines to seed an empty database.
+
+**Still open:** whether this ever actually fired in production. That requires the runtime-environment read-out below and is the remaining evidence needed to close Issue #40.
+
+### Original analysis (retained for the record)
+
+**Was: hypothesis, code-verified, production-unverified. Directly relevant to Issue #40.**
 
 Reading `server/index.js` against `server/config.js` on `main`:
 
@@ -121,7 +131,7 @@ CI Run #145 succeeded before merge.
 
 Ordered by priority. Item 1 gates the rest.
 
-1. **Resolve the auto-seed / runtime-environment question above.** Read `NODE_ENV`, `SKIP_AUTO_SEED`, `ALLOW_AUTO_SEED`, `PRODUCTION_INITIALIZATION_ENABLED`, and `DB_PATH` as the **Passenger process** sees them, not as an interactive SSH shell reports them. Until this is settled, any restart or deployment carries a residual risk of auto-seeding if the database is ever observed empty.
+1. **Resolve the auto-seed / runtime-environment question above.** Read `NODE_ENV`, `SKIP_AUTO_SEED`, `ALLOW_AUTO_SEED`, `PRODUCTION_INITIALIZATION_ENABLED`, and `DB_PATH` as the **Passenger process** sees them, not as an interactive SSH shell reports them. This is now needed as *evidence for Issue #40* rather than as a safety gate: once the fix on `main` is deployed, an unset environment fails safe. Until it is deployed, production still runs the old fail-open guard.
 2. **Verify production's deployed commit read-only** and reconcile it to `main`. Production is behind by three merges and is not known to contain PR #43.
    - **Open advisory (2026-07-27):** production may have been operated against an isolated database copy on the `hotfix/opening-stock-idempotency` branch during PR #43 verification. Confirm the checked-out branch and commit before deploying; do not assume production reflects PR #43 or any later merge.
 3. **Verify the production-initialization lock**, including whether any lock file exists outside the code-expected `<app>/data/` path. A lock in the wrong location does not prove the application is locked.
