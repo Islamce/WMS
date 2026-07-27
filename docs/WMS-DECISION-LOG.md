@@ -133,6 +133,81 @@ Production backups are uploaded through a GitHub Actions workflow to Backblaze B
 
 ---
 
+## DEC-009 — SQLite production recovery requires an isolated, rollback-safe procedure
+
+**Status:** Accepted on 2026-07-25.
+
+**Context:**
+
+A production deletion incident and a subsequent empty active database caused authentication failure. Multiple database copies existed, and choosing or replacing one without evidence could have caused further loss.
+
+**Decision:**
+
+Any production SQLite restoration must use the following controlled sequence:
+
+1. Diagnose candidates read-only.
+2. Record source path, size, checksum, integrity, schema/migration state, and key record counts.
+3. Create independent safety copies of both the active database and the selected source.
+4. Stop only the WMS application process; do not touch unrelated services.
+5. Preserve the active DB/WAL/SHM files by **moving** them into a protected rollback directory; never delete them.
+6. Restore the selected source with restrictive permissions.
+7. Validate checksum, integrity, and key counts before application startup.
+8. Run reviewed migrations only; never seed or reset accounts as part of restoration.
+9. Restart Passenger and validate health, authentication, migrations, and business counts.
+10. Retain the rollback directory until an explicit reviewed retention decision.
+
+**Alternatives considered:**
+
+- Resetting only the administrator account: rejected — the active database was missing far more than credentials, so a reset would have masked the real fault.
+- Seeding production: rejected — it would create demo data and obscure the recovery state.
+- Copying individual user rows: rejected — the complete validated database was the safer, internally consistent recovery unit.
+
+**Consequences:**
+
+- Recovery takes longer but has a clear rollback path and evidence trail.
+- WAL/SHM handling is treated as part of database state, not incidental files.
+- Candidate database filenames alone are insufficient; integrity and business counts must be checked.
+- Restore drills and runtime-environment verification become required follow-up controls.
+
+**Evidence/links:**
+
+- Incident `INC-2026-07-25-01`.
+- Selected source SHA-256: `02745ba0c34386f7aaab23538dda9ab4ec5b947c9e64f1a1b50b9fb9224c2df4`.
+- Final validation: 9 users, 9,746 materials, 12 migrations, HTTP 200 health, successful administrator login.
+
+---
+
+## DEC-010 — Project-memory facts must be labelled by evidence class
+
+**Status:** Accepted on 2026-07-27.
+
+**Context:**
+
+`docs/WMS-CURRENT-STATUS.md` on `main` continued to state that administrator login was an open blocking issue for two days after it had been resolved, because the correcting change sat in an unmerged PR that had gone stale and conflicted. A later session then re-copied the stale claim forward into a new merged commit, compounding it. Documentation drift of this kind directly threatens production safety, because operators and AI agents use these files as the basis for risky decisions.
+
+**Decision:**
+
+- Every durable status fact is labelled **Verified (repo)**, **Reported (production)**, or **Unverified**, and a fact may not be silently promoted to a stronger class.
+- A session must reconcile against **open** pull requests before restating a status fact, not only against `main`.
+- Documentation PRs that record production evidence are merged promptly or closed and superseded; they must not be left open to drift out of mergeability.
+- When a merged document is found to be wrong, the correction states plainly that the earlier statement was stale rather than quietly editing it away.
+
+**Alternatives considered:**
+
+- Relying on reviewer vigilance alone: rejected — it already failed twice in this project.
+- Treating `main` as automatically authoritative: rejected — this is exactly what produced the error, since the newer truth was in an open PR.
+
+**Consequences:**
+
+- Status documents become slightly more verbose but far less dangerous to act on.
+- Unverified claims are visibly unverified, so a reader can tell what still needs checking before a deployment.
+
+**Evidence/links:**
+
+- PR #42 (closed, superseded), PR #44 (propagated the stale claim), this reconciliation PR.
+
+---
+
 ## Template
 
 ```markdown
