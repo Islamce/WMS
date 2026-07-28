@@ -12,6 +12,7 @@
     "setup": "npm run migrate && npm run seed",
     "backup": "node scripts/backup.js",
     "verify-backup": "node scripts/verify-backup.js",
+    "validate-opening-stock": "node scripts/validate-opening-stock.js",
     "reset-admin": "node scripts/reset-admin.js",
     "fresh-start": "node scripts/fresh-start.js",
     "lint": "eslint . --ext .js",
