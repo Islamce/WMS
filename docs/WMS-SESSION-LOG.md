@@ -2,6 +2,44 @@
 
 This is the chronological operational memory for the project. It records durable summaries of conversations and work, not secrets or necessarily verbatim transcripts.
 
+## 2026-07-27 — Opening Stock import validation harness
+
+**Objective:** De-risk the Opening Stock production import — the step where a mistake corrupts the FIFO baseline and is expensive to detect and unwind. Repository-side only; no production access, no production command.
+
+**Starting state:** `main` at `8012b5d`, clean tree, CI green, no open PRs.
+
+**What was built:** `scripts/validate-opening-stock.js` (`npm run validate-opening-stock`). An operator tool, not a CI test: it boots the **real** server and calls the **real** import endpoint against a copy of a real database, so what it proves is what the operator will actually get through the UI.
+
+**Safety design.** The tool writes test data, so it must never reach a live database:
+
+- Refuses the database this checkout is configured to use (`config.dbPath`).
+- Refuses paths containing production markers (`domains/wms.kynox.io`).
+- Never mutates the file passed to it — it copies to a scratch directory, works there, and deletes it afterwards.
+- Creates a disposable admin and `VALIDATE-`-prefixed fixtures inside the scratch copy only, so real rows are untouched even there.
+
+**Scenarios covered** (the eight in the V1.0 plan, plus a data-integrity check): create; identical re-import skipped; re-import with a different quantity does not overwrite; same batch in a different bin rejected; operational goods-receipt batch rejected rather than increased; comma-formatted quantities; multiple bins in one import; forced failure rolls back the whole import; pre-existing data untouched and `integrity_check` still `ok`.
+
+The rollback scenario installs a temporary trigger that raises on a sentinel batch number, so the all-or-nothing guarantee is **proven** rather than assumed from reading `applyRows`.
+
+**Evidence:**
+
+- Against a seeded copy: **39 passed, 0 failed**.
+- Source file SHA-256 identical before and after a full run — the harness does not modify what it is pointed at.
+- Guards verified by execution: no argument → exit 2; configured live DB → exit 2; production-looking path → exit 2; valid copy → exit 0.
+- ESLint clean.
+
+**Two defects found in my own harness while building it**, both fixed: the goods-receipt fixture used lowercase `released` against a `CHECK` constraint requiring `RELEASED`, and an early exit-code check was reading `head`'s status rather than the script's. Neither was a product defect.
+
+**Documentation:** `WMS-PRODUCTION-RUNBOOK.md` gains an "Opening Stock import — pre-flight validation" procedure, including the instruction to **re-import the same file on production afterwards** to prove idempotency on production itself, not only on a copy.
+
+**Production state:** unchanged. Production changed: no. Database changed: no.
+
+**Remaining work:** unchanged and still gated on deployment — production is six merges behind `main` and runs neither the auto-seed nor the credential hardening, nor the PR #43 idempotency fix.
+
+**Exact next step:** operator returns the read-only production output; deploy `main`; then use this harness against a copy before the real Opening Stock import.
+
+---
+
 ## 2026-07-27 — Credential safety hardening (remaining code asks in Issue #40)
 
 **Objective:** Close the remaining code-hardening items in Issue #40 — `reset-admin` safety, credential audit logging, and force-change semantics. Repository-side only; no production access, no production command.

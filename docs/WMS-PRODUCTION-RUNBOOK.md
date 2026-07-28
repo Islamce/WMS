@@ -136,6 +136,55 @@ When a known login fails:
 6. Use the smallest targeted correction, with an audit entry where supported.
 7. Verify login and document the exact outcome.
 
+## Opening Stock import — pre-flight validation
+
+Opening Stock is the inventory baseline. An error there propagates into every
+later FIFO/FEFO calculation and is expensive to unwind, so validate the
+behaviour against a copy **before** importing into production.
+
+Never point this at the live database — it writes test data. It refuses the
+configured `DB_PATH` and obvious production paths, and it works on its own
+scratch copy so the file you pass is never modified.
+
+```bash
+# 1. Take a copy (application stopped, or from a verified backup).
+cp ~/domains/wms.kynox.io/nodejs/data/wms.db /home/u716763642/openstock-check.db
+
+# 2. Validate against the copy.
+export PATH=/opt/alt/alt-nodejs20/root/usr/bin:$PATH
+cd ~/domains/wms.kynox.io/nodejs
+npm run validate-opening-stock -- /home/u716763642/openstock-check.db
+
+# 3. Remove the copy when finished.
+rm -f /home/u716763642/openstock-check.db
+```
+
+Exit code `0` means every scenario passed. Any other code means **do not run
+the production import** until the failure is understood.
+
+It boots the real server and calls the real import endpoint against the scratch
+copy, then asserts:
+
+1. A new opening-stock batch creates exactly one batch and one ledger entry.
+2. An identical re-import is skipped — no quantity change, no new transaction.
+3. A re-import with a *different* quantity does not overwrite the balance.
+4. The same batch number in a different bin is rejected.
+5. An existing operational goods-receipt batch is rejected, never increased.
+6. Comma-formatted quantities (`1,234.5`) parse correctly.
+7. Multiple bins in one import each get their own batch.
+8. A forced failure rolls back the **whole** import, leaving no partial rows.
+9. Pre-existing data is untouched and `PRAGMA integrity_check` still returns `ok`.
+
+### Then, for the real import
+
+- Record the source-file checksum, row count, and expected totals first.
+- Take and verify a backup.
+- Import once.
+- **Re-import the same file** and confirm it reports only `skipped`, with no
+  change to batch quantities, bin balances, or transaction counts. This proves
+  idempotency on production itself, not just on a copy.
+- Compare totals by material, warehouse, bin, and batch against expectations.
+
 ## Reconciliation procedure
 
 - Start with dry run only.
