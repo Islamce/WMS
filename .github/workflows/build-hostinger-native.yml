@@ -2,6 +2,12 @@ name: Build Hostinger native addon
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - package.json
+      - package-lock.json
+      - .github/workflows/build-hostinger-native.yml
 
 permissions:
   contents: read
