@@ -1,0 +1,61 @@
+name: Build Hostinger native addon
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-better-sqlite3:
+    runs-on: ubuntu-24.04
+    container: rockylinux:8
+    timeout-minutes: 20
+    steps:
+      - name: Install EL8 build toolchain
+        run: dnf install -y gcc gcc-c++ make python3 tar gzip git findutils binutils
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.4
+          cache: npm
+
+      - name: Build from source on glibc 2.28
+        env:
+          npm_config_build_from_source: "true"
+        run: npm ci --omit=dev
+
+      - name: Verify ABI, GLIBC ceiling, and module load
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          addon=node_modules/better-sqlite3/build/Release/better_sqlite3.node
+          test -s "$addon"
+          test "$(node -p 'process.versions.modules')" = "115"
+          getconf GNU_LIBC_VERSION
+          readelf --version-info "$addon" > glibc-symbols.txt
+          if grep -E 'GLIBC_2\.(29|[3-9][0-9])' glibc-symbols.txt; then
+            echo "Artifact requires a GLIBC version newer than 2.28"
+            exit 1
+          fi
+          node - <<'NODE'
+          const Database = require('better-sqlite3');
+          const db = new Database(':memory:');
+          if (db.prepare('SELECT 1 AS ok').get().ok !== 1) process.exit(1);
+          db.close();
+          NODE
+          cp "$addon" better_sqlite3.node
+          sha256sum better_sqlite3.node > better_sqlite3.node.sha256
+
+      - name: Upload verified addon
+        uses: actions/upload-artifact@v4
+        with:
+          name: better-sqlite3-11.10.0-node20-abi115-el8-x64
+          path: |
+            better_sqlite3.node
+            better_sqlite3.node.sha256
+            glibc-symbols.txt
+          if-no-files-found: error
+          retention-days: 7
