@@ -1,6 +1,6 @@
 # One-command deploy for a Hostinger VPS (or any Docker host).
 #   docker compose up -d --build      # build + start
-#   docker compose run --rm wms npm run seed   # one-time: default admin + samples
+#   docker compose run --rm wms npm run migrate # schema only; never seed production
 #   docker compose logs -f            # tail logs
 services:
   wms:
@@ -15,6 +15,9 @@ services:
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in your shell or a .env file}
       JWT_EXPIRES_IN: 8h
       DB_PATH: /app/data/wms.db
+      SKIP_AUTO_SEED: "1"
+      ALLOW_AUTO_SEED: "0"
+      PRODUCTION_INITIALIZATION_ENABLED: "false"
     volumes:
       # Persist the SQLite database across rebuilds/restarts.
       - wms-data:/app/data
