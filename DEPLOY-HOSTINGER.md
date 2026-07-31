@@ -11,31 +11,24 @@ your Hostinger plan:
 | **Business / Cloud shared hosting** (older "Node.js" app in hPanel) | Path C — hPanel Node.js app | easy |
 | Premium / Single shared hosting (no Node.js) | ❌ not supported — Node.js can't run there | — |
 
-> **First-run bootstrap (opt-in):** the server always creates the schema. It
-> will additionally seed the default admin, roles/permissions, warehouses/bins
-> and demo data **only when you start it once with `ALLOW_AUTO_SEED=1`**.
-> Otherwise an empty database is left untouched and a `[CRITICAL]` warning is
-> logged. `npm run seed` remains the normal manual route.
+> **Production safety profile:** every production environment must set
+> `SKIP_AUTO_SEED=1`, `ALLOW_AUTO_SEED=0`, and
+> `PRODUCTION_INITIALIZATION_ENABLED=false`. Deployment may run the idempotent
+> schema migration only. It must never seed demo data, create a default admin,
+> reset an admin, or initialize a new production dataset.
 >
-> Seeding is opt-in on purpose. It writes a *default administrator*, so if it
-> ever fired against a live-but-empty database it would mask data loss and reset
-> the admin credentials. Making it depend on a variable being *present* (rather
-> than on `NODE_ENV` being absent) means a missing environment fails safe.
-> See `docs/WMS-INCIDENT-LOG.md` → `INC-2026-07-25-01`.
+> An empty or unexpected database is a **stop-and-investigate incident**. Stop
+> the application update, verify the absolute `DB_PATH` and persistent storage,
+> and restore the approved backup. See `docs/WMS-INCIDENT-LOG.md` →
+> `INC-2026-07-25-01`.
 
 > ⚠️ **If your users/passwords "disappear" after a redeploy**, your `DB_PATH`
 > points at ephemeral storage — the platform recreated the filesystem, and the
 > SQLite file (with every account in it) went with it. Fix the storage first:
 > put `DB_PATH` on a persistent disk/volume (e.g. `/var/lib/wms/wms.db` on a
-> VPS). Then recover access instantly:
->
-> ```bash
-> npm run reset-admin                            # admin@example.com / Admin@123456
-> npm run reset-admin -- you@company.com NewPass1
-> ```
->
-> This creates or force-resets an active admin (password change forced on first
-> login) and never touches other data.
+> VPS). Stop the rollout and restore the verified database backup. Do not seed
+> or reset an administrator as a deployment workaround; access recovery is a
+> separate, explicitly approved operation after database identity is confirmed.
 
 > **Native module note:** WMS uses `better-sqlite3`, a compiled addon. It
 > installs cleanly on a VPS. On shared Node.js hosting it usually works from
@@ -70,10 +63,12 @@ redeploys on every push.
    - `NODE_ENV = production`
    - `JWT_SECRET = <paste the generated secret>`
    - `JWT_EXPIRES_IN = 8h`
-   - `DB_PATH = ./data/wms.db`  (or a persistent-storage path — see the note below)
-4. Deploy. On first boot the app **auto-creates and seeds** the database (default
-   admin + demo data), so there's nothing else to run. Watch the deploy log for
-   `Empty database detected — running first-run seed…`.
+   - `DB_PATH = <absolute persistent path>/wms.db`
+   - `SKIP_AUTO_SEED = 1`
+   - `ALLOW_AUTO_SEED = 0`
+   - `PRODUCTION_INITIALIZATION_ENABLED = false`
+4. Run `npm run migrate` against the verified persistent database, then deploy.
+   If the database is empty or unexpected, stop and restore it; do not seed it.
 5. Enable **SSL** for the domain (free, in hPanel). Then open the site and log in.
 
 > ⚠️ **Data persistence — check this.** SQLite stores everything in one file at
@@ -100,7 +95,7 @@ redeploys on every push.
    ```bash
    export JWT_SECRET="<paste the generated secret>"
    docker compose up -d --build
-   docker compose run --rm wms npm run seed   # one time: default admin + sample data
+   docker compose run --rm wms npm run migrate
    ```
 4. The app now listens on port **3000**. Point Hostinger's firewall / a reverse
    proxy at it and add SSL (see **HTTPS** below).
@@ -118,11 +113,15 @@ the `wms-data` volume and is preserved).
    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
    sudo apt-get install -y nodejs build-essential python3
    ```
-2. Clone, install, seed:
+2. Clone, install, and migrate the verified persistent database:
    ```bash
    git clone https://github.com/Islamce/WMS.git && cd WMS
    npm ci --omit=dev
-   npm run setup            # creates + seeds data/wms.db
+   export DB_PATH=/var/lib/wms/wms.db
+   export SKIP_AUTO_SEED=1
+   export ALLOW_AUTO_SEED=0
+   export PRODUCTION_INITIALIZATION_ENABLED=false
+   npm run migrate
    ```
 3. Set the secret and start under PM2:
    ```bash
@@ -150,12 +149,15 @@ the `wms-data` volume and is preserved).
    - `NODE_ENV = production`
    - `JWT_SECRET = <paste the generated secret>`
    - `JWT_EXPIRES_IN = 8h`
-   - `DB_PATH = ./data/wms.db`
+   - `DB_PATH = /home/<account>/wms-data/wms.db` (absolute persistent path)
+   - `SKIP_AUTO_SEED = 1`
+   - `ALLOW_AUTO_SEED = 0`
+   - `PRODUCTION_INITIALIZATION_ENABLED = false`
    (Leave `PORT` unset — Passenger assigns it.)
 5. Click **Run NPM Install**, then open the panel's terminal (or SSH) in the app
-   root and seed once:
+   root and migrate the verified persistent database:
    ```bash
-   npm run seed
+   npm run migrate
    ```
 6. **Restart** the application from the panel. Your domain now serves WMS.
 
@@ -188,9 +190,9 @@ the `wms-data` volume and is preserved).
 
 ## First login & hardening
 
-1. Log in with the seeded admin: **`admin@example.com` / `Admin@123456`**.
-2. **Immediately** change that password (or create a new admin and disable the
-   default) from **Users Management**.
+1. Log in with the approved, existing production administrator.
+2. Confirm the account is active and forced-password-change controls behave as
+   expected. Do not use development seed credentials.
 3. Confirm production guards are active: with `NODE_ENV=production` the server
    refuses to boot unless `JWT_SECRET` is a real ≥32-char secret. Login is
    rate-limited (10 failures / 15 min per IP+email), and `helmet` security
