@@ -2,6 +2,75 @@
 
 This log records production failures, data-risk events, deployment failures, recoveries, and important near misses. Do not include secrets.
 
+## INC-2026-07-31-01 — Hostinger native addon incompatible; recovery artifact not retained
+
+**Status:** Open. Passenger restart remains forbidden pending a retained,
+provenance-bound artifact and successful completion of every recovery gate.
+
+**Environment:** Hostinger shared Node.js / Passenger production environment.
+
+**Impact:**
+
+- **Reported (production):** the upstream `better-sqlite3 11.10.0` Linux addon
+  requires GLIBC 2.29, while the shared host provides GLIBC 2.28; the shared
+  host also lacks the compiler toolchain needed for an in-place rebuild.
+- The application cannot rely on the upstream prebuild on that host.
+- A compatible binary was built in GitHub Actions but was not retained for
+  download, so native recovery cannot proceed through the reviewed path.
+
+**Detection and evidence:**
+
+- Draft PR #53, branch `agent/hostinger-glibc228-native-recovery`.
+- Native workflow run #2 compiled `better-sqlite3 11.10.0` with GCC Toolset 12
+  on Rocky Linux 8, then passed Node `v20.19.4`, ABI 115, GLIBC ceiling, module
+  load, and in-memory SQLite query checks.
+- The job failed only at `actions/upload-artifact` with
+  `Failed to CreateArtifact: Artifact storage quota has been hit`.
+- Main CI run #174 passed.
+- No downloadable native-addon artifact was created by the failed run.
+
+**Root cause / contributing factors:**
+
+- Native binary compatibility differs between the upstream build environment
+  and the Hostinger shared host's older glibc runtime.
+- GitHub Actions artifact storage was already full, preventing retention of the
+  successfully built compatibility artifact.
+- The first PR #53 runbook revision did not fully bind the artifact to its
+  source SHA and did not preserve/atomically swap the installed addon before
+  host validation.
+
+**Corrective work in Draft PR #53:**
+
+- Check out and verify an explicit full source SHA.
+- Emit `native-addon-manifest.json` with source, dependency, lockfile, Node/ABI,
+  platform, compiler, GLIBC, and workflow-run provenance.
+- Include the source SHA in the artifact name and upload binary, checksum,
+  manifest, and GLIBC evidence together.
+- Require deployed source identity, effective Passenger safeguards, production
+  DB identity/counts, initialization-lock state, staged-addon host preflight,
+  timestamped existing-addon preservation, atomic replacement, and an immediate
+  validated rollback path before restart can be considered.
+
+**Production and data impact of this correction session:** None. Production was
+not accessed. No database, migration, seed, reset, initialization, Passenger
+restart, artifact deletion, or PR merge action occurred.
+
+**Open blocker — artifact quota:** Before requesting approval to delete any
+artifact, create a read-only inventory containing artifact ID, exact name,
+workflow name/path, run ID and attempt, branch/commit, creation and expiry time,
+size in bytes, retention purpose, whether it is referenced by a release or
+backup/restore procedure, and the reason it is safe or unsafe to delete. Report
+the exact proposed deletion IDs and total bytes; do not delete from a wildcard,
+age-only filter, workflow-wide action, or repository-wide bulk operation.
+
+**Owner / next step:** Repository owner. Review PR #53 corrections, inventory
+artifact storage read-only, approve an exact deletion set if appropriate, wait
+for quota recalculation, rerun the workflow for the final reviewed PR SHA, and
+verify all four retained artifact files. Keep Passenger stopped until the
+server-side gates are executed and reviewed separately.
+
+---
+
 ## INC-2026-07-25-01 — Production SQLite files deleted, then an empty database activated
 
 **Status:** Resolved and validated on 2026-07-25. One preventive follow-up remains open (see "Open preventive follow-up").

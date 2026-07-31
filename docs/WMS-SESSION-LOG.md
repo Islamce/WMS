@@ -2,6 +2,32 @@
 
 This is the chronological operational memory for the project. It records durable summaries of conversations and work, not secrets or necessarily verbatim transcripts.
 
+## 2026-08-01 — Draft PR #53 merge-readiness hardening
+
+**Objective:** Correct the Hostinger native `better-sqlite3` recovery workflow and operator runbook before Draft PR #53 can be considered merge-ready. Repository-side only; production, Passenger, the production database, and existing GitHub artifacts were not changed.
+
+**Starting state:** local `main` and `origin/main` at `0ba56106e7e9691930ba03d659c743561ad81614`; PR #53 head available at `3672b2a0900f15b628ada4b210a85c7f023a9d83` on `agent/hostinger-glibc228-native-recovery`. GitHub Actions CI run `30662015496` passed, while native-addon run `30662015501` passed its build, GLIBC-ceiling, and module-load checks but failed at artifact upload because repository artifact storage was over quota.
+
+**Changes:**
+
+- The native-addon workflow now requires and checks out an explicit full source SHA, verifies the checkout, and produces a SHA-named artifact containing the binary, checksum, manifest, and GLIBC evidence. The manifest records the source SHA, exact dependency and lockfile identity, Node/ABI/platform/compiler/GLIBC evidence, and workflow run provenance.
+- The Hostinger recovery runbook is now fail-closed across four gates: deployed branch/SHA and effective Passenger environment; production database identity, reviewed record counts, and initialization-lock state; staged-addon provenance and load/query preflight; then timestamped backup, same-directory atomic swap, and a validated immediate rollback command. Passenger restart remains forbidden until every gate has passed and its evidence has been reviewed.
+- Current status, production runbook, incident log, and decision log were updated to make those gates and the unresolved artifact-quota condition durable.
+
+**Validation:** extracted shell blocks from the workflow and recovery runbook pass `bash -n`; package/lockfile versions and the workflow/runbook required-field assertions pass; `git diff --check` passes. The local machine does not provide Node/npm, so the full application test suite cannot be rerun locally. A new GitHub CI run also cannot start until the branch is published.
+
+**GitHub publication state:** local changes remain uncommitted and unpushed. The mandatory publishing workflow requires GitHub CLI authentication, but `gh` is not installed on this machine. Draft PR #53 therefore remains at its previous remote head until `gh` is installed and authenticated.
+
+**Artifact cleanup gate:** no artifact was deleted and no deletion was attempted. Before any deletion approval request, obtain a repository-wide inventory containing artifact ID and exact name; workflow name/path; run ID and attempt; branch and source SHA; creation and expiry timestamps; size in bytes; retention purpose; release/backup references; and a per-artifact safe/unsafe rationale. The approval request must list the exact proposed artifact IDs and total bytes—never a wildcard, age-only, workflow-wide, or repository-wide deletion.
+
+**Production state:** unchanged. No production access, Passenger restart, migration, seed, reset, initialization, or database write occurred.
+
+**Remaining blockers:** install and authenticate `gh`; publish the reviewed commit; obtain the exact artifact inventory and separate deletion approval; free only specifically approved artifact storage; rerun the native build at the new source SHA; retain and inspect the artifact; then execute all production gates in an approved maintenance window. Passenger restart remains forbidden until those gates pass.
+
+**Exact next step:** install GitHub CLI, run `gh auth login` followed by `gh auth status`, then rerun the final scope review before staging the eight intended files and publishing the existing PR branch.
+
+---
+
 ## 2026-07-27 — Opening Stock import validation harness
 
 **Objective:** De-risk the Opening Stock production import — the step where a mistake corrupts the FIFO baseline and is expensive to detect and unwind. Repository-side only; no production access, no production command.

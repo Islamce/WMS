@@ -2,6 +2,11 @@ name: Build Hostinger native addon
 
 on:
   workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Full 40-character application commit SHA to build
+        required: true
+        type: string
   pull_request:
     branches: [main]
     paths:
@@ -17,11 +22,35 @@ jobs:
     runs-on: ubuntu-24.04
     container: rockylinux:8
     timeout-minutes: 20
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || inputs.source_sha }}
+    defaults:
+      run:
+        shell: bash
     steps:
+      - name: Validate requested source SHA
+        run: |
+          set -Eeuo pipefail
+          if [[ ! "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "source_sha must be a full lowercase 40-character commit SHA"
+            exit 1
+          fi
+
       - name: Install EL8 build toolchain
         run: dnf install -y gcc-toolset-12-gcc gcc-toolset-12-gcc-c++ make python3 tar gzip git findutils binutils
 
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 1
+
+      - name: Verify checked-out source
+        run: |
+          set -Eeuo pipefail
+          ACTUAL_SHA="$(git rev-parse HEAD)"
+          test "$ACTUAL_SHA" = "$SOURCE_SHA"
+          test -z "$(git status --porcelain --untracked-files=no)"
+          printf 'SOURCE_SHA=%s\n' "$ACTUAL_SHA"
 
       - uses: actions/setup-node@v4
         with:
@@ -34,38 +63,103 @@ jobs:
           CC: /opt/rh/gcc-toolset-12/root/usr/bin/gcc
           CXX: /opt/rh/gcc-toolset-12/root/usr/bin/g++
         run: |
+          set -Eeuo pipefail
+          test "$(node -p "require('./package.json').dependencies['better-sqlite3']")" = "11.10.0"
           "$CXX" --version
           npm ci --omit=dev
 
-      - name: Verify ABI, GLIBC ceiling, and module load
-        shell: bash
+      - name: Verify addon and generate provenance manifest
+        env:
+          CC: /opt/rh/gcc-toolset-12/root/usr/bin/gcc
+          CXX: /opt/rh/gcc-toolset-12/root/usr/bin/g++
         run: |
           set -Eeuo pipefail
           addon=node_modules/better-sqlite3/build/Release/better_sqlite3.node
           test -s "$addon"
           test "$(node -p 'process.versions.modules')" = "115"
-          getconf GNU_LIBC_VERSION
+
+          GLIBC_RUNTIME="$(getconf GNU_LIBC_VERSION)"
+          test "$GLIBC_RUNTIME" = "glibc 2.28"
           readelf --version-info "$addon" > glibc-symbols.txt
           if grep -E 'GLIBC_2\.(29|[3-9][0-9])' glibc-symbols.txt; then
             echo "Artifact requires a GLIBC version newer than 2.28"
             exit 1
           fi
+
+          GLIBC_MAX="$(grep -oE 'GLIBC_[0-9]+\.[0-9]+' glibc-symbols.txt | sort -Vu | tail -n 1)"
+          test -n "$GLIBC_MAX"
+          if test "$(printf '%s\n' GLIBC_2.28 "$GLIBC_MAX" | sort -V | tail -n 1)" != "GLIBC_2.28"; then
+            echo "Artifact GLIBC ceiling exceeded: $GLIBC_MAX"
+            exit 1
+          fi
+
           node - <<'NODE'
           const Database = require('better-sqlite3');
           const db = new Database(':memory:');
           if (db.prepare('SELECT 1 AS ok').get().ok !== 1) process.exit(1);
           db.close();
           NODE
+
           cp "$addon" better_sqlite3.node
           sha256sum better_sqlite3.node > better_sqlite3.node.sha256
+
+          export BETTER_SQLITE3_VERSION="$(node -p "require('./node_modules/better-sqlite3/package.json').version")"
+          export PACKAGE_LOCK_SHA256="$(sha256sum package-lock.json | awk '{print $1}')"
+          export BUILD_NODE_VERSION="$(node --version)"
+          export BUILD_NODE_ABI="$(node -p 'process.versions.modules')"
+          export BUILD_OS="$(node -p 'process.platform')"
+          export BUILD_ARCH="$(node -p 'process.arch')"
+          export BUILD_UNAME="$(uname -srm)"
+          export BUILD_COMPILER="$("$CXX" --version | sed -n '1p')"
+          export GLIBC_RUNTIME
+          export GLIBC_MAX
+          export GLIBC_EVIDENCE_SHA256="$(sha256sum glibc-symbols.txt | awk '{print $1}')"
+
+          node - <<'NODE'
+          const fs = require('fs');
+
+          const manifest = {
+            source_sha: process.env.SOURCE_SHA,
+            better_sqlite3_version: process.env.BETTER_SQLITE3_VERSION,
+            package_lock_sha256: process.env.PACKAGE_LOCK_SHA256,
+            node_version: process.env.BUILD_NODE_VERSION,
+            node_abi: process.env.BUILD_NODE_ABI,
+            os: process.env.BUILD_OS,
+            architecture: process.env.BUILD_ARCH,
+            uname: process.env.BUILD_UNAME,
+            compiler: process.env.BUILD_COMPILER,
+            glibc_runtime: process.env.GLIBC_RUNTIME,
+            glibc_max_required_symbol: process.env.GLIBC_MAX,
+            glibc_evidence_file: 'glibc-symbols.txt',
+            glibc_evidence_sha256: process.env.GLIBC_EVIDENCE_SHA256,
+            workflow_run_id: process.env.GITHUB_RUN_ID,
+            workflow_run_attempt: process.env.GITHUB_RUN_ATTEMPT,
+          };
+
+          fs.writeFileSync(
+            'native-addon-manifest.json',
+            `${JSON.stringify(manifest, null, 2)}\n`,
+          );
+          NODE
+
+          node - <<'NODE'
+          const manifest = require('./native-addon-manifest.json');
+          if (manifest.source_sha !== process.env.SOURCE_SHA) process.exit(1);
+          if (manifest.better_sqlite3_version !== '11.10.0') process.exit(1);
+          if (manifest.node_version !== 'v20.19.4') process.exit(1);
+          if (manifest.node_abi !== '115') process.exit(1);
+          if (manifest.os !== 'linux' || manifest.architecture !== 'x64') process.exit(1);
+          if (!/^\d+$/.test(manifest.workflow_run_id)) process.exit(1);
+          NODE
 
       - name: Upload verified addon
         uses: actions/upload-artifact@v4
         with:
-          name: better-sqlite3-11.10.0-node20-abi115-el8-x64
+          name: better-sqlite3-11.10.0-node20-abi115-el8-x64-${{ env.SOURCE_SHA }}
           path: |
             better_sqlite3.node
             better_sqlite3.node.sha256
+            native-addon-manifest.json
             glibc-symbols.txt
           if-no-files-found: error
           retention-days: 7

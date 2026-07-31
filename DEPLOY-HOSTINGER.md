@@ -159,8 +159,11 @@ the `wms-data` volume and is preserved).
 5. Install the verified EL8 native addon by following
    `HOSTINGER-NATIVE-RECOVERY.md`. During incident recovery, do not run npm
    install/rebuild, migrations, seed, initialization, or reset commands.
-6. **Restart** only after the runbook prints
-   `BETTER_SQLITE3_STATUS=VERIFIED`, then verify `/healthz` and startup logs.
+6. Keep Passenger stopped until every source, effective-environment, database,
+   initialization-lock, artifact, staged-addon, atomic-swap, and rollback gate
+   in `HOSTINGER-NATIVE-RECOVERY.md` passes, the evidence is reviewed, and
+   restart approval is explicit. Only then restart and verify `/healthz` and
+   startup logs.
 
 > Passenger starts `app.js` for you and injects the port; the app already reads
 > `process.env.PORT`. If the DB can't be written, make sure `data/` exists and
