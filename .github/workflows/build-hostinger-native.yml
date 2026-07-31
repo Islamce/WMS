@@ -19,7 +19,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Install EL8 build toolchain
-        run: dnf install -y gcc gcc-c++ make python3 tar gzip git findutils binutils
+        run: dnf install -y gcc-toolset-12-gcc gcc-toolset-12-gcc-c++ make python3 tar gzip git findutils binutils
 
       - uses: actions/checkout@v4
 
@@ -31,7 +31,11 @@ jobs:
       - name: Build from source on glibc 2.28
         env:
           npm_config_build_from_source: "true"
-        run: npm ci --omit=dev
+          CC: /opt/rh/gcc-toolset-12/root/usr/bin/gcc
+          CXX: /opt/rh/gcc-toolset-12/root/usr/bin/g++
+        run: |
+          "$CXX" --version
+          npm ci --omit=dev
 
       - name: Verify ABI, GLIBC ceiling, and module load
         shell: bash
