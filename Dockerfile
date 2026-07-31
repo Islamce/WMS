@@ -10,7 +10,10 @@ RUN npm ci --omit=dev
 COPY . .
 
 FROM node:20-bookworm-slim
-ENV NODE_ENV=production
+ENV NODE_ENV=production \
+    SKIP_AUTO_SEED=1 \
+    ALLOW_AUTO_SEED=0 \
+    PRODUCTION_INITIALIZATION_ENABLED=false
 WORKDIR /app
 # Copy the built app (incl. compiled better-sqlite3) from the build stage.
 COPY --from=build /app /app
@@ -18,6 +21,6 @@ COPY --from=build /app /app
 RUN mkdir -p /app/data
 VOLUME ["/app/data"]
 EXPOSE 3000
-# The schema is created on boot (idempotent). Seed once with:
-#   docker compose run --rm wms npm run seed
+# Schema migrations are idempotent. Never seed or initialize a production
+# database from the image; an empty database is a stop-and-investigate event.
 CMD ["node", "server/index.js"]
