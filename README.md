@@ -30,7 +30,10 @@ Key building blocks:
   and accepts operator-keyed ERP numbers; swap in a SAP/Oracle/Dynamics connector
   implementing the same interface without touching the workflow.
 
-### Demo role accounts (password `Passw0rd!`)
+### Development-only demo role accounts (password `Passw0rd!`)
+
+> These seeded accounts are for disposable local development and test databases
+> only. They must not be created or used in production.
 
 | Role | Email |
 |------|-------|
@@ -43,7 +46,9 @@ Key building blocks:
 | Quality | quality@example.com |
 | Auditor | auditor@example.com |
 
-The default admin (`admin@example.com` / `Admin@123456`) has every permission.
+The development seed also creates a default admin. Production deployments must
+use an explicitly provisioned administrator and must not rely on seeded
+credentials.
 
 ---
 
@@ -106,7 +111,7 @@ Health check: `https://<your-codespace>-3000.app.github.dev/healthz` returns
 `{"status":"ok"}` when the app is up — a 200 here with a 401 on `/` means the
 port is still Private, not an app problem.
 
-## Installation & setup
+## Local development installation & setup
 
 Requirements: Node.js 18+.
 
@@ -114,8 +119,7 @@ Requirements: Node.js 18+.
 # 1. Install dependencies
 npm install
 
-# 2. Create the database schema and seed data (roles, permissions,
-#    default admin, sample materials and locations)
+# 2. Create a disposable local database and development seed data
 npm run setup        # = npm run migrate && npm run seed
 
 # 3. Start the server
@@ -124,13 +128,13 @@ npm start            # or: npm run dev (auto-restart on changes)
 
 Open **http://localhost:3000**.
 
-### Default admin login
+### Development-only admin login
 
 | Email               | Password       |
 |---------------------|----------------|
 | `admin@example.com` | `Admin@123456` |
 
-> Change this password (or replace the account) before any real deployment.
+> Never use this account or password in production.
 
 ### Configuration
 
@@ -141,6 +145,9 @@ PORT=3000
 JWT_SECRET=change-me-to-a-long-random-string   # REQUIRED in production
 JWT_EXPIRES_IN=8h
 DB_PATH=./data/wms.db
+SKIP_AUTO_SEED=1
+ALLOW_AUTO_SEED=0
+PRODUCTION_INITIALIZATION_ENABLED=false
 ```
 
 ### Testing & CI
@@ -185,6 +192,10 @@ correctly behind Hostinger's reverse proxy.
 
 - `NODE_ENV=production` **requires** a real `JWT_SECRET` (≥ 32 chars, not the
   example placeholder) — the server refuses to boot otherwise.
+- Production must set `SKIP_AUTO_SEED=1`, `ALLOW_AUTO_SEED=0`, and
+  `PRODUCTION_INITIALIZATION_ENABLED=false`. A missing or empty database is a
+  stop-and-investigate incident; restore the correct persistent database rather
+  than creating users or demo data.
 - Login is rate-limited: 10 failed attempts per email/IP per 15 minutes.
 - Security headers are set by `helmet` (CSP, `X-Content-Type-Options`, etc.);
   the CSP allows only same-origin scripts (no inline handlers).
@@ -200,8 +211,8 @@ correctly behind Hostinger's reverse proxy.
   operational logs (`RETENTION_DAYS`; the audit trail is never pruned).
 - Passwords must be ≥8 chars with a letter and a digit; a coarse global API
   rate limit (`API_RATE_LIMIT`) complements the per-email login limiter.
-- Change the default admin password before going live.
-- The seeded admin must change its password on first login (forced).
+- Provision production administrators through the approved access-recovery
+  procedure; do not deploy seeded or default credentials.
 - Passwords are hashed asynchronously on the request path (login, signup,
   change, admin reset); an unknown-email login still runs a dummy bcrypt
   compare so response timing can't be used to enumerate accounts.
@@ -218,13 +229,17 @@ correctly behind Hostinger's reverse proxy.
   `SCHEDULER_ENABLED=0`.
 
 
-### Database migration & seeding
+### Database migration & development seeding
 
 - `npm run migrate` — creates all tables and indexes (idempotent).
-- `npm run seed` — inserts roles, permission keys, the default admin, sample
-  materials and locations (idempotent, safe to re-run).
-- The SQLite database file lives at `data/wms.db` (git-ignored). Delete it and
-  re-run `npm run setup` for a fresh start.
+- `npm run seed` — development/test only; inserts roles, permission keys,
+  default users, and sample data into a disposable database.
+- `npm run setup` — development/test only; runs migration and seed together.
+- Production deployment runs `npm run migrate` only. Never run `seed`, `setup`,
+  `fresh-start`, or `reset-admin` as a deployment step.
+- The SQLite database file lives at `data/wms.db` by default (git-ignored).
+  Production must use a verified persistent absolute `DB_PATH` and must never
+  delete or replace the database during an application update.
 
 ## Project structure
 
@@ -304,8 +319,9 @@ except signup/login. Permission keys are enforced per route.
 
 To add a new screen:
 
-1. Add its permission key in `server/db/seed.js` (`PERMISSIONS`) and re-run
-   `npm run seed`.
+1. Add its permission key in `server/db/seed.js` (`PERMISSIONS`). Refresh a
+   disposable development database with `npm run seed`; production permission
+   changes require a reviewed migration or governed administrative procedure.
 2. Create the API route in `server/routes/` protected with
    `requirePermission('your_key')` and mount it in `server/index.js`.
 3. Create `public/js/pages/yourpage.js` registering `Pages.yourpage`, include
