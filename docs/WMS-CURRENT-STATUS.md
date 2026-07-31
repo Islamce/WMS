@@ -55,6 +55,13 @@ Passenger restart remains forbidden until every gate passes and the evidence is
 reviewed. No production access, database operation, Passenger restart, artifact
 deletion, or PR merge occurred while making this correction.
 
+**CI follow-up, 2026-08-01:** CI passed on PR head `41e2cde`, but native-build
+run `30667043301` stopped before compilation because Git rejected the
+container-owned checkout as a dubious directory. The workflow now scopes each
+container-side Git command with `-c safe.directory="$GITHUB_WORKSPACE"`; it does
+not add a global or wildcard trust rule. Artifact quota remains unresolved
+because the failed run never reached upload.
+
 ## Current production data state after recovery
 
 Database record counts (**Reported (production)**, 2026-07-25, post-restore):

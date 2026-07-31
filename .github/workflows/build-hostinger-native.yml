@@ -47,9 +47,13 @@ jobs:
       - name: Verify checked-out source
         run: |
           set -Eeuo pipefail
-          ACTUAL_SHA="$(git rev-parse HEAD)"
+          ACTUAL_SHA="$(
+            git -c safe.directory="$GITHUB_WORKSPACE" rev-parse HEAD
+          )"
           test "$ACTUAL_SHA" = "$SOURCE_SHA"
-          test -z "$(git status --porcelain --untracked-files=no)"
+          test -z "$(
+            git -c safe.directory="$GITHUB_WORKSPACE" status --porcelain --untracked-files=no
+          )"
           printf 'SOURCE_SHA=%s\n' "$ACTUAL_SHA"
 
       - uses: actions/setup-node@v4

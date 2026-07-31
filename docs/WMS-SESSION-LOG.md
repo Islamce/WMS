@@ -2,6 +2,18 @@
 
 This is the chronological operational memory for the project. It records durable summaries of conversations and work, not secrets or necessarily verbatim transcripts.
 
+## 2026-08-01 — Native workflow checkout trust correction
+
+**Objective:** Correct PR #53 native-build run `30667043301`, which checked out the exact source SHA successfully but failed when the following Git verification command rejected the Rocky Linux container checkout as a dubious directory.
+
+**Change:** Every Git command executed by the workflow inside the container now uses the repository-scoped form `git -c safe.directory="$GITHUB_WORKSPACE" ...`. No `safe.directory='*'`, global Git configuration, production command, database operation, Passenger restart, or artifact deletion is involved.
+
+**Evidence:** CI passed on `41e2cde`; the native run failed at `git rev-parse HEAD` before compilation or upload and retained zero artifacts. Shell syntax, workflow assertions, and `git diff --check` are rerun before publishing this correction.
+
+**Remaining work:** Push the focused correction, monitor both checks, and confirm whether the native artifact can be retained. Artifact storage quota remains unresolved until a run reaches upload.
+
+---
+
 ## 2026-08-01 — Draft PR #53 merge-readiness hardening
 
 **Objective:** Correct the Hostinger native `better-sqlite3` recovery workflow and operator runbook before Draft PR #53 can be considered merge-ready. Repository-side only; production, Passenger, the production database, and existing GitHub artifacts were not changed.
