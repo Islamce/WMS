@@ -1,0 +1,1244 @@
+{
+  "_meta": {
+    "artifact": "architecture.json",
+    "bodyDigest": "6bf28a98b3ebdc873ffef29aaf84315ccd2226fc2081a33552f1f8b461653f95",
+    "confidence": "verified",
+    "doNotEdit": true,
+    "generator": "kaaf",
+    "generatorVersion": "0.7.0",
+    "inputDigest": "8f5f19c1b46bdc9b7c02c7f28e3524288722198142d16464698ebe1eb0598902",
+    "provenanceNote": "Generated from the declared kaaf.repo.json and kaaf.module.json manifests. No wall-clock time or commit SHA is embedded: both would break byte-identical regeneration. Use git history for when and from which commit.",
+    "schemaVersion": "1.0.0"
+  },
+  "apis": [
+    {
+      "auth": "jwt",
+      "confidence": "verified",
+      "id": "wms-admin-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/admin.js",
+      "requestType": "HTTP routes mounted from admin.js",
+      "responseType": "JSON",
+      "sourceManifest": "server/kaaf.module.json",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "confidence": "verified",
+      "id": "wms-analytics-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/analytics.js",
+      "requestType": "HTTP routes mounted from analytics.js",
+      "responseType": "JSON",
+      "sourceManifest": "server/kaaf.module.json",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "confidence": "verified",
+      "id": "wms-approvals-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/approvals.js",
+      "requestType": "HTTP routes mounted from approvals.js",
+      "responseType": "JSON",
+      "sourceManifest": "server/kaaf.module.json",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "confidence": "verified",
+      "id": "wms-attachments-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/attachments.js",
+      "requestType": "HTTP routes mounted from attachments.js",
+      "responseType": "JSON",
+      "sourceManifest": "server/kaaf.module.json",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "confidence": "verified",
+      "id": "wms-auth-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/auth.js",
+      "requestType": "HTTP routes mounted from auth.js",
+      "responseType": "JSON",
+      "sourceManifest": "server/kaaf.module.json",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "confidence": "verified",
+      "id": "wms-cycleCount-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/cycleCount.js",
+      "requestType": "HTTP routes mounted from cycleCount.js",
+      "responseType": "JSON",
+      "sourceManifest": "server/kaaf.module.json",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "confidence": "verified",
+      "id": "wms-dashboard-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/dashboard.js",
+      "requestType": "HTTP routes mounted from dashboard.js",
+      "responseType": "JSON",
+      "sourceManifest": "server/kaaf.module.json",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "confidence": "verified",
+      "id": "wms-erpOperator-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/erpOperator.js",
+      "requestType": "HTTP routes mounted from erpOperator.js",
+      "responseType": "JSON",
+      "sourceManifest": "server/kaaf.module.json",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "confidence": "verified",
+      "id": "wms-export-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/export.js",
+      "requestType": "HTTP routes mounted from export.js",
+      "responseType": "JSON",
+      "sourceManifest": "server/kaaf.module.json",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "confidence": "verified",
+      "id": "wms-gi-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/gi.js",
+      "requestType": "HTTP routes mounted from gi.js",
+      "responseType": "JSON",
+      "sourceManifest": "server/kaaf.module.json",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "confidence": "verified",
+      "id": "wms-import-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/import.js",
+      "requestType": "HTTP routes mounted from import.js",
+      "responseType": "JSON",
+      "sourceManifest": "server/kaaf.module.json",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "confidence": "verified",
+      "id": "wms-inventory-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/inventory.js",
+      "requestType": "HTTP routes mounted from inventory.js",
+      "responseType": "JSON",
+      "sourceManifest": "server/kaaf.module.json",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "confidence": "verified",
+      "id": "wms-kpi-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/kpi.js",
+      "requestType": "HTTP routes mounted from kpi.js",
+      "responseType": "JSON",
+      "sourceManifest": "server/kaaf.module.json",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "confidence": "verified",
+      "id": "wms-locations-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/locations.js",
+      "requestType": "HTTP routes mounted from locations.js",
+      "responseType": "JSON",
+      "sourceManifest": "server/kaaf.module.json",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "confidence": "verified",
+      "id": "wms-masterdata-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/masterdata.js",
+      "requestType": "HTTP routes mounted from masterdata.js",
+      "responseType": "JSON",
+      "sourceManifest": "server/kaaf.module.json",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "confidence": "verified",
+      "id": "wms-materials-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/materials.js",
+      "requestType": "HTTP routes mounted from materials.js",
+      "responseType": "JSON",
+      "sourceManifest": "server/kaaf.module.json",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "confidence": "verified",
+      "id": "wms-meta-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/meta.js",
+      "requestType": "HTTP routes mounted from meta.js",
+      "responseType": "JSON",
+      "sourceManifest": "server/kaaf.module.json",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "confidence": "verified",
+      "id": "wms-notifications-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/notifications.js",
+      "requestType": "HTTP routes mounted from notifications.js",
+      "responseType": "JSON",
+      "sourceManifest": "server/kaaf.module.json",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "confidence": "verified",
+      "id": "wms-openingStockReconcile-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/openingStockReconcile.js",
+      "requestType": "HTTP routes mounted from openingStockReconcile.js",
+      "responseType": "JSON",
+      "sourceManifest": "server/kaaf.module.json",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "confidence": "verified",
+      "id": "wms-permissions-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/permissions.js",
+      "requestType": "HTTP routes mounted from permissions.js",
+      "responseType": "JSON",
+      "sourceManifest": "server/kaaf.module.json",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "confidence": "verified",
+      "id": "wms-picking-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/picking.js",
+      "requestType": "HTTP routes mounted from picking.js",
+      "responseType": "JSON",
+      "sourceManifest": "server/kaaf.module.json",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "confidence": "verified",
+      "id": "wms-reallocation-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/reallocation.js",
+      "requestType": "HTTP routes mounted from reallocation.js",
+      "responseType": "JSON",
+      "sourceManifest": "server/kaaf.module.json",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "confidence": "verified",
+      "id": "wms-receiving-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/receiving.js",
+      "requestType": "HTTP routes mounted from receiving.js",
+      "responseType": "JSON",
+      "sourceManifest": "server/kaaf.module.json",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "confidence": "verified",
+      "id": "wms-requests-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/requests.js",
+      "requestType": "HTTP routes mounted from requests.js",
+      "responseType": "JSON",
+      "sourceManifest": "server/kaaf.module.json",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "confidence": "verified",
+      "id": "wms-shipping-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/shipping.js",
+      "requestType": "HTTP routes mounted from shipping.js",
+      "responseType": "JSON",
+      "sourceManifest": "server/kaaf.module.json",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "confidence": "verified",
+      "id": "wms-stock-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/stock.js",
+      "requestType": "HTTP routes mounted from stock.js",
+      "responseType": "JSON",
+      "sourceManifest": "server/kaaf.module.json",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "confidence": "verified",
+      "id": "wms-users-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/users.js",
+      "requestType": "HTTP routes mounted from users.js",
+      "responseType": "JSON",
+      "sourceManifest": "server/kaaf.module.json",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "confidence": "verified",
+      "id": "wms-warehouse-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/warehouse.js",
+      "requestType": "HTTP routes mounted from warehouse.js",
+      "responseType": "JSON",
+      "sourceManifest": "server/kaaf.module.json",
+      "stability": "evolving",
+      "version": "1"
+    }
+  ],
+  "dependencies": {
+    "declaredEdges": [],
+    "discoveredEdges": [
+      {
+        "declared": false,
+        "evidence": [
+          "server/index.js"
+        ],
+        "from": "wms-api",
+        "to": "wms-ops-scripts"
+      },
+      {
+        "declared": false,
+        "evidence": [
+          "scripts/backup.js",
+          "scripts/fresh-start.js",
+          "scripts/reset-admin.js",
+          "scripts/validate-opening-stock.js"
+        ],
+        "from": "wms-ops-scripts",
+        "to": "wms-api"
+      },
+      {
+        "declared": false,
+        "evidence": [
+          "scripts/backup.js"
+        ],
+        "from": "wms-ops-scripts",
+        "to": "wms-runtime-entry"
+      },
+      {
+        "declared": false,
+        "evidence": [
+          "app.js",
+          "index.js"
+        ],
+        "from": "wms-runtime-entry",
+        "to": "wms-api"
+      }
+    ],
+    "edges": [],
+    "hasCycles": false,
+    "note": "'edges' and 'declaredEdges' come from the manifests; cycles there are rejected at scan time (KAAF-E004). 'discoveredEdges' come from real imports — see drift.json where the two disagree."
+  },
+  "deployment": {
+    "environments": [
+      "production"
+    ],
+    "note": "Managed Hostinger Node.js under Passenger at ~/domains/wms.kynox.io/nodejs with a SQLite database at data/wms.db. Production safety invariants are defined in CLAUDE.md and docs/WMS-PRODUCTION-RUNBOOK.md and are authoritative over this note."
+  },
+  "drift": {
+    "counts": {
+      "error": 5,
+      "info": 0,
+      "warning": 0
+    },
+    "detail": ".ai/drift.json",
+    "hasErrors": true
+  },
+  "externalIntegrations": [
+    {
+      "confidence": "verified",
+      "criticality": "optional",
+      "kind": "push-notification",
+      "module": "wms-api",
+      "name": "Firebase Cloud Messaging (firebase-admin)",
+      "onUnavailable": "Mobile push notifications are not delivered; in-app notification records are still written.",
+      "sourceManifest": "server/kaaf.module.json"
+    },
+    {
+      "confidence": "verified",
+      "criticality": "required",
+      "kind": "database",
+      "module": "wms-api",
+      "name": "SQLite via better-sqlite3",
+      "onUnavailable": "The system cannot serve or record any warehouse operation. Production database path and safety invariants are defined in CLAUDE.md.",
+      "sourceManifest": "server/kaaf.module.json"
+    },
+    {
+      "confidence": "verified",
+      "criticality": "optional",
+      "kind": "push-notification",
+      "module": "wms-mobile",
+      "name": "Firebase Cloud Messaging",
+      "onUnavailable": "Device push notifications are not received; in-app screens still function.",
+      "sourceManifest": "wms flutter application/kaaf.module.json"
+    },
+    {
+      "confidence": "verified",
+      "criticality": "required",
+      "kind": "http-api",
+      "module": "wms-mobile",
+      "name": "WMS API",
+      "onUnavailable": "The mobile client cannot authenticate or perform any warehouse operation.",
+      "sourceManifest": "wms flutter application/kaaf.module.json"
+    },
+    {
+      "confidence": "verified",
+      "criticality": "required",
+      "kind": "process-manager",
+      "module": "wms-runtime-entry",
+      "name": "Phusion Passenger / PM2",
+      "onUnavailable": "The production process is not supervised or restarted.",
+      "sourceManifest": "kaaf.module.json"
+    }
+  ],
+  "modules": [
+    {
+      "confidence": "verified",
+      "confidenceReason": "Declared and corroborated by 63 discovered code file(s).",
+      "declared": true,
+      "declaredConfidence": "verified",
+      "dependedOnBy": [],
+      "dependsOn": [],
+      "discovery": {
+        "codeFileCount": 63,
+        "discovered": true,
+        "entryPoints": [
+          "server/index.js"
+        ],
+        "languages": [
+          "javascript",
+          "json"
+        ],
+        "parseErrors": [],
+        "publicSymbols": [],
+        "sourceFileCount": 64
+      },
+      "id": "wms-api",
+      "ownedEntities": [
+        "approval_thresholds",
+        "audit_trail",
+        "batches",
+        "bin_locations",
+        "cycle_counts",
+        "device_tokens",
+        "erp_integration_log",
+        "inventory_count_lines",
+        "inventory_sessions",
+        "locations",
+        "material_location_stock",
+        "material_request_headers",
+        "material_request_lines",
+        "materials",
+        "movement_types",
+        "notification_log",
+        "opening_stock_batch_registry",
+        "permissions",
+        "picking_allocations",
+        "picking_tasks",
+        "qr_codes",
+        "reference_data",
+        "request_attachments",
+        "role_permissions",
+        "roles",
+        "scheduler_locks",
+        "schema_migrations",
+        "shipments",
+        "so",
+        "stock_movement_history",
+        "stock_movement_import_batches",
+        "stock_movement_import_errors",
+        "stock_reallocations",
+        "stock_transactions",
+        "user_permissions",
+        "users",
+        "warehouses"
+      ],
+      "owner": "Backend",
+      "path": "server",
+      "publicEntryPoints": [
+        "server/config.js",
+        "server/index.js"
+      ],
+      "purpose": "Serve every warehouse operation over HTTP - materials, stock, receiving, picking, shipping, requests, approvals, cycle counts, locations, analytics and administration - and enforce database-defined permissions on each.",
+      "sourceManifest": "server/kaaf.module.json"
+    },
+    {
+      "confidence": "verified",
+      "confidenceReason": "Declared and corroborated by 31 discovered code file(s).",
+      "declared": true,
+      "declaredConfidence": "verified",
+      "dependedOnBy": [],
+      "dependsOn": [],
+      "discovery": {
+        "codeFileCount": 31,
+        "discovered": true,
+        "entryPoints": [
+          "scripts/architecture/aggregate.py",
+          "scripts/architecture/compat.py",
+          "scripts/architecture/generate.py",
+          "scripts/architecture/generate.sh",
+          "scripts/architecture/validators/validate_drift.py",
+          "scripts/architecture/validators/validate_generated.py",
+          "scripts/architecture/validators/validate_index.py"
+        ],
+        "languages": [
+          "json",
+          "python",
+          "shell"
+        ],
+        "parseErrors": [],
+        "publicSymbols": [
+          "build_artifacts",
+          "check",
+          "main",
+          "write"
+        ],
+        "sourceFileCount": 32
+      },
+      "id": "wms-kaaf-tooling",
+      "ownedEntities": [
+        "generated-architecture-context"
+      ],
+      "owner": "DevOps",
+      "path": "scripts/architecture",
+      "publicEntryPoints": [
+        "scripts/architecture/generate.py",
+        "scripts/architecture/generate.sh"
+      ],
+      "purpose": "Generate and validate this repository's KAAF architecture context. Vendored from Islamce/KAAF; see VENDORED.md before changing anything here.",
+      "sourceManifest": "scripts/architecture/kaaf.module.json"
+    },
+    {
+      "confidence": "verified",
+      "confidenceReason": "Declared and corroborated by 38 discovered code file(s).",
+      "declared": true,
+      "declaredConfidence": "verified",
+      "dependedOnBy": [],
+      "dependsOn": [],
+      "discovery": {
+        "codeFileCount": 38,
+        "discovered": true,
+        "entryPoints": [
+          "wms flutter application/lib/main.dart",
+          "wms flutter application/test/api_client_test.dart"
+        ],
+        "languages": [
+          "dart",
+          "json",
+          "markdown",
+          "yaml"
+        ],
+        "parseErrors": [],
+        "publicSymbols": [
+          "SessionScope",
+          "WmsApp"
+        ],
+        "sourceFileCount": 46
+      },
+      "id": "wms-mobile",
+      "ownedEntities": [
+        "device-token",
+        "mobile-screen",
+        "mobile-session"
+      ],
+      "owner": "Mobile",
+      "path": "wms flutter application",
+      "publicEntryPoints": [
+        "wms flutter application/lib/main.dart",
+        "wms flutter application/pubspec.yaml"
+      ],
+      "purpose": "Provide the Flutter mobile client (wms_mobile) for warehouse floor operations - scanning, picking, counting, requests and approvals - against the WMS API.",
+      "sourceManifest": "wms flutter application/kaaf.module.json"
+    },
+    {
+      "confidence": "verified",
+      "confidenceReason": "Declared and corroborated by 8 discovered code file(s).",
+      "declared": true,
+      "declaredConfidence": "verified",
+      "dependedOnBy": [],
+      "dependsOn": [],
+      "discovery": {
+        "codeFileCount": 8,
+        "discovered": true,
+        "entryPoints": [
+          "scripts/backup-retention.js",
+          "scripts/backup-select.js",
+          "scripts/backup.js",
+          "scripts/monitor.sh",
+          "scripts/validate-opening-stock.js",
+          "scripts/verify-backup.js"
+        ],
+        "languages": [
+          "javascript",
+          "json",
+          "shell"
+        ],
+        "parseErrors": [],
+        "publicSymbols": [],
+        "sourceFileCount": 9
+      },
+      "id": "wms-ops-scripts",
+      "ownedEntities": [
+        "operational-procedure"
+      ],
+      "owner": "DevOps",
+      "path": "scripts",
+      "publicEntryPoints": [
+        "scripts/"
+      ],
+      "purpose": "Operational and maintenance scripts. Several are destructive or production-affecting; CLAUDE.md forbids running seed, reset or fresh-start operations in production and is authoritative over this manifest.",
+      "sourceManifest": "scripts/kaaf.module.json"
+    },
+    {
+      "confidence": "verified",
+      "confidenceReason": "Declared and corroborated by 3 discovered code file(s).",
+      "declared": true,
+      "declaredConfidence": "verified",
+      "dependedOnBy": [],
+      "dependsOn": [],
+      "discovery": {
+        "codeFileCount": 3,
+        "discovered": true,
+        "entryPoints": [],
+        "languages": [
+          "javascript",
+          "json",
+          "markdown",
+          "yaml"
+        ],
+        "parseErrors": [],
+        "publicSymbols": [],
+        "sourceFileCount": 46
+      },
+      "id": "wms-runtime-entry",
+      "ownedEntities": [
+        "production-process"
+      ],
+      "owner": "DevOps",
+      "path": ".",
+      "publicEntryPoints": [
+        "app.js",
+        "ecosystem.config.js",
+        "index.js"
+      ],
+      "purpose": "Boot the production process under the managed host. Production path, runtime path and required environment flags are defined in CLAUDE.md and are authoritative over this manifest.",
+      "sourceManifest": "kaaf.module.json"
+    },
+    {
+      "confidence": "verified",
+      "confidenceReason": "Declared and corroborated by 26 discovered code file(s).",
+      "declared": true,
+      "declaredConfidence": "verified",
+      "dependedOnBy": [],
+      "dependsOn": [],
+      "discovery": {
+        "codeFileCount": 26,
+        "discovered": true,
+        "entryPoints": [
+          "tests/load/smoke-load.js",
+          "tests/run.sh"
+        ],
+        "languages": [
+          "javascript",
+          "json",
+          "python",
+          "shell"
+        ],
+        "parseErrors": [],
+        "publicSymbols": [],
+        "sourceFileCount": 27
+      },
+      "id": "wms-tests",
+      "ownedEntities": [
+        "regression-suite"
+      ],
+      "owner": "QA",
+      "path": "tests",
+      "publicEntryPoints": [
+        "tests/"
+      ],
+      "purpose": "End-to-end, smoke and load suites, including the executable regression tests that pin the fail-closed auto-seed rule established after the 2026-07-25 production database incident.",
+      "sourceManifest": "tests/kaaf.module.json"
+    },
+    {
+      "confidence": "verified",
+      "confidenceReason": "Declared and corroborated by 35 discovered code file(s).",
+      "declared": true,
+      "declaredConfidence": "verified",
+      "dependedOnBy": [],
+      "dependsOn": [],
+      "discovery": {
+        "codeFileCount": 35,
+        "discovered": true,
+        "entryPoints": [],
+        "languages": [
+          "javascript",
+          "json"
+        ],
+        "parseErrors": [],
+        "publicSymbols": [],
+        "sourceFileCount": 36
+      },
+      "id": "wms-web",
+      "ownedEntities": [
+        "browser-page",
+        "client-view"
+      ],
+      "owner": "Frontend",
+      "path": "public",
+      "publicEntryPoints": [
+        "public/index.html"
+      ],
+      "purpose": "Present the warehouse operations interface in the browser, served as static assets by the API process.",
+      "sourceManifest": "public/kaaf.module.json"
+    }
+  ],
+  "permissions": [
+    {
+      "action": "access",
+      "confidence": "verified",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/analytics.js"
+      ],
+      "key": "wms.ai_analytics",
+      "module": "wms-api",
+      "resource": "ai_analytics",
+      "roles": [
+        "database-defined"
+      ],
+      "sourceManifest": "server/kaaf.module.json"
+    },
+    {
+      "action": "access",
+      "confidence": "verified",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/locations.js"
+      ],
+      "key": "wms.all_locations",
+      "module": "wms-api",
+      "resource": "all_locations",
+      "roles": [
+        "database-defined"
+      ],
+      "sourceManifest": "server/kaaf.module.json"
+    },
+    {
+      "action": "access",
+      "confidence": "verified",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/approvals.js"
+      ],
+      "key": "wms.approvals",
+      "module": "wms-api",
+      "resource": "approvals",
+      "roles": [
+        "database-defined"
+      ],
+      "sourceManifest": "server/kaaf.module.json"
+    },
+    {
+      "action": "access",
+      "confidence": "verified",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/masterdata.js"
+      ],
+      "key": "wms.audit_trail",
+      "module": "wms-api",
+      "resource": "audit_trail",
+      "roles": [
+        "database-defined"
+      ],
+      "sourceManifest": "server/kaaf.module.json"
+    },
+    {
+      "action": "access",
+      "confidence": "verified",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/reallocation.js",
+        "server/routes/warehouse.js"
+      ],
+      "key": "wms.bin_batch_assignment",
+      "module": "wms-api",
+      "resource": "bin_batch_assignment",
+      "roles": [
+        "database-defined"
+      ],
+      "sourceManifest": "server/kaaf.module.json"
+    },
+    {
+      "action": "access",
+      "confidence": "verified",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/masterdata.js"
+      ],
+      "key": "wms.bins_master",
+      "module": "wms-api",
+      "resource": "bins_master",
+      "roles": [
+        "database-defined"
+      ],
+      "sourceManifest": "server/kaaf.module.json"
+    },
+    {
+      "action": "access",
+      "confidence": "verified",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/requests.js"
+      ],
+      "key": "wms.create_request",
+      "module": "wms-api",
+      "resource": "create_request",
+      "roles": [
+        "database-defined"
+      ],
+      "sourceManifest": "server/kaaf.module.json"
+    },
+    {
+      "action": "access",
+      "confidence": "verified",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/cycleCount.js"
+      ],
+      "key": "wms.cycle_count",
+      "module": "wms-api",
+      "resource": "cycle_count",
+      "roles": [
+        "database-defined"
+      ],
+      "sourceManifest": "server/kaaf.module.json"
+    },
+    {
+      "action": "access",
+      "confidence": "verified",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/dashboard.js"
+      ],
+      "key": "wms.dashboard",
+      "module": "wms-api",
+      "resource": "dashboard",
+      "roles": [
+        "database-defined"
+      ],
+      "sourceManifest": "server/kaaf.module.json"
+    },
+    {
+      "action": "access",
+      "confidence": "verified",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/locations.js"
+      ],
+      "key": "wms.empty_locations",
+      "module": "wms-api",
+      "resource": "empty_locations",
+      "roles": [
+        "database-defined"
+      ],
+      "sourceManifest": "server/kaaf.module.json"
+    },
+    {
+      "action": "access",
+      "confidence": "verified",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/erpOperator.js"
+      ],
+      "key": "wms.erp_operator",
+      "module": "wms-api",
+      "resource": "erp_operator",
+      "roles": [
+        "database-defined"
+      ],
+      "sourceManifest": "server/kaaf.module.json"
+    },
+    {
+      "action": "access",
+      "confidence": "verified",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/masterdata.js"
+      ],
+      "key": "wms.expiry_alerts",
+      "module": "wms-api",
+      "resource": "expiry_alerts",
+      "roles": [
+        "database-defined"
+      ],
+      "sourceManifest": "server/kaaf.module.json"
+    },
+    {
+      "action": "access",
+      "confidence": "verified",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/gi.js"
+      ],
+      "key": "wms.gi_posting",
+      "module": "wms-api",
+      "resource": "gi_posting",
+      "roles": [
+        "database-defined"
+      ],
+      "sourceManifest": "server/kaaf.module.json"
+    },
+    {
+      "action": "access",
+      "confidence": "verified",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/receiving.js"
+      ],
+      "key": "wms.goods_receipt",
+      "module": "wms-api",
+      "resource": "goods_receipt",
+      "roles": [
+        "database-defined"
+      ],
+      "sourceManifest": "server/kaaf.module.json"
+    },
+    {
+      "action": "access",
+      "confidence": "verified",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/kpi.js"
+      ],
+      "key": "wms.kpi_dashboard",
+      "module": "wms-api",
+      "resource": "kpi_dashboard",
+      "roles": [
+        "database-defined"
+      ],
+      "sourceManifest": "server/kaaf.module.json"
+    },
+    {
+      "action": "access",
+      "confidence": "verified",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/locations.js"
+      ],
+      "key": "wms.locations",
+      "module": "wms-api",
+      "resource": "locations",
+      "roles": [
+        "database-defined"
+      ],
+      "sourceManifest": "server/kaaf.module.json"
+    },
+    {
+      "action": "access",
+      "confidence": "verified",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/requests.js"
+      ],
+      "key": "wms.material_requests",
+      "module": "wms-api",
+      "resource": "material_requests",
+      "roles": [
+        "database-defined"
+      ],
+      "sourceManifest": "server/kaaf.module.json"
+    },
+    {
+      "action": "access",
+      "confidence": "verified",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/materials.js"
+      ],
+      "key": "wms.materials",
+      "module": "wms-api",
+      "resource": "materials",
+      "roles": [
+        "database-defined"
+      ],
+      "sourceManifest": "server/kaaf.module.json"
+    },
+    {
+      "action": "access",
+      "confidence": "verified",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/masterdata.js"
+      ],
+      "key": "wms.movement_types_master",
+      "module": "wms-api",
+      "resource": "movement_types_master",
+      "roles": [
+        "database-defined"
+      ],
+      "sourceManifest": "server/kaaf.module.json"
+    },
+    {
+      "action": "access",
+      "confidence": "verified",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/permissions.js"
+      ],
+      "key": "wms.permissions_management",
+      "module": "wms-api",
+      "resource": "permissions_management",
+      "roles": [
+        "database-defined"
+      ],
+      "sourceManifest": "server/kaaf.module.json"
+    },
+    {
+      "action": "access",
+      "confidence": "verified",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/warehouse.js"
+      ],
+      "key": "wms.picker_assignment",
+      "module": "wms-api",
+      "resource": "picker_assignment",
+      "roles": [
+        "database-defined"
+      ],
+      "sourceManifest": "server/kaaf.module.json"
+    },
+    {
+      "action": "access",
+      "confidence": "verified",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/picking.js"
+      ],
+      "key": "wms.picking",
+      "module": "wms-api",
+      "resource": "picking",
+      "roles": [
+        "database-defined"
+      ],
+      "sourceManifest": "server/kaaf.module.json"
+    },
+    {
+      "action": "access",
+      "confidence": "verified",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/masterdata.js"
+      ],
+      "key": "wms.quality",
+      "module": "wms-api",
+      "resource": "quality",
+      "roles": [
+        "database-defined"
+      ],
+      "sourceManifest": "server/kaaf.module.json"
+    },
+    {
+      "action": "access",
+      "confidence": "verified",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/reallocation.js"
+      ],
+      "key": "wms.reallocation",
+      "module": "wms-api",
+      "resource": "reallocation",
+      "roles": [
+        "database-defined"
+      ],
+      "sourceManifest": "server/kaaf.module.json"
+    },
+    {
+      "action": "access",
+      "confidence": "verified",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/stock.js"
+      ],
+      "key": "wms.stock_in",
+      "module": "wms-api",
+      "resource": "stock_in",
+      "roles": [
+        "database-defined"
+      ],
+      "sourceManifest": "server/kaaf.module.json"
+    },
+    {
+      "action": "access",
+      "confidence": "verified",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/stock.js"
+      ],
+      "key": "wms.stock_out",
+      "module": "wms-api",
+      "resource": "stock_out",
+      "roles": [
+        "database-defined"
+      ],
+      "sourceManifest": "server/kaaf.module.json"
+    },
+    {
+      "action": "access",
+      "confidence": "verified",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/users.js"
+      ],
+      "key": "wms.users_management",
+      "module": "wms-api",
+      "resource": "users_management",
+      "roles": [
+        "database-defined"
+      ],
+      "sourceManifest": "server/kaaf.module.json"
+    },
+    {
+      "action": "access",
+      "confidence": "verified",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/masterdata.js"
+      ],
+      "key": "wms.warehouses_master",
+      "module": "wms-api",
+      "resource": "warehouses_master",
+      "roles": [
+        "database-defined"
+      ],
+      "sourceManifest": "server/kaaf.module.json"
+    }
+  ],
+  "repository": {
+    "defaultBranch": "main",
+    "kaafPhase": 7,
+    "name": "WMS",
+    "repository": "Islamce/WMS"
+  }
+}

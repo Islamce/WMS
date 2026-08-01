@@ -1,0 +1,125 @@
+{
+  "_meta": {
+    "artifact": "modules/wms-runtime-entry.json",
+    "bodyDigest": "3b7d18713308faddb4c197162e3011ba5cf006975d3414279f42934f63a7089c",
+    "confidence": "verified",
+    "doNotEdit": true,
+    "generator": "kaaf",
+    "generatorVersion": "0.7.0",
+    "inputDigest": "8f5f19c1b46bdc9b7c02c7f28e3524288722198142d16464698ebe1eb0598902",
+    "provenanceNote": "Generated from the declared kaaf.repo.json and kaaf.module.json manifests. No wall-clock time or commit SHA is embedded: both would break byte-identical regeneration. Use git history for when and from which commit.",
+    "schemaVersion": "1.0.0"
+  },
+  "apis": [],
+  "confidence": "verified",
+  "confidenceReason": "Declared and corroborated by 3 discovered code file(s).",
+  "declared": true,
+  "declaredConfidence": "verified",
+  "dependedOnBy": [],
+  "dependsOn": [],
+  "discovery": {
+    "codeFiles": [
+      "app.js",
+      "ecosystem.config.js",
+      "index.js"
+    ],
+    "discovered": true,
+    "entryPoints": [],
+    "languages": [
+      "javascript",
+      "json",
+      "markdown",
+      "yaml"
+    ],
+    "parseErrors": [],
+    "publicSymbols": [],
+    "sourceFiles": [
+      ".devcontainer/devcontainer.json",
+      ".eslintrc.json",
+      ".github/dependabot.yml",
+      ".github/workflows/build-hostinger-native.yml",
+      ".github/workflows/ci.yml",
+      ".github/workflows/flutter-apk.yml",
+      ".github/workflows/mobile-ci.yml",
+      ".github/workflows/production-backup.yml",
+      "CLAUDE.md",
+      "DEPLOY-HOSTINGER.md",
+      "HOSTINGER-NATIVE-RECOVERY.md",
+      "README.md",
+      "app.js",
+      "docker-compose.yml",
+      "docs/ANDROID-UAT-V1.0.md",
+      "docs/HOSTINGER-SCHEDULED-BACKUP.md",
+      "docs/KYNOX-WMS-V2-EXECUTION-NOTE.md",
+      "docs/KYNOX-WMS-V2-IMPLEMENTATION-SEQUENCE.md",
+      "docs/KYNOX-WMS-V2-NAVIGATION-MATRIX.md",
+      "docs/KYNOX-WMS-V2-PHASE-1-ACCEPTANCE.md",
+      "docs/KYNOX-WMS-V2-PHASE-2-CHANGELOG.md",
+      "docs/KYNOX-WMS-V2-PHASE-2-REVIEW.md",
+      "docs/KYNOX-WMS-V2-PHASE-2-SCOPE.md",
+      "docs/KYNOX-WMS-V2-PHASE-2-UAT.md",
+      "docs/KYNOX-WMS-V2-REALITY-GATES.md",
+      "docs/KYNOX-WMS-V2-TRANSFORMATION-PLAN.md",
+      "docs/OPS-RUNBOOK.md",
+      "docs/POSTGRES-MIGRATION.md",
+      "docs/WMS-ACTIONS-ARTIFACT-INVENTORY-2026-08-01.md",
+      "docs/WMS-CURRENT-STATUS.md",
+      "docs/WMS-DECISION-LOG.md",
+      "docs/WMS-INCIDENT-LOG.md",
+      "docs/WMS-PROCESS-FLOW-ASSESSMENT.md",
+      "docs/WMS-PRODUCTION-RUNBOOK.md",
+      "docs/WMS-SESSION-LOG.md",
+      "docs/WMS-UNIFIED-AI-HANDOFF.md",
+      "docs/WMS-V1.0-EXECUTION-PLAN.md",
+      "docs/WMS-WORKFLOW-HARDENING-PHASE2.md",
+      "docs/WORKFLOW-GAP-ANALYSIS.md",
+      "docs/incidents/2026-07-23-navigation-observer-loop.md",
+      "ecosystem.config.js",
+      "index.js",
+      "kaaf.module.json",
+      "kaaf.repo.json",
+      "package-lock.json",
+      "package.json"
+    ]
+  },
+  "driftFindings": [
+    {
+      "evidence": [
+        "app.js",
+        "index.js"
+      ],
+      "module": "wms-runtime-entry",
+      "recommendation": "Add 'wms-api' to dependsOn in kaaf.module.json, or remove the import (docs/kaaf/STANDARDS.md §1).",
+      "severity": "error",
+      "summary": "'wms-runtime-entry' imports 'wms-api' but does not declare the dependency.",
+      "type": "undeclared-dependency"
+    }
+  ],
+  "externalIntegrations": [
+    {
+      "criticality": "required",
+      "kind": "process-manager",
+      "name": "Phusion Passenger / PM2",
+      "onUnavailable": "The production process is not supervised or restarted."
+    }
+  ],
+  "id": "wms-runtime-entry",
+  "ownedEntities": [
+    "production-process"
+  ],
+  "owner": "DevOps",
+  "path": ".",
+  "permissions": [],
+  "publicEntryPoints": [
+    "app.js",
+    "ecosystem.config.js",
+    "index.js"
+  ],
+  "purpose": "Boot the production process under the managed host. Production path, runtime path and required environment flags are defined in CLAUDE.md and are authoritative over this manifest.",
+  "readNext": [
+    "app.js",
+    "ecosystem.config.js",
+    "index.js"
+  ],
+  "sourceManifest": "kaaf.module.json"
+}

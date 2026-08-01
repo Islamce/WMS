@@ -1,0 +1,717 @@
+{
+  "_meta": {
+    "artifact": "index/repository.json",
+    "bodyDigest": "5dcfe5b7ba03dd7288172e68c27f4719214ab10cce0a426850abe9d3a5c396d6",
+    "confidence": "derived",
+    "doNotEdit": true,
+    "generator": "kaaf",
+    "generatorVersion": "0.7.0",
+    "inputDigest": "8f5f19c1b46bdc9b7c02c7f28e3524288722198142d16464698ebe1eb0598902",
+    "provenanceNote": "Generated from the declared kaaf.repo.json and kaaf.module.json manifests. No wall-clock time or commit SHA is embedded: both would break byte-identical regeneration. Use git history for when and from which commit.",
+    "schemaVersion": "1.0.0"
+  },
+  "apis": [
+    {
+      "confidence": "verified",
+      "id": "wms-admin-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/admin.js",
+      "qualifiedId": "Islamce/WMS#wms-api/wms-admin-routes",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "confidence": "verified",
+      "id": "wms-analytics-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/analytics.js",
+      "qualifiedId": "Islamce/WMS#wms-api/wms-analytics-routes",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "confidence": "verified",
+      "id": "wms-approvals-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/approvals.js",
+      "qualifiedId": "Islamce/WMS#wms-api/wms-approvals-routes",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "confidence": "verified",
+      "id": "wms-attachments-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/attachments.js",
+      "qualifiedId": "Islamce/WMS#wms-api/wms-attachments-routes",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "confidence": "verified",
+      "id": "wms-auth-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/auth.js",
+      "qualifiedId": "Islamce/WMS#wms-api/wms-auth-routes",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "confidence": "verified",
+      "id": "wms-cycleCount-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/cycleCount.js",
+      "qualifiedId": "Islamce/WMS#wms-api/wms-cycleCount-routes",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "confidence": "verified",
+      "id": "wms-dashboard-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/dashboard.js",
+      "qualifiedId": "Islamce/WMS#wms-api/wms-dashboard-routes",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "confidence": "verified",
+      "id": "wms-erpOperator-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/erpOperator.js",
+      "qualifiedId": "Islamce/WMS#wms-api/wms-erpOperator-routes",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "confidence": "verified",
+      "id": "wms-export-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/export.js",
+      "qualifiedId": "Islamce/WMS#wms-api/wms-export-routes",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "confidence": "verified",
+      "id": "wms-gi-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/gi.js",
+      "qualifiedId": "Islamce/WMS#wms-api/wms-gi-routes",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "confidence": "verified",
+      "id": "wms-import-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/import.js",
+      "qualifiedId": "Islamce/WMS#wms-api/wms-import-routes",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "confidence": "verified",
+      "id": "wms-inventory-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/inventory.js",
+      "qualifiedId": "Islamce/WMS#wms-api/wms-inventory-routes",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "confidence": "verified",
+      "id": "wms-kpi-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/kpi.js",
+      "qualifiedId": "Islamce/WMS#wms-api/wms-kpi-routes",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "confidence": "verified",
+      "id": "wms-locations-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/locations.js",
+      "qualifiedId": "Islamce/WMS#wms-api/wms-locations-routes",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "confidence": "verified",
+      "id": "wms-masterdata-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/masterdata.js",
+      "qualifiedId": "Islamce/WMS#wms-api/wms-masterdata-routes",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "confidence": "verified",
+      "id": "wms-materials-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/materials.js",
+      "qualifiedId": "Islamce/WMS#wms-api/wms-materials-routes",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "confidence": "verified",
+      "id": "wms-meta-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/meta.js",
+      "qualifiedId": "Islamce/WMS#wms-api/wms-meta-routes",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "confidence": "verified",
+      "id": "wms-notifications-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/notifications.js",
+      "qualifiedId": "Islamce/WMS#wms-api/wms-notifications-routes",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "confidence": "verified",
+      "id": "wms-openingStockReconcile-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/openingStockReconcile.js",
+      "qualifiedId": "Islamce/WMS#wms-api/wms-openingStockReconcile-routes",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "confidence": "verified",
+      "id": "wms-permissions-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/permissions.js",
+      "qualifiedId": "Islamce/WMS#wms-api/wms-permissions-routes",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "confidence": "verified",
+      "id": "wms-picking-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/picking.js",
+      "qualifiedId": "Islamce/WMS#wms-api/wms-picking-routes",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "confidence": "verified",
+      "id": "wms-reallocation-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/reallocation.js",
+      "qualifiedId": "Islamce/WMS#wms-api/wms-reallocation-routes",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "confidence": "verified",
+      "id": "wms-receiving-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/receiving.js",
+      "qualifiedId": "Islamce/WMS#wms-api/wms-receiving-routes",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "confidence": "verified",
+      "id": "wms-requests-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/requests.js",
+      "qualifiedId": "Islamce/WMS#wms-api/wms-requests-routes",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "confidence": "verified",
+      "id": "wms-shipping-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/shipping.js",
+      "qualifiedId": "Islamce/WMS#wms-api/wms-shipping-routes",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "confidence": "verified",
+      "id": "wms-stock-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/stock.js",
+      "qualifiedId": "Islamce/WMS#wms-api/wms-stock-routes",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "confidence": "verified",
+      "id": "wms-users-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/users.js",
+      "qualifiedId": "Islamce/WMS#wms-api/wms-users-routes",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "confidence": "verified",
+      "id": "wms-warehouse-routes",
+      "kind": "rest",
+      "module": "wms-api",
+      "path": "server/routes/warehouse.js",
+      "qualifiedId": "Islamce/WMS#wms-api/wms-warehouse-routes",
+      "stability": "evolving",
+      "version": "1"
+    }
+  ],
+  "externalIntegrations": [
+    {
+      "criticality": "optional",
+      "kind": "push-notification",
+      "module": "wms-api",
+      "name": "Firebase Cloud Messaging (firebase-admin)"
+    },
+    {
+      "criticality": "required",
+      "kind": "database",
+      "module": "wms-api",
+      "name": "SQLite via better-sqlite3"
+    },
+    {
+      "criticality": "optional",
+      "kind": "push-notification",
+      "module": "wms-mobile",
+      "name": "Firebase Cloud Messaging"
+    },
+    {
+      "criticality": "required",
+      "kind": "http-api",
+      "module": "wms-mobile",
+      "name": "WMS API"
+    },
+    {
+      "criticality": "required",
+      "kind": "process-manager",
+      "module": "wms-runtime-entry",
+      "name": "Phusion Passenger / PM2"
+    }
+  ],
+  "health": {
+    "confidenceByLevel": {
+      "verified": 7
+    },
+    "driftCounts": {
+      "error": 5,
+      "info": 0,
+      "warning": 0
+    },
+    "hasDriftErrors": true,
+    "moduleCount": 7,
+    "modulesUndeclared": 0,
+    "modulesWithoutOwner": [],
+    "note": "No publication timestamp is embedded: it would break byte-identical regeneration. Time-based staleness is computed at aggregation time from publication metadata supplied to the aggregator.",
+    "ownershipCoverage": 1.0
+  },
+  "indexSchemaVersion": "1.1.0",
+  "kaafGeneratorVersion": "0.7.0",
+  "modules": [
+    {
+      "confidence": "verified",
+      "consumes": [],
+      "declared": true,
+      "dependsOn": [],
+      "id": "wms-api",
+      "ownedEntities": [
+        "approval_thresholds",
+        "audit_trail",
+        "batches",
+        "bin_locations",
+        "cycle_counts",
+        "device_tokens",
+        "erp_integration_log",
+        "inventory_count_lines",
+        "inventory_sessions",
+        "locations",
+        "material_location_stock",
+        "material_request_headers",
+        "material_request_lines",
+        "materials",
+        "movement_types",
+        "notification_log",
+        "opening_stock_batch_registry",
+        "permissions",
+        "picking_allocations",
+        "picking_tasks",
+        "qr_codes",
+        "reference_data",
+        "request_attachments",
+        "role_permissions",
+        "roles",
+        "scheduler_locks",
+        "schema_migrations",
+        "shipments",
+        "so",
+        "stock_movement_history",
+        "stock_movement_import_batches",
+        "stock_movement_import_errors",
+        "stock_reallocations",
+        "stock_transactions",
+        "user_permissions",
+        "users",
+        "warehouses"
+      ],
+      "owner": "Backend",
+      "path": "server",
+      "purpose": "Serve every warehouse operation over HTTP - materials, stock, receiving, picking, shipping, requests, approvals, cycle counts, locations, analytics and administration - and enforce database-defined permissions on each.",
+      "qualifiedId": "Islamce/WMS#wms-api"
+    },
+    {
+      "confidence": "verified",
+      "consumes": [],
+      "declared": true,
+      "dependsOn": [],
+      "id": "wms-kaaf-tooling",
+      "ownedEntities": [
+        "generated-architecture-context"
+      ],
+      "owner": "DevOps",
+      "path": "scripts/architecture",
+      "purpose": "Generate and validate this repository's KAAF architecture context. Vendored from Islamce/KAAF; see VENDORED.md before changing anything here.",
+      "qualifiedId": "Islamce/WMS#wms-kaaf-tooling"
+    },
+    {
+      "confidence": "verified",
+      "consumes": [],
+      "declared": true,
+      "dependsOn": [],
+      "id": "wms-mobile",
+      "ownedEntities": [
+        "device-token",
+        "mobile-screen",
+        "mobile-session"
+      ],
+      "owner": "Mobile",
+      "path": "wms flutter application",
+      "purpose": "Provide the Flutter mobile client (wms_mobile) for warehouse floor operations - scanning, picking, counting, requests and approvals - against the WMS API.",
+      "qualifiedId": "Islamce/WMS#wms-mobile"
+    },
+    {
+      "confidence": "verified",
+      "consumes": [],
+      "declared": true,
+      "dependsOn": [],
+      "id": "wms-ops-scripts",
+      "ownedEntities": [
+        "operational-procedure"
+      ],
+      "owner": "DevOps",
+      "path": "scripts",
+      "purpose": "Operational and maintenance scripts. Several are destructive or production-affecting; CLAUDE.md forbids running seed, reset or fresh-start operations in production and is authoritative over this manifest.",
+      "qualifiedId": "Islamce/WMS#wms-ops-scripts"
+    },
+    {
+      "confidence": "verified",
+      "consumes": [],
+      "declared": true,
+      "dependsOn": [],
+      "id": "wms-runtime-entry",
+      "ownedEntities": [
+        "production-process"
+      ],
+      "owner": "DevOps",
+      "path": ".",
+      "purpose": "Boot the production process under the managed host. Production path, runtime path and required environment flags are defined in CLAUDE.md and are authoritative over this manifest.",
+      "qualifiedId": "Islamce/WMS#wms-runtime-entry"
+    },
+    {
+      "confidence": "verified",
+      "consumes": [],
+      "declared": true,
+      "dependsOn": [],
+      "id": "wms-tests",
+      "ownedEntities": [
+        "regression-suite"
+      ],
+      "owner": "QA",
+      "path": "tests",
+      "purpose": "End-to-end, smoke and load suites, including the executable regression tests that pin the fail-closed auto-seed rule established after the 2026-07-25 production database incident.",
+      "qualifiedId": "Islamce/WMS#wms-tests"
+    },
+    {
+      "confidence": "verified",
+      "consumes": [],
+      "declared": true,
+      "dependsOn": [],
+      "id": "wms-web",
+      "ownedEntities": [
+        "browser-page",
+        "client-view"
+      ],
+      "owner": "Frontend",
+      "path": "public",
+      "purpose": "Present the warehouse operations interface in the browser, served as static assets by the API process.",
+      "qualifiedId": "Islamce/WMS#wms-web"
+    }
+  ],
+  "permissions": [
+    {
+      "confidence": "verified",
+      "key": "wms.ai_analytics",
+      "module": "wms-api",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "confidence": "verified",
+      "key": "wms.all_locations",
+      "module": "wms-api",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "confidence": "verified",
+      "key": "wms.approvals",
+      "module": "wms-api",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "confidence": "verified",
+      "key": "wms.audit_trail",
+      "module": "wms-api",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "confidence": "verified",
+      "key": "wms.bin_batch_assignment",
+      "module": "wms-api",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "confidence": "verified",
+      "key": "wms.bins_master",
+      "module": "wms-api",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "confidence": "verified",
+      "key": "wms.create_request",
+      "module": "wms-api",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "confidence": "verified",
+      "key": "wms.cycle_count",
+      "module": "wms-api",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "confidence": "verified",
+      "key": "wms.dashboard",
+      "module": "wms-api",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "confidence": "verified",
+      "key": "wms.empty_locations",
+      "module": "wms-api",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "confidence": "verified",
+      "key": "wms.erp_operator",
+      "module": "wms-api",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "confidence": "verified",
+      "key": "wms.expiry_alerts",
+      "module": "wms-api",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "confidence": "verified",
+      "key": "wms.gi_posting",
+      "module": "wms-api",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "confidence": "verified",
+      "key": "wms.goods_receipt",
+      "module": "wms-api",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "confidence": "verified",
+      "key": "wms.kpi_dashboard",
+      "module": "wms-api",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "confidence": "verified",
+      "key": "wms.locations",
+      "module": "wms-api",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "confidence": "verified",
+      "key": "wms.material_requests",
+      "module": "wms-api",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "confidence": "verified",
+      "key": "wms.materials",
+      "module": "wms-api",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "confidence": "verified",
+      "key": "wms.movement_types_master",
+      "module": "wms-api",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "confidence": "verified",
+      "key": "wms.permissions_management",
+      "module": "wms-api",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "confidence": "verified",
+      "key": "wms.picker_assignment",
+      "module": "wms-api",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "confidence": "verified",
+      "key": "wms.picking",
+      "module": "wms-api",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "confidence": "verified",
+      "key": "wms.quality",
+      "module": "wms-api",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "confidence": "verified",
+      "key": "wms.reallocation",
+      "module": "wms-api",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "confidence": "verified",
+      "key": "wms.stock_in",
+      "module": "wms-api",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "confidence": "verified",
+      "key": "wms.stock_out",
+      "module": "wms-api",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "confidence": "verified",
+      "key": "wms.users_management",
+      "module": "wms-api",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "confidence": "verified",
+      "key": "wms.warehouses_master",
+      "module": "wms-api",
+      "roles": [
+        "database-defined"
+      ]
+    }
+  ],
+  "repository": {
+    "defaultBranch": "main",
+    "description": "WMS - a warehouse management system with a Node.js backend, a browser client, and a Flutter mobile application.",
+    "kaafPhase": 7,
+    "name": "WMS",
+    "repository": "Islamce/WMS"
+  }
+}

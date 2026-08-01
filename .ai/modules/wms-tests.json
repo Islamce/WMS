@@ -1,0 +1,109 @@
+{
+  "_meta": {
+    "artifact": "modules/wms-tests.json",
+    "bodyDigest": "b38821d2d30ef2d52f46b1f419b40a095428e034f219ba2b8a49111bf6e757f9",
+    "confidence": "verified",
+    "doNotEdit": true,
+    "generator": "kaaf",
+    "generatorVersion": "0.7.0",
+    "inputDigest": "8f5f19c1b46bdc9b7c02c7f28e3524288722198142d16464698ebe1eb0598902",
+    "provenanceNote": "Generated from the declared kaaf.repo.json and kaaf.module.json manifests. No wall-clock time or commit SHA is embedded: both would break byte-identical regeneration. Use git history for when and from which commit.",
+    "schemaVersion": "1.0.0"
+  },
+  "apis": [],
+  "confidence": "verified",
+  "confidenceReason": "Declared and corroborated by 26 discovered code file(s).",
+  "declared": true,
+  "declaredConfidence": "verified",
+  "dependedOnBy": [],
+  "dependsOn": [],
+  "discovery": {
+    "codeFiles": [
+      "tests/e2e/autoseed_guard_test.py",
+      "tests/e2e/backup_retention_test.py",
+      "tests/e2e/backup_test.py",
+      "tests/e2e/features_test.py",
+      "tests/e2e/idempotency_test.py",
+      "tests/e2e/import_test.py",
+      "tests/e2e/movement_history_import_test.py",
+      "tests/e2e/p0_hardening_test.py",
+      "tests/e2e/p0_regression_test.py",
+      "tests/e2e/p1_hardening_test.py",
+      "tests/e2e/p1_regression_test.py",
+      "tests/e2e/p2_test.py",
+      "tests/e2e/p3_test.py",
+      "tests/e2e/password_test.py",
+      "tests/e2e/quickwins_test.py",
+      "tests/e2e/r3_test.py",
+      "tests/e2e/refinements_test.py",
+      "tests/e2e/reports_test.py",
+      "tests/e2e/reverse_workflow_test.py",
+      "tests/e2e/uat2_test.py",
+      "tests/e2e/uat_test.py",
+      "tests/e2e/workflow_test.py",
+      "tests/load/smoke-load.js",
+      "tests/navigation-v2-observer.test.js",
+      "tests/run.sh",
+      "tests/smoke/playwright_smoke.js"
+    ],
+    "discovered": true,
+    "entryPoints": [
+      "tests/load/smoke-load.js",
+      "tests/run.sh"
+    ],
+    "languages": [
+      "javascript",
+      "json",
+      "python",
+      "shell"
+    ],
+    "parseErrors": [],
+    "publicSymbols": [],
+    "sourceFiles": [
+      "tests/e2e/autoseed_guard_test.py",
+      "tests/e2e/backup_retention_test.py",
+      "tests/e2e/backup_test.py",
+      "tests/e2e/features_test.py",
+      "tests/e2e/idempotency_test.py",
+      "tests/e2e/import_test.py",
+      "tests/e2e/movement_history_import_test.py",
+      "tests/e2e/p0_hardening_test.py",
+      "tests/e2e/p0_regression_test.py",
+      "tests/e2e/p1_hardening_test.py",
+      "tests/e2e/p1_regression_test.py",
+      "tests/e2e/p2_test.py",
+      "tests/e2e/p3_test.py",
+      "tests/e2e/password_test.py",
+      "tests/e2e/quickwins_test.py",
+      "tests/e2e/r3_test.py",
+      "tests/e2e/refinements_test.py",
+      "tests/e2e/reports_test.py",
+      "tests/e2e/reverse_workflow_test.py",
+      "tests/e2e/uat2_test.py",
+      "tests/e2e/uat_test.py",
+      "tests/e2e/workflow_test.py",
+      "tests/kaaf.module.json",
+      "tests/load/smoke-load.js",
+      "tests/navigation-v2-observer.test.js",
+      "tests/run.sh",
+      "tests/smoke/playwright_smoke.js"
+    ]
+  },
+  "driftFindings": [],
+  "externalIntegrations": [],
+  "id": "wms-tests",
+  "ownedEntities": [
+    "regression-suite"
+  ],
+  "owner": "QA",
+  "path": "tests",
+  "permissions": [],
+  "publicEntryPoints": [
+    "tests/"
+  ],
+  "purpose": "End-to-end, smoke and load suites, including the executable regression tests that pin the fail-closed auto-seed rule established after the 2026-07-25 production database incident.",
+  "readNext": [
+    "tests/"
+  ],
+  "sourceManifest": "tests/kaaf.module.json"
+}

@@ -1,0 +1,100 @@
+{
+  "_meta": {
+    "artifact": "modules/wms-ops-scripts.json",
+    "bodyDigest": "2023cfba1e439858f33d06eaab64dbd5a675e42cae7917087f854aeb0a5a0e94",
+    "confidence": "verified",
+    "doNotEdit": true,
+    "generator": "kaaf",
+    "generatorVersion": "0.7.0",
+    "inputDigest": "8f5f19c1b46bdc9b7c02c7f28e3524288722198142d16464698ebe1eb0598902",
+    "provenanceNote": "Generated from the declared kaaf.repo.json and kaaf.module.json manifests. No wall-clock time or commit SHA is embedded: both would break byte-identical regeneration. Use git history for when and from which commit.",
+    "schemaVersion": "1.0.0"
+  },
+  "apis": [],
+  "confidence": "verified",
+  "confidenceReason": "Declared and corroborated by 8 discovered code file(s).",
+  "declared": true,
+  "declaredConfidence": "verified",
+  "dependedOnBy": [],
+  "dependsOn": [],
+  "discovery": {
+    "codeFiles": [
+      "scripts/backup-retention.js",
+      "scripts/backup-select.js",
+      "scripts/backup.js",
+      "scripts/fresh-start.js",
+      "scripts/monitor.sh",
+      "scripts/reset-admin.js",
+      "scripts/validate-opening-stock.js",
+      "scripts/verify-backup.js"
+    ],
+    "discovered": true,
+    "entryPoints": [
+      "scripts/backup-retention.js",
+      "scripts/backup-select.js",
+      "scripts/backup.js",
+      "scripts/monitor.sh",
+      "scripts/validate-opening-stock.js",
+      "scripts/verify-backup.js"
+    ],
+    "languages": [
+      "javascript",
+      "json",
+      "shell"
+    ],
+    "parseErrors": [],
+    "publicSymbols": [],
+    "sourceFiles": [
+      "scripts/backup-retention.js",
+      "scripts/backup-select.js",
+      "scripts/backup.js",
+      "scripts/fresh-start.js",
+      "scripts/kaaf.module.json",
+      "scripts/monitor.sh",
+      "scripts/reset-admin.js",
+      "scripts/validate-opening-stock.js",
+      "scripts/verify-backup.js"
+    ]
+  },
+  "driftFindings": [
+    {
+      "evidence": [
+        "scripts/backup.js",
+        "scripts/fresh-start.js",
+        "scripts/reset-admin.js",
+        "scripts/validate-opening-stock.js"
+      ],
+      "module": "wms-ops-scripts",
+      "recommendation": "Add 'wms-api' to dependsOn in scripts/kaaf.module.json, or remove the import (docs/kaaf/STANDARDS.md §1).",
+      "severity": "error",
+      "summary": "'wms-ops-scripts' imports 'wms-api' but does not declare the dependency.",
+      "type": "undeclared-dependency"
+    },
+    {
+      "evidence": [
+        "scripts/backup.js"
+      ],
+      "module": "wms-ops-scripts",
+      "recommendation": "Add 'wms-runtime-entry' to dependsOn in scripts/kaaf.module.json, or remove the import (docs/kaaf/STANDARDS.md §1).",
+      "severity": "error",
+      "summary": "'wms-ops-scripts' imports 'wms-runtime-entry' but does not declare the dependency.",
+      "type": "undeclared-dependency"
+    }
+  ],
+  "externalIntegrations": [],
+  "id": "wms-ops-scripts",
+  "ownedEntities": [
+    "operational-procedure"
+  ],
+  "owner": "DevOps",
+  "path": "scripts",
+  "permissions": [],
+  "publicEntryPoints": [
+    "scripts/"
+  ],
+  "purpose": "Operational and maintenance scripts. Several are destructive or production-affecting; CLAUDE.md forbids running seed, reset or fresh-start operations in production and is authoritative over this manifest.",
+  "readNext": [
+    "scripts/"
+  ],
+  "sourceManifest": "scripts/kaaf.module.json"
+}

@@ -1,0 +1,168 @@
+{
+  "_meta": {
+    "artifact": "drift.json",
+    "bodyDigest": "c52ac205818fab8ec632af5b8f53ad1262c495ff2eb73636937aa6e6fca6e8ba",
+    "confidence": "derived",
+    "doNotEdit": true,
+    "generator": "kaaf",
+    "generatorVersion": "0.7.0",
+    "inputDigest": "8f5f19c1b46bdc9b7c02c7f28e3524288722198142d16464698ebe1eb0598902",
+    "provenanceNote": "Generated from the declared kaaf.repo.json and kaaf.module.json manifests. No wall-clock time or commit SHA is embedded: both would break byte-identical regeneration. Use git history for when and from which commit.",
+    "schemaVersion": "1.0.0"
+  },
+  "confidenceByModule": {
+    "wms-api": {
+      "level": "verified",
+      "reason": "Declared and corroborated by 63 discovered code file(s)."
+    },
+    "wms-kaaf-tooling": {
+      "level": "verified",
+      "reason": "Declared and corroborated by 31 discovered code file(s)."
+    },
+    "wms-mobile": {
+      "level": "verified",
+      "reason": "Declared and corroborated by 38 discovered code file(s)."
+    },
+    "wms-ops-scripts": {
+      "level": "verified",
+      "reason": "Declared and corroborated by 8 discovered code file(s)."
+    },
+    "wms-runtime-entry": {
+      "level": "verified",
+      "reason": "Declared and corroborated by 3 discovered code file(s)."
+    },
+    "wms-tests": {
+      "level": "verified",
+      "reason": "Declared and corroborated by 26 discovered code file(s)."
+    },
+    "wms-web": {
+      "level": "verified",
+      "reason": "Declared and corroborated by 35 discovered code file(s)."
+    }
+  },
+  "counts": {
+    "error": 5,
+    "info": 0,
+    "warning": 0
+  },
+  "declaredModules": [
+    "wms-api",
+    "wms-kaaf-tooling",
+    "wms-mobile",
+    "wms-ops-scripts",
+    "wms-runtime-entry",
+    "wms-tests",
+    "wms-web"
+  ],
+  "discoveredImportEdges": [
+    {
+      "evidence": [
+        "server/index.js"
+      ],
+      "from": "wms-api",
+      "to": "wms-ops-scripts"
+    },
+    {
+      "evidence": [
+        "scripts/backup.js",
+        "scripts/fresh-start.js",
+        "scripts/reset-admin.js",
+        "scripts/validate-opening-stock.js"
+      ],
+      "from": "wms-ops-scripts",
+      "to": "wms-api"
+    },
+    {
+      "evidence": [
+        "scripts/backup.js"
+      ],
+      "from": "wms-ops-scripts",
+      "to": "wms-runtime-entry"
+    },
+    {
+      "evidence": [
+        "app.js",
+        "index.js"
+      ],
+      "from": "wms-runtime-entry",
+      "to": "wms-api"
+    }
+  ],
+  "discoveredModules": [
+    "wms-api",
+    "wms-kaaf-tooling",
+    "wms-mobile",
+    "wms-ops-scripts",
+    "wms-runtime-entry",
+    "wms-tests",
+    "wms-web"
+  ],
+  "findings": [
+    {
+      "evidence": [
+        "server/index.js",
+        "scripts/backup.js",
+        "scripts/fresh-start.js",
+        "scripts/reset-admin.js",
+        "scripts/validate-opening-stock.js"
+      ],
+      "module": "wms-api",
+      "recommendation": "Break the cycle. A cycle is a design defect and blocks merge (docs/kaaf/STANDARDS.md §1).",
+      "severity": "error",
+      "summary": "Discovered imports form a cycle: wms-api -> wms-ops-scripts -> wms-api",
+      "type": "discovered-import-cycle"
+    },
+    {
+      "evidence": [
+        "server/index.js"
+      ],
+      "module": "wms-api",
+      "recommendation": "Add 'wms-ops-scripts' to dependsOn in server/kaaf.module.json, or remove the import (docs/kaaf/STANDARDS.md §1).",
+      "severity": "error",
+      "summary": "'wms-api' imports 'wms-ops-scripts' but does not declare the dependency.",
+      "type": "undeclared-dependency"
+    },
+    {
+      "evidence": [
+        "scripts/backup.js",
+        "scripts/fresh-start.js",
+        "scripts/reset-admin.js",
+        "scripts/validate-opening-stock.js"
+      ],
+      "module": "wms-ops-scripts",
+      "recommendation": "Add 'wms-api' to dependsOn in scripts/kaaf.module.json, or remove the import (docs/kaaf/STANDARDS.md §1).",
+      "severity": "error",
+      "summary": "'wms-ops-scripts' imports 'wms-api' but does not declare the dependency.",
+      "type": "undeclared-dependency"
+    },
+    {
+      "evidence": [
+        "scripts/backup.js"
+      ],
+      "module": "wms-ops-scripts",
+      "recommendation": "Add 'wms-runtime-entry' to dependsOn in scripts/kaaf.module.json, or remove the import (docs/kaaf/STANDARDS.md §1).",
+      "severity": "error",
+      "summary": "'wms-ops-scripts' imports 'wms-runtime-entry' but does not declare the dependency.",
+      "type": "undeclared-dependency"
+    },
+    {
+      "evidence": [
+        "app.js",
+        "index.js"
+      ],
+      "module": "wms-runtime-entry",
+      "recommendation": "Add 'wms-api' to dependsOn in kaaf.module.json, or remove the import (docs/kaaf/STANDARDS.md §1).",
+      "severity": "error",
+      "summary": "'wms-runtime-entry' imports 'wms-api' but does not declare the dependency.",
+      "type": "undeclared-dependency"
+    }
+  ],
+  "hasErrors": true,
+  "howToRead": [
+    "error: the declaration and the code disagree in a way that must be fixed; CI fails.",
+    "warning: real drift that does not block, most often code with no manifest.",
+    "info: expected divergence, such as a documentation-only dependency.",
+    "Everything here is derived from a static read of the source: dynamic imports and runtime wiring are invisible to it, so absence of a finding is not proof of absence."
+  ],
+  "undeclaredCode": []
+}

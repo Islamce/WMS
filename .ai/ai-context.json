@@ -1,0 +1,185 @@
+{
+  "_meta": {
+    "artifact": "ai-context.json",
+    "bodyDigest": "b10d4eecf770e8ca981257c53f50c4c764301e5b37cef914cf18afb5e8d31972",
+    "confidence": "verified",
+    "doNotEdit": true,
+    "generator": "kaaf",
+    "generatorVersion": "0.7.0",
+    "inputDigest": "8f5f19c1b46bdc9b7c02c7f28e3524288722198142d16464698ebe1eb0598902",
+    "provenanceNote": "Generated from the declared kaaf.repo.json and kaaf.module.json manifests. No wall-clock time or commit SHA is embedded: both would break byte-identical regeneration. Use git history for when and from which commit.",
+    "schemaVersion": "1.0.0"
+  },
+  "conventions": {
+    "branchNaming": [
+      "agent/*",
+      "chore/*",
+      "docs/*",
+      "feat/*",
+      "fix/*"
+    ],
+    "generatedContextRoot": ".ai/",
+    "moduleManifestFile": "kaaf.module.json",
+    "monorepo": "server/ is the Node backend; public/ is the browser client it serves; 'wms flutter application/' is the Flutter mobile client"
+  },
+  "counts": {
+    "apis": 28,
+    "externalIntegrations": 5,
+    "modules": 7,
+    "modulesDeclared": 7,
+    "modulesUndeclared": 0,
+    "permissions": 28
+  },
+  "drift": {
+    "counts": {
+      "error": 5,
+      "info": 0,
+      "warning": 0
+    },
+    "detail": ".ai/drift.json",
+    "hasErrors": true
+  },
+  "kaafPhase": 7,
+  "modules": [
+    {
+      "confidence": "verified",
+      "declared": true,
+      "declaredConfidence": "verified",
+      "dependsOn": [],
+      "detail": "modules/wms-api.json",
+      "hasDiscoveredCode": true,
+      "id": "wms-api",
+      "owner": "Backend",
+      "path": "server",
+      "publicEntryPoints": [
+        "server/config.js",
+        "server/index.js"
+      ],
+      "purpose": "Serve every warehouse operation over HTTP - materials, stock, receiving, picking, shipping, requests, approvals, cycle counts, locations, analytics and administration - and enforce database-defined permissions on each."
+    },
+    {
+      "confidence": "verified",
+      "declared": true,
+      "declaredConfidence": "verified",
+      "dependsOn": [],
+      "detail": "modules/wms-kaaf-tooling.json",
+      "hasDiscoveredCode": true,
+      "id": "wms-kaaf-tooling",
+      "owner": "DevOps",
+      "path": "scripts/architecture",
+      "publicEntryPoints": [
+        "scripts/architecture/generate.py",
+        "scripts/architecture/generate.sh"
+      ],
+      "purpose": "Generate and validate this repository's KAAF architecture context. Vendored from Islamce/KAAF; see VENDORED.md before changing anything here."
+    },
+    {
+      "confidence": "verified",
+      "declared": true,
+      "declaredConfidence": "verified",
+      "dependsOn": [],
+      "detail": "modules/wms-mobile.json",
+      "hasDiscoveredCode": true,
+      "id": "wms-mobile",
+      "owner": "Mobile",
+      "path": "wms flutter application",
+      "publicEntryPoints": [
+        "wms flutter application/lib/main.dart",
+        "wms flutter application/pubspec.yaml"
+      ],
+      "purpose": "Provide the Flutter mobile client (wms_mobile) for warehouse floor operations - scanning, picking, counting, requests and approvals - against the WMS API."
+    },
+    {
+      "confidence": "verified",
+      "declared": true,
+      "declaredConfidence": "verified",
+      "dependsOn": [],
+      "detail": "modules/wms-ops-scripts.json",
+      "hasDiscoveredCode": true,
+      "id": "wms-ops-scripts",
+      "owner": "DevOps",
+      "path": "scripts",
+      "publicEntryPoints": [
+        "scripts/"
+      ],
+      "purpose": "Operational and maintenance scripts. Several are destructive or production-affecting; CLAUDE.md forbids running seed, reset or fresh-start operations in production and is authoritative over this manifest."
+    },
+    {
+      "confidence": "verified",
+      "declared": true,
+      "declaredConfidence": "verified",
+      "dependsOn": [],
+      "detail": "modules/wms-runtime-entry.json",
+      "hasDiscoveredCode": true,
+      "id": "wms-runtime-entry",
+      "owner": "DevOps",
+      "path": ".",
+      "publicEntryPoints": [
+        "app.js",
+        "ecosystem.config.js",
+        "index.js"
+      ],
+      "purpose": "Boot the production process under the managed host. Production path, runtime path and required environment flags are defined in CLAUDE.md and are authoritative over this manifest."
+    },
+    {
+      "confidence": "verified",
+      "declared": true,
+      "declaredConfidence": "verified",
+      "dependsOn": [],
+      "detail": "modules/wms-tests.json",
+      "hasDiscoveredCode": true,
+      "id": "wms-tests",
+      "owner": "QA",
+      "path": "tests",
+      "publicEntryPoints": [
+        "tests/"
+      ],
+      "purpose": "End-to-end, smoke and load suites, including the executable regression tests that pin the fail-closed auto-seed rule established after the 2026-07-25 production database incident."
+    },
+    {
+      "confidence": "verified",
+      "declared": true,
+      "declaredConfidence": "verified",
+      "dependsOn": [],
+      "detail": "modules/wms-web.json",
+      "hasDiscoveredCode": true,
+      "id": "wms-web",
+      "owner": "Frontend",
+      "path": "public",
+      "publicEntryPoints": [
+        "public/index.html"
+      ],
+      "purpose": "Present the warehouse operations interface in the browser, served as static assets by the API process."
+    }
+  ],
+  "pointers": {
+    "architecture": ".ai/architecture.json",
+    "drift": ".ai/drift.json",
+    "governance": "docs/kaaf/GOVERNANCE.md",
+    "moduleDetail": ".ai/modules/<id>.json",
+    "prompts": "docs/ai/prompts/",
+    "roadmap": "docs/kaaf/ROADMAP.md",
+    "standards": "docs/kaaf/STANDARDS.md",
+    "summary": ".ai/summary.md"
+  },
+  "readOrder": [
+    ".ai/ai-context.json",
+    ".ai/summary.md",
+    ".ai/modules/<id>.json for the module the task touches",
+    "only the source files those steps referenced"
+  ],
+  "repository": {
+    "defaultBranch": "main",
+    "description": "WMS - a warehouse management system with a Node.js backend, a browser client, and a Flutter mobile application.",
+    "name": "WMS",
+    "repository": "Islamce/WMS"
+  },
+  "rules": [
+    "Never hand-edit anything under .ai/ except README.md and .gitkeep.",
+    "If a component is not described here and not in the source, it does not exist — say 'not found'.",
+    "Regenerate .ai/ in the same pull request as any structural change.",
+    "Tag every architectural claim with a confidence level.",
+    "Confidence here is computed from evidence, not copied from a manifest: 'verified' means declared and corroborated by discovered code, 'documented' means declared with no code to check it against, 'derived' means discovered with no declaration.",
+    "Check drift before trusting this: findings in .ai/drift.json mean the manifests have fallen behind the code."
+  ]
+}
