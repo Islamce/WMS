@@ -1,6 +1,6 @@
 # WMS Current Status
 
-Last updated: 2026-07-27
+Last updated: 2026-08-01
 
 ## Executive status
 
@@ -11,12 +11,12 @@ Last updated: 2026-07-27
 - Production database: SQLite at `data/wms.db` using WAL mode
 - Production runtime: Node `v20.19.4`, npm `10.8.2`
 - Current deployed commit (last confirmed on production, 2026-07-25): `579b5091cf99ea3c4dfa3f5531202eab546b3a88`
-- `main` branch head (verified 2026-07-27, **not** confirmed deployed): `b9ec782dddfd3e57dbb3448f9906b340427bb2f4`
-- Production is therefore **behind `main` by three merges** (PR #41 → PR #43 → PR #44) and is **not** known to contain the PR #43 opening-stock idempotency fix.
+- `main` branch head (Verified (repo), 2026-07-31, **not** confirmed deployed): `0ba56106e7e9691930ba03d659c743561ad81614`
+- The last confirmed production commit predates PR #43 and the later auto-seed and credential hardening. The exact current production branch/SHA remains **Unverified** and must be read before any restart or deployment.
 - Health endpoint: healthy, returning `{"status":"ok","service":"wms"}` (as of the 2026-07-25 recovery check; not re-verified since)
 - Database migrations: 12 recorded in production as of the 2026-07-25 check; 12 defined in code on `main` (latest `012_opening_stock_batch_registry`)
-- Latest offsite backup: GitHub Actions `production-backup.yml` run #11, `2026-07-27T06:03:54Z`, scheduled, conclusion **success**
-- Latest CI on `main`: run #155 on `b9ec782`, conclusion **success**
+- Latest offsite backup reviewed during PR #53 recovery: GitHub Actions `production-backup.yml` run #15 on 2026-07-31, conclusion **success**
+- Latest CI reviewed for Draft PR #53: run #174, conclusion **success**
 
 ### Evidence classification
 
@@ -25,6 +25,42 @@ Facts in this document are labelled as follows and must not be silently upgraded
 - **Verified (repo):** confirmed directly against Git/GitHub in the stated session.
 - **Reported (production):** observed by the operator during a production session and recorded here. Trustworthy as a record, but re-verify before relying on it for a risky operation.
 - **Unverified:** believed but not currently evidenced. Must be re-checked before use.
+
+## Hostinger native-addon recovery — OPEN, restart forbidden
+
+**Verified (repo/GitHub), 2026-07-31 to 2026-08-01:** Draft PR #53
+(`agent/hostinger-glibc228-native-recovery`) adds a controlled build and recovery
+path for `better-sqlite3 11.10.0` on the Hostinger shared host's Node 20 / ABI
+115 / glibc 2.28 runtime.
+
+The PR #53 native workflow successfully reached and passed the Rocky Linux 8
+source build, Node ABI check, GLIBC 2.28 symbol ceiling, module load, and
+in-memory SQLite query. The job then failed at `actions/upload-artifact` because
+GitHub Actions artifact storage quota was full. **No downloadable recovery
+artifact was retained.** This is an operational blocker, not evidence that the
+binary failed compatibility checks.
+
+The merge-readiness correction now requires:
+
+- exact deployed branch/SHA and artifact-source SHA agreement;
+- the five required variables read from the effective WMS Passenger process,
+  not inferred from an interactive shell;
+- the active production DB path, integrity, reviewed record counts, SQLite file
+  state, and initialization-lock state before restart;
+- manifest-bound artifact provenance, staged-addon host preflight, preservation
+  of the installed addon, atomic replacement, and a validated immediate rollback
+  path.
+
+Passenger restart remains forbidden until every gate passes and the evidence is
+reviewed. No production access, database operation, Passenger restart, artifact
+deletion, or PR merge occurred while making this correction.
+
+**Historical CI follow-up, 2026-08-01:** CI passed on PR head `41e2cde`, but native-build
+run `30667043301` stopped before compilation because Git rejected the
+container-owned checkout as a dubious directory. The workflow now scopes each
+container-side Git command with `-c safe.directory="$GITHUB_WORKSPACE"`; it does
+not add a global or wildcard trust rule. That run never reached upload; later
+runs established the current artifact path recorded below.
 
 ## Current production data state after recovery
 
@@ -131,15 +167,17 @@ CI Run #145 succeeded before merge.
 
 Ordered by priority. Item 1 gates the rest.
 
-1. **Resolve the auto-seed / runtime-environment question above.** Read `NODE_ENV`, `SKIP_AUTO_SEED`, `ALLOW_AUTO_SEED`, `PRODUCTION_INITIALIZATION_ENABLED`, and `DB_PATH` as the **Passenger process** sees them, not as an interactive SSH shell reports them. This is now needed as *evidence for Issue #40* rather than as a safety gate: once the fix on `main` is deployed, an unset environment fails safe. Until it is deployed, production still runs the old fail-open guard.
-2. **Verify production's deployed commit read-only** and reconcile it to `main`. Production is behind by three merges and is not known to contain PR #43.
+1. **Complete PR #53 merge-readiness evidence, then execute recovery gates only in an approved production window.** The current PR head must have successful CI and native-build checks plus a retained, SHA-named artifact whose four files were independently inspected for binary checksum, source and lockfile provenance, Node/ABI, ELF architecture, GLIBC evidence checksum, and the GLIBC 2.28 ceiling. Record the exact current head, run, artifact ID, checksum, and expiry in the PR description after the final build rather than committing self-invalidating transient identifiers here. Production access, staged host preflight, database/environment/source gates, addon backup/swap/rollback, and Passenger restart remain separately approval-gated; do not restart Passenger yet.
+2. **Resolve the auto-seed / runtime-environment question above.** Read `NODE_ENV`, `SKIP_AUTO_SEED`, `ALLOW_AUTO_SEED`, `PRODUCTION_INITIALIZATION_ENABLED`, and `DB_PATH` as the **Passenger process** sees them, not as an interactive SSH shell reports them. This is also a mandatory pre-restart gate in `HOSTINGER-NATIVE-RECOVERY.md`.
+3. **Verify production's deployed commit read-only** and reconcile it to `main`. Production is not known to contain PR #43 or later safety hardening.
    - **Open advisory (2026-07-27):** production may have been operated against an isolated database copy on the `hotfix/opening-stock-idempotency` branch during PR #43 verification. Confirm the checked-out branch and commit before deploying; do not assume production reflects PR #43 or any later merge.
-3. **Verify the production-initialization lock**, including whether any lock file exists outside the code-expected `<app>/data/` path. A lock in the wrong location does not prove the application is locked.
-4. Deploy PR #43 (opening-stock import idempotency) through `WMS-PRODUCTION-RUNBOOK.md` once items 1–3 are settled. Do **not** re-import Opening Stock into production before this fix is confirmed deployed.
-5. Run opening-stock date reconciliation in **dry-run mode only** (`apply: false`) and review the output; apply only after explicit review and approval.
-6. Complete the cross-table stock consistency audit required by Issue #40 (batches vs `material_location_stock` vs `stock_transactions` vs dashboard KPIs). Needs real data and production access. The **code**-hardening asks in Issue #40 are done: auto-seed fails closed, a database identity line is logged every boot, `reset-admin` refuses default credentials and never seeds, and every credential change is audited (`DEC-011`, `DEC-012`).
-7. Complete and validate web/mobile parity gaps where still outstanding.
-8. Ensure every future deployment and incident updates the project memory files required by `CLAUDE.md`.
+4. **Verify the production-initialization lock**, including whether any lock file exists outside the code-expected `<app>/data/` path. A lock in the wrong location does not prove the application is locked.
+5. Complete the reviewed native-addon recovery gates. Keep Passenger stopped until source, environment, database, lock, artifact, preflight, atomic swap, and rollback evidence all pass.
+6. Deploy approved `main` through `WMS-PRODUCTION-RUNBOOK.md` once items 1–5 are settled. Do **not** re-import Opening Stock into production before PR #43 is confirmed deployed.
+7. Run opening-stock date reconciliation in **dry-run mode only** (`apply: false`) and review the output; apply only after explicit review and approval.
+8. Complete the cross-table stock consistency audit required by Issue #40 (batches vs `material_location_stock` vs `stock_transactions` vs dashboard KPIs). Needs real data and production access. The **code**-hardening asks in Issue #40 are done: auto-seed fails closed, a database identity line is logged every boot, `reset-admin` refuses default credentials and never seeds, and every credential change is audited (`DEC-011`, `DEC-012`).
+9. Complete and validate web/mobile parity gaps where still outstanding.
+10. Ensure every future deployment and incident updates the project memory files required by `CLAUDE.md`.
 
 ## Production configuration invariants
 

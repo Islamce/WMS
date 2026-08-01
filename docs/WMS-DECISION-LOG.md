@@ -287,6 +287,63 @@ Issue #40 reported that the administrator password "returns to the default" with
 
 ---
 
+## DEC-013 — Native production addons require provenance and atomic rollback
+
+**Status:** Accepted on 2026-08-01.
+
+**Context:**
+
+The Hostinger shared host provides Node 20 ABI 115 and glibc 2.28, while the
+observed upstream `better-sqlite3 11.10.0` prebuild requires GLIBC 2.29. A
+Rocky Linux 8 build passed compatibility and load checks, but GitHub artifact
+quota prevented retaining the binary. The initial recovery draft also replaced
+the installed addon before completing host-side validation and did not bind the
+fixed artifact name to a source commit.
+
+**Decision:**
+
+- A production native addon is deployable only when built from an explicitly
+  verified full source SHA and accompanied by a machine-readable manifest that
+  binds it to the dependency version, lockfile hash, Node version and ABI,
+  OS/architecture, compiler, GLIBC evidence, and workflow run.
+- The source SHA is part of the artifact name. Binary, checksum, manifest, and
+  compatibility evidence are retained and reviewed as one artifact set.
+- Host compatibility is preflighted against the staged addon before the
+  installed addon is modified.
+- The currently installed addon is preserved in a timestamped directory.
+  Replacement and rollback use same-directory atomic renames and verify hashes
+  before and after the operation.
+- Native-addon success alone does not authorize application restart. Deployed
+  source, effective Passenger safeguards, active database identity/counts, and
+  initialization-lock state are independent mandatory gates.
+- Artifact-quota remediation begins with an exact read-only inventory. No
+  artifact may be deleted without approval of specific artifact IDs and scope.
+
+**Alternatives considered:**
+
+- Use the upstream prebuild: rejected because its observed GLIBC requirement
+  exceeds the host runtime.
+- Run `npm rebuild` on the shared host: rejected because the required compiler
+  toolchain is unavailable and the action would broaden an incident recovery.
+- Replace the installed addon and test afterward without a saved prior binary:
+  rejected because a failed host load would leave no immediate rollback.
+- Treat a successful build log as equivalent to a retained artifact: rejected
+  because no checksum-verifiable binary exists to install.
+
+**Consequences:**
+
+- Native recovery has more explicit evidence and operator steps, but every
+  binary can be traced to source and reversed without touching production data.
+- A full artifact quota is a hard operational blocker rather than a reason to
+  weaken artifact retention or bypass provenance.
+- Passenger remains stopped until all independent source, environment, data,
+  lock, artifact, installation, and rollback gates pass.
+
+**Evidence/links:** Draft PR #53, `HOSTINGER-NATIVE-RECOVERY.md`, workflow
+`build-hostinger-native.yml`, and `INC-2026-07-31-01`.
+
+---
+
 ## Template
 
 ```markdown

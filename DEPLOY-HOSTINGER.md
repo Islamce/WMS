@@ -30,9 +30,11 @@ your Hostinger plan:
 > or reset an administrator as a deployment workaround; access recovery is a
 > separate, explicitly approved operation after database identity is confirmed.
 
-> **Native module note:** WMS uses `better-sqlite3`, a compiled addon. It
-> installs cleanly on a VPS. On shared Node.js hosting it usually works from
-> prebuilt binaries; if `npm install` fails to build it, use a VPS instead.
+> **Native module gate:** WMS pins `better-sqlite3 11.10.0`. The upstream
+> Linux prebuild observed on the current Hostinger shared host requires GLIBC
+> 2.29, while the host provides GLIBC 2.28. Build the verified EL8 artifact with
+> `.github/workflows/build-hostinger-native.yml` and install it only through
+> `HOSTINGER-NATIVE-RECOVERY.md`.
 
 Before you start, generate a real JWT secret (you'll paste it in below):
 
@@ -154,12 +156,14 @@ the `wms-data` volume and is preserved).
    - `ALLOW_AUTO_SEED = 0`
    - `PRODUCTION_INITIALIZATION_ENABLED = false`
    (Leave `PORT` unset — Passenger assigns it.)
-5. Click **Run NPM Install**, then open the panel's terminal (or SSH) in the app
-   root and migrate the verified persistent database:
-   ```bash
-   npm run migrate
-   ```
-6. **Restart** the application from the panel. Your domain now serves WMS.
+5. Install the verified EL8 native addon by following
+   `HOSTINGER-NATIVE-RECOVERY.md`. During incident recovery, do not run npm
+   install/rebuild, migrations, seed, initialization, or reset commands.
+6. Keep Passenger stopped until every source, effective-environment, database,
+   initialization-lock, artifact, staged-addon, atomic-swap, and rollback gate
+   in `HOSTINGER-NATIVE-RECOVERY.md` passes, the evidence is reviewed, and
+   restart approval is explicit. Only then restart and verify `/healthz` and
+   startup logs.
 
 > Passenger starts `app.js` for you and injects the port; the app already reads
 > `process.env.PORT`. If the DB can't be written, make sure `data/` exists and

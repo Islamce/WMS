@@ -1,6 +1,6 @@
 # WMS Production Runbook
 
-Last updated: 2026-07-25
+Last updated: 2026-08-01
 
 ## Environment
 
@@ -194,7 +194,44 @@ copy, then asserts:
 - Obtain explicit approval before setting `apply: true`.
 - Re-run reconciliation in dry-run mode afterward to confirm no pending changes.
 
+## Hostinger shared-host native-addon recovery
+
+Use `HOSTINGER-NATIVE-RECOVERY.md` only for the reviewed
+`better-sqlite3 11.10.0` / Node 20 ABI 115 / glibc 2.28 incident path. Native
+recovery is not a normal deployment and must not include `npm install`,
+`npm ci`, `npm rebuild`, migrations, seed, initialization, reset, production-DB
+tests, or DB/WAL/SHM replacement.
+
+Before any Passenger restart, retain evidence that all of these gates passed:
+
+1. The deployed branch and exact 40-character SHA match the reviewed artifact
+   source SHA.
+2. `NODE_ENV`, `SKIP_AUTO_SEED`, `ALLOW_AUTO_SEED`,
+   `PRODUCTION_INITIALIZATION_ENABLED`, and `DB_PATH` were read from the
+   effective WMS Passenger process and match the required production values.
+3. Passenger is stopped and no replacement WMS worker is using the application
+   root.
+4. The active database path, integrity, reviewed record counts, SQLite file
+   state, and initialization-lock state match the approved evidence.
+5. The artifact checksum and provenance manifest match the deployed lockfile,
+   source SHA, Node/ABI/OS/architecture, compiler, GLIBC evidence, and workflow
+   run ID.
+6. The staged addon passes host `ldd`, in-memory load/query, and read-only backup
+   integrity checks before the installed addon is touched.
+7. The current addon is preserved in a timestamped rollback directory, the new
+   addon is installed by a same-directory atomic rename, and the immediate
+   rollback block validates both its saved source and restored target.
+
+A missing or mismatched gate is a hard stop. An addon that built successfully
+but was not retained as a downloadable GitHub artifact is not deployable.
+Artifact deletion to clear quota requires a read-only inventory and explicit
+approval of the exact artifact IDs first.
+
 ## Restart
+
+The generic restart command below does not override the native-recovery gate.
+For a native recovery, do not run it until every item above has passed and the
+captured evidence has been reviewed.
 
 ```bash
 cd ~/domains/wms.kynox.io/nodejs

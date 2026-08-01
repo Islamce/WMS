@@ -2,6 +2,114 @@
 
 This is the chronological operational memory for the project. It records durable summaries of conversations and work, not secrets or necessarily verbatim transcripts.
 
+## 2026-08-01 — Final merge-readiness documentation strategy
+
+**Review result:** The complete PR #53 diff, GitHub metadata, checks, comments, review threads, native artifact, and local worktree were reviewed. Runtime/workflow/runbook changes had no code blocker; CI and native validation were green, the PR was mergeable/clean, and no unresolved review thread existed. Merge-readiness remained blocked only because the PR description and durable records contained transient artifact/quota claims that had become stale after later builds.
+
+**Approved correction:** Durable status, incident, inventory, and session records now state the invariant: the current PR head must have green CI/native checks and an independently inspected SHA-named artifact. Exact transient SHA/run/artifact/checksum/expiry evidence belongs in the PR description after the final build, avoiding another source commit that would invalidate its own artifact identity.
+
+**Post-commit gate:** Monitor the automatically triggered checks, inspect the new current-head artifact, and update only the PR description with its exact evidence. Keep the PR draft and unmerged until the owner separately approves a state change. No production action is part of this correction.
+
+## 2026-08-01 — Pre-final documentation-head artifact independently inspected
+
+**Authorization:** The owner approved downloading and inspecting artifact `8822626790` for documentation head `2afa14c655db1147ec1c601c56edaf129e7d0cdd`. No production access, Passenger restart, database operation, artifact deletion, PR state change, commit, or push was authorized or performed during that inspection.
+
+**Evidence and result:** The artifact was downloaded to a unique temporary directory and contained exactly the four required files. Binary SHA-256 `a9c4d701f59a492c538416211cc3e65257f1d74e3e4ce3d8d9862e1981676dc4` matched the checksum file. The manifest matched SHA `2afa14c655db1147ec1c601c56edaf129e7d0cdd`, better-sqlite3 11.10.0, LF-normalized source lockfile SHA-256 `10ee51b4744c84eeed49076321f1dde07e97cdb92b31e7140a6284b8dfc060ae`, Node v20.19.4, ABI 115, Linux x64, GLIBC runtime/ceiling 2.28, run `30713474797`, and attempt 1. GLIBC evidence SHA-256 `e2a520c68093e094229a09a1e10689e1a046a6d5e5e643fee7f8889604ff9e03` matched; independent parsing found no symbol above GLIBC 2.28. The binary is ELF64 little-endian x86-64. Workflow module-load/query validation passed; Windows did not attempt to load the Linux addon.
+
+**Next gate:** A final documentation correction will supersede this SHA. After that single commit, require successful CI/native checks, retain and inspect the new SHA-matched artifact, and record its transient exact identifiers in the PR description without another source commit. Any transition from Draft, merge, production access, staged Hostinger preflight, addon swap, rollback exercise, or Passenger restart requires its own explicit authorization.
+
+## 2026-08-01 — Recovery evidence published; documentation-head checks passed
+
+**Publication:** With owner approval, the four documentation-only changes were reviewed, staged explicitly, committed as `2afa14c655db1147ec1c601c56edaf129e7d0cdd` (`docs(ops): record native recovery evidence`), and pushed to `agent/hostinger-glibc228-native-recovery`. Local HEAD, origin branch HEAD, and Draft PR #53 head matched; the worktree was clean immediately after push.
+
+**Automatic validation:** The push automatically triggered CI run `30713474799` and native run `30713474797`; no manual rerun was issued. Both completed successfully on exact SHA `2afa14c655db1147ec1c601c56edaf129e7d0cdd`. Native artifact `8822626790`, exact name `better-sqlite3-11.10.0-node20-abi115-el8-x64-2afa14c655db1147ec1c601c56edaf129e7d0cdd`, size 1,092,375 bytes, is retained through 2026-08-08T18:53:24Z.
+
+**Next gate at that point:** The documentation-head artifact had not yet been downloaded or independently inspected; the later entry above records that completed inspection. Do not use the previously inspected `e57b278e` artifact for a deployment that claims agreement with a later PR head. PR #53 remained draft and unmerged.
+
+## 2026-08-01 — Retained native artifact independently inspected locally
+
+**Authorization and scope:** The owner approved the previously stated next step: download and locally inspect retained artifact `8822465615`. This did not authorize production access, Passenger restart, database operations, PR merge, or GitHub artifact deletion.
+
+**Evidence:** The exact SHA-named artifact was downloaded to a unique local temporary directory. It contained exactly `better_sqlite3.node`, `better_sqlite3.node.sha256`, `native-addon-manifest.json`, and `glibc-symbols.txt`. Binary SHA-256 `a9c4d701f59a492c538416211cc3e65257f1d74e3e4ce3d8d9862e1981676dc4` matched its checksum file. The manifest matched source SHA `e57b278e04f8cf3ed3838a524bda3f0dbb25252f`, better-sqlite3 11.10.0, the LF-normalized source `package-lock.json` SHA-256 `10ee51b4744c84eeed49076321f1dde07e97cdb92b31e7140a6284b8dfc060ae`, Node v20.19.4, ABI 115, Linux x64, GLIBC runtime/ceiling 2.28, workflow run `30667893534`, and attempt 3. GLIBC evidence SHA-256 `e2a520c68093e094229a09a1e10689e1a046a6d5e5e643fee7f8889604ff9e03` matched, and independent parsing found no required GLIBC symbol above 2.28. The binary header is ELF64 little-endian x86-64.
+
+**Result and remaining gate:** Local artifact validation passed. A Linux module-load/query test already passed in the workflow. The binary cannot be loaded by Windows, and this local review does not replace the mandatory staged-addon preflight on Hostinger. No production action occurred. Keep Passenger restart forbidden until source, effective environment, production database/record-count, initialization-lock, staged preflight, timestamped backup, atomic swap, and immediate rollback gates all pass in a separately approved window.
+
+## 2026-08-01 — Native artifact upload succeeded after quota recalculation
+
+**Authorization:** The owner authorized one additional rerun of Draft PR #53's native build at exact head SHA `e57b278e04f8cf3ed3838a524bda3f0dbb25252f`, solely to test whether the artifact-storage block had cleared.
+
+**Result:** Run `30667893534`, attempt 3, completed successfully. Source-SHA validation, checkout verification, EL8 source build, GLIBC/addon checks, provenance-manifest generation, and `Upload verified addon` all passed. GitHub retained artifact `8822465615`, exact name `better-sqlite3-11.10.0-node20-abi115-el8-x64-e57b278e04f8cf3ed3838a524bda3f0dbb25252f`, size 1,092,375 bytes, expiring 2026-08-08T18:38:39Z. Active storage is now five artifacts totaling 289,436,683 bytes.
+
+**Next gate:** The artifact has not been downloaded or inspected locally and no production action is authorized. Obtain separate approval to download and validate its binary, checksum, manifest, and GLIBC evidence. PR #53 remains open, draft, unmerged, and at the exact source SHA. No artifact deletion, production access, Passenger restart, database operation, commit, or push occurred.
+
+## 2026-08-01 — Single authorized native-build rerun completed
+
+**Authorization and identity gate:** The owner authorized exactly one rerun of Draft PR #53's native build at verified head SHA `e57b278e04f8cf3ed3838a524bda3f0dbb25252f`. Before rerun, PR #53 was confirmed open, draft, unmerged, and still at that SHA; run `30667893534` was confirmed to be the matching `Build Hostinger native addon` run.
+
+**Result:** Attempt 2 passed requested-source validation, Rocky Linux container setup, exact checkout verification, Node setup, source build on GLIBC 2.28, native-addon validation, and provenance-manifest generation. It failed only at `Upload verified addon`: GitHub still reported `Artifact storage quota has been hit` and stated that usage is recalculated every 6–12 hours. No native artifact was created. Post-run verification found the same four active retained artifacts totaling 288,344,308 bytes and zero `better-sqlite3-*` artifacts.
+
+**Gate:** The single authorized rerun has been consumed. Do not rerun again without new explicit authorization and evidence that quota accounting has recalculated. PR #53 remains draft and unmerged. No production access, Passenger restart, database operation, artifact deletion, commit, or push occurred.
+
+## 2026-08-01 — Exact approved Actions artifact cleanup executed
+
+**Authorization and scope:** The repository owner explicitly approved deletion of only the 35 exact artifact IDs in the evidence-supported cleanup pool in `docs/WMS-ACTIONS-ARTIFACT-INVENTORY-2026-08-01.md`, totaling 2,069,364,217 bytes, and explicitly protected IDs `8447368682`, `8447506723`, `8462156227`, and `8576609631`.
+
+**Preflight and execution:** A live GitHub API preflight matched all 35 approved IDs to the inventory by exact name and byte size, confirmed the exact total, found all four protected IDs, and found no active artifact outside those two sets. The 35 approved IDs were then deleted individually through exact-ID API calls. No wildcard, age filter, workflow-wide, or repository-wide deletion was used.
+
+**Postcondition:** A separate live API query found zero deleted IDs still present and exactly four active artifacts—the protected IDs above—totaling 288,344,308 bytes. Artifact deletion is not recoverable through GitHub. Quota recalculation may take 6–12 hours. The native workflow was not rerun, so the PR #53 native artifact remains unretained pending quota recalculation and a separately authorized rerun.
+
+**Safety:** No production access, Passenger restart, database operation, migration, seed, reset, initialization, PR merge, or deletion outside the exact approved set occurred.
+
+## 2026-08-01 — Read-only GitHub Actions artifact classification
+
+**Objective:** Classify all 39 active Actions artifacts after PR #53's native build passed compilation/validation but could not upload because artifact storage was full. No deletion, workflow rerun, production access, database command, Passenger restart, or PR merge occurred.
+
+**Evidence and result:** Joined every artifact to its workflow/run/attempt/event/branch/source SHA, commit-to-PR relationships, app version, tags, Releases and permanent Release assets, UAT records, and deployment/rollback documentation. Active storage is 2,357,708,525 bytes. Four artifacts totaling 288,344,308 bytes remain `RETAIN`; 35 totaling 2,069,364,217 bytes are demonstrably superseded or unreferenced. Exact rows, rationales, minimum and optional deletion sets, assumptions, and retention-policy recommendations are in `docs/WMS-ACTIONS-ARTIFACT-INVENTORY-2026-08-01.md`.
+
+**Critical uncertainty:** The 2026-07-20 physical-device UAT record omitted build commit and APK checksum. Three plausible PR #25/main artifacts therefore remain retained. The account's exact billing quota could not be read without adding an unrelated OAuth scope; the minimum-set capacity calculation is explicitly conditional on a 500 MiB ceiling.
+
+**Exact next step:** Review the inventory and request approval for exact artifact IDs and bytes. Do not delete anything until that approval is explicit.
+
+---
+
+## 2026-08-01 — Native workflow checkout trust correction
+
+**Objective:** Correct PR #53 native-build run `30667043301`, which checked out the exact source SHA successfully but failed when the following Git verification command rejected the Rocky Linux container checkout as a dubious directory.
+
+**Change:** Every Git command executed by the workflow inside the container now uses the repository-scoped form `git -c safe.directory="$GITHUB_WORKSPACE" ...`. No `safe.directory='*'`, global Git configuration, production command, database operation, Passenger restart, or artifact deletion is involved.
+
+**Evidence:** CI passed on `41e2cde`; the native run failed at `git rev-parse HEAD` before compilation or upload and retained zero artifacts. Shell syntax, workflow assertions, and `git diff --check` are rerun before publishing this correction.
+
+**Remaining work:** Push the focused correction, monitor both checks, and confirm whether the native artifact can be retained. Artifact storage quota remains unresolved until a run reaches upload.
+
+---
+
+## 2026-08-01 — Draft PR #53 merge-readiness hardening
+
+**Objective:** Correct the Hostinger native `better-sqlite3` recovery workflow and operator runbook before Draft PR #53 can be considered merge-ready. Repository-side only; production, Passenger, the production database, and existing GitHub artifacts were not changed.
+
+**Starting state:** local `main` and `origin/main` at `0ba56106e7e9691930ba03d659c743561ad81614`; PR #53 head available at `3672b2a0900f15b628ada4b210a85c7f023a9d83` on `agent/hostinger-glibc228-native-recovery`. GitHub Actions CI run `30662015496` passed, while native-addon run `30662015501` passed its build, GLIBC-ceiling, and module-load checks but failed at artifact upload because repository artifact storage was over quota.
+
+**Changes:**
+
+- The native-addon workflow now requires and checks out an explicit full source SHA, verifies the checkout, and produces a SHA-named artifact containing the binary, checksum, manifest, and GLIBC evidence. The manifest records the source SHA, exact dependency and lockfile identity, Node/ABI/platform/compiler/GLIBC evidence, and workflow run provenance.
+- The Hostinger recovery runbook is now fail-closed across four gates: deployed branch/SHA and effective Passenger environment; production database identity, reviewed record counts, and initialization-lock state; staged-addon provenance and load/query preflight; then timestamped backup, same-directory atomic swap, and a validated immediate rollback command. Passenger restart remains forbidden until every gate has passed and its evidence has been reviewed.
+- Current status, production runbook, incident log, and decision log were updated to make those gates and the unresolved artifact-quota condition durable.
+
+**Validation:** extracted shell blocks from the workflow and recovery runbook pass `bash -n`; package/lockfile versions and the workflow/runbook required-field assertions pass; `git diff --check` passes. The local machine does not provide Node/npm, so the full application test suite cannot be rerun locally. A new GitHub CI run also cannot start until the branch is published.
+
+**GitHub publication state:** local changes remain uncommitted and unpushed. The mandatory publishing workflow requires GitHub CLI authentication, but `gh` is not installed on this machine. Draft PR #53 therefore remains at its previous remote head until `gh` is installed and authenticated.
+
+**Artifact cleanup gate:** no artifact was deleted and no deletion was attempted. Before any deletion approval request, obtain a repository-wide inventory containing artifact ID and exact name; workflow name/path; run ID and attempt; branch and source SHA; creation and expiry timestamps; size in bytes; retention purpose; release/backup references; and a per-artifact safe/unsafe rationale. The approval request must list the exact proposed artifact IDs and total bytes—never a wildcard, age-only, workflow-wide, or repository-wide deletion.
+
+**Production state:** unchanged. No production access, Passenger restart, migration, seed, reset, initialization, or database write occurred.
+
+**Remaining blockers:** install and authenticate `gh`; publish the reviewed commit; obtain the exact artifact inventory and separate deletion approval; free only specifically approved artifact storage; rerun the native build at the new source SHA; retain and inspect the artifact; then execute all production gates in an approved maintenance window. Passenger restart remains forbidden until those gates pass.
+
+**Exact next step:** install GitHub CLI, run `gh auth login` followed by `gh auth status`, then rerun the final scope review before staging the eight intended files and publishing the existing PR branch.
+
+---
+
 ## 2026-07-27 — Opening Stock import validation harness
 
 **Objective:** De-risk the Opening Stock production import — the step where a mistake corrupts the FIFO baseline and is expensive to detect and unwind. Repository-side only; no production access, no production command.
