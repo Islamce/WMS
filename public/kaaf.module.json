@@ -1,0 +1,20 @@
+{
+  "apis": [],
+  "confidence": "verified",
+  "consumes": [],
+  "dependsOn": [],
+  "externalIntegrations": [],
+  "flows": [],
+  "id": "wms-web",
+  "ownedEntities": [
+    "browser-page",
+    "client-view"
+  ],
+  "owner": "Frontend",
+  "permissions": [],
+  "publicEntryPoints": [
+    "public/index.html"
+  ],
+  "purpose": "Present the warehouse operations interface in the browser, served as static assets by the API process.",
+  "schemaVersion": "1.0.0"
+}

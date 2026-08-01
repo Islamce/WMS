@@ -1,0 +1,18 @@
+{
+  "conventions": {
+    "branchNaming": ["agent/*", "chore/*", "docs/*", "feat/*", "fix/*"],
+    "generatedContextRoot": ".ai/",
+    "moduleManifestFile": "kaaf.module.json",
+    "monorepo": "server/ is the Node backend; public/ is the browser client it serves; 'wms flutter application/' is the Flutter mobile client"
+  },
+  "defaultBranch": "main",
+  "deployment": {
+    "environments": ["production"],
+    "note": "Managed Hostinger Node.js under Passenger at ~/domains/wms.kynox.io/nodejs with a SQLite database at data/wms.db. Production safety invariants are defined in CLAUDE.md and docs/WMS-PRODUCTION-RUNBOOK.md and are authoritative over this note."
+  },
+  "description": "WMS - a warehouse management system with a Node.js backend, a browser client, and a Flutter mobile application.",
+  "kaafPhase": 7,
+  "name": "WMS",
+  "repository": "Islamce/WMS",
+  "schemaVersion": "1.0.0"
+}

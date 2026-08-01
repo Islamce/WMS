@@ -1,0 +1,35 @@
+{
+  "apis": [],
+  "confidence": "verified",
+  "consumes": [],
+  "dependsOn": [],
+  "externalIntegrations": [
+    {
+      "criticality": "required",
+      "kind": "http-api",
+      "name": "WMS API",
+      "onUnavailable": "The mobile client cannot authenticate or perform any warehouse operation."
+    },
+    {
+      "criticality": "optional",
+      "kind": "push-notification",
+      "name": "Firebase Cloud Messaging",
+      "onUnavailable": "Device push notifications are not received; in-app screens still function."
+    }
+  ],
+  "flows": [],
+  "id": "wms-mobile",
+  "ownedEntities": [
+    "mobile-screen",
+    "mobile-session",
+    "device-token"
+  ],
+  "owner": "Mobile",
+  "permissions": [],
+  "publicEntryPoints": [
+    "wms flutter application/pubspec.yaml",
+    "wms flutter application/lib/main.dart"
+  ],
+  "purpose": "Provide the Flutter mobile client (wms_mobile) for warehouse floor operations - scanning, picking, counting, requests and approvals - against the WMS API.",
+  "schemaVersion": "1.0.0"
+}

@@ -1,0 +1,19 @@
+{
+  "apis": [],
+  "confidence": "verified",
+  "consumes": [],
+  "dependsOn": [],
+  "externalIntegrations": [],
+  "flows": [],
+  "id": "wms-tests",
+  "ownedEntities": [
+    "regression-suite"
+  ],
+  "owner": "QA",
+  "permissions": [],
+  "publicEntryPoints": [
+    "tests/"
+  ],
+  "purpose": "End-to-end, smoke and load suites, including the executable regression tests that pin the fail-closed auto-seed rule established after the 2026-07-25 production database incident.",
+  "schemaVersion": "1.0.0"
+}

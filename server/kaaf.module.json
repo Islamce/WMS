@@ -1,0 +1,718 @@
+{
+  "apis": [
+    {
+      "auth": "jwt",
+      "id": "wms-admin-routes",
+      "kind": "rest",
+      "path": "server/routes/admin.js",
+      "requestType": "HTTP routes mounted from admin.js",
+      "responseType": "JSON",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "id": "wms-analytics-routes",
+      "kind": "rest",
+      "path": "server/routes/analytics.js",
+      "requestType": "HTTP routes mounted from analytics.js",
+      "responseType": "JSON",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "id": "wms-approvals-routes",
+      "kind": "rest",
+      "path": "server/routes/approvals.js",
+      "requestType": "HTTP routes mounted from approvals.js",
+      "responseType": "JSON",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "id": "wms-attachments-routes",
+      "kind": "rest",
+      "path": "server/routes/attachments.js",
+      "requestType": "HTTP routes mounted from attachments.js",
+      "responseType": "JSON",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "id": "wms-auth-routes",
+      "kind": "rest",
+      "path": "server/routes/auth.js",
+      "requestType": "HTTP routes mounted from auth.js",
+      "responseType": "JSON",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "id": "wms-cycleCount-routes",
+      "kind": "rest",
+      "path": "server/routes/cycleCount.js",
+      "requestType": "HTTP routes mounted from cycleCount.js",
+      "responseType": "JSON",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "id": "wms-dashboard-routes",
+      "kind": "rest",
+      "path": "server/routes/dashboard.js",
+      "requestType": "HTTP routes mounted from dashboard.js",
+      "responseType": "JSON",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "id": "wms-erpOperator-routes",
+      "kind": "rest",
+      "path": "server/routes/erpOperator.js",
+      "requestType": "HTTP routes mounted from erpOperator.js",
+      "responseType": "JSON",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "id": "wms-export-routes",
+      "kind": "rest",
+      "path": "server/routes/export.js",
+      "requestType": "HTTP routes mounted from export.js",
+      "responseType": "JSON",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "id": "wms-gi-routes",
+      "kind": "rest",
+      "path": "server/routes/gi.js",
+      "requestType": "HTTP routes mounted from gi.js",
+      "responseType": "JSON",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "id": "wms-import-routes",
+      "kind": "rest",
+      "path": "server/routes/import.js",
+      "requestType": "HTTP routes mounted from import.js",
+      "responseType": "JSON",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "id": "wms-inventory-routes",
+      "kind": "rest",
+      "path": "server/routes/inventory.js",
+      "requestType": "HTTP routes mounted from inventory.js",
+      "responseType": "JSON",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "id": "wms-kpi-routes",
+      "kind": "rest",
+      "path": "server/routes/kpi.js",
+      "requestType": "HTTP routes mounted from kpi.js",
+      "responseType": "JSON",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "id": "wms-locations-routes",
+      "kind": "rest",
+      "path": "server/routes/locations.js",
+      "requestType": "HTTP routes mounted from locations.js",
+      "responseType": "JSON",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "id": "wms-masterdata-routes",
+      "kind": "rest",
+      "path": "server/routes/masterdata.js",
+      "requestType": "HTTP routes mounted from masterdata.js",
+      "responseType": "JSON",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "id": "wms-materials-routes",
+      "kind": "rest",
+      "path": "server/routes/materials.js",
+      "requestType": "HTTP routes mounted from materials.js",
+      "responseType": "JSON",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "id": "wms-meta-routes",
+      "kind": "rest",
+      "path": "server/routes/meta.js",
+      "requestType": "HTTP routes mounted from meta.js",
+      "responseType": "JSON",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "id": "wms-notifications-routes",
+      "kind": "rest",
+      "path": "server/routes/notifications.js",
+      "requestType": "HTTP routes mounted from notifications.js",
+      "responseType": "JSON",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "id": "wms-openingStockReconcile-routes",
+      "kind": "rest",
+      "path": "server/routes/openingStockReconcile.js",
+      "requestType": "HTTP routes mounted from openingStockReconcile.js",
+      "responseType": "JSON",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "id": "wms-permissions-routes",
+      "kind": "rest",
+      "path": "server/routes/permissions.js",
+      "requestType": "HTTP routes mounted from permissions.js",
+      "responseType": "JSON",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "id": "wms-picking-routes",
+      "kind": "rest",
+      "path": "server/routes/picking.js",
+      "requestType": "HTTP routes mounted from picking.js",
+      "responseType": "JSON",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "id": "wms-reallocation-routes",
+      "kind": "rest",
+      "path": "server/routes/reallocation.js",
+      "requestType": "HTTP routes mounted from reallocation.js",
+      "responseType": "JSON",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "id": "wms-receiving-routes",
+      "kind": "rest",
+      "path": "server/routes/receiving.js",
+      "requestType": "HTTP routes mounted from receiving.js",
+      "responseType": "JSON",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "id": "wms-requests-routes",
+      "kind": "rest",
+      "path": "server/routes/requests.js",
+      "requestType": "HTTP routes mounted from requests.js",
+      "responseType": "JSON",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "id": "wms-shipping-routes",
+      "kind": "rest",
+      "path": "server/routes/shipping.js",
+      "requestType": "HTTP routes mounted from shipping.js",
+      "responseType": "JSON",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "id": "wms-stock-routes",
+      "kind": "rest",
+      "path": "server/routes/stock.js",
+      "requestType": "HTTP routes mounted from stock.js",
+      "responseType": "JSON",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "id": "wms-users-routes",
+      "kind": "rest",
+      "path": "server/routes/users.js",
+      "requestType": "HTTP routes mounted from users.js",
+      "responseType": "JSON",
+      "stability": "evolving",
+      "version": "1"
+    },
+    {
+      "auth": "jwt",
+      "id": "wms-warehouse-routes",
+      "kind": "rest",
+      "path": "server/routes/warehouse.js",
+      "requestType": "HTTP routes mounted from warehouse.js",
+      "responseType": "JSON",
+      "stability": "evolving",
+      "version": "1"
+    }
+  ],
+  "confidence": "verified",
+  "consumes": [],
+  "dependsOn": [
+    "wms-ops-scripts"
+  ],
+  "externalIntegrations": [
+    {
+      "criticality": "required",
+      "kind": "database",
+      "name": "SQLite via better-sqlite3",
+      "onUnavailable": "The system cannot serve or record any warehouse operation. Production database path and safety invariants are defined in CLAUDE.md."
+    },
+    {
+      "criticality": "optional",
+      "kind": "push-notification",
+      "name": "Firebase Cloud Messaging (firebase-admin)",
+      "onUnavailable": "Mobile push notifications are not delivered; in-app notification records are still written."
+    }
+  ],
+  "flows": [],
+  "id": "wms-api",
+  "ownedEntities": [
+    "approval_thresholds",
+    "audit_trail",
+    "batches",
+    "bin_locations",
+    "cycle_counts",
+    "device_tokens",
+    "erp_integration_log",
+    "inventory_count_lines",
+    "inventory_sessions",
+    "locations",
+    "material_location_stock",
+    "material_request_headers",
+    "material_request_lines",
+    "materials",
+    "movement_types",
+    "notification_log",
+    "opening_stock_batch_registry",
+    "permissions",
+    "picking_allocations",
+    "picking_tasks",
+    "qr_codes",
+    "reference_data",
+    "request_attachments",
+    "role_permissions",
+    "roles",
+    "scheduler_locks",
+    "schema_migrations",
+    "shipments",
+    "so",
+    "stock_movement_history",
+    "stock_movement_import_batches",
+    "stock_movement_import_errors",
+    "stock_reallocations",
+    "stock_transactions",
+    "user_permissions",
+    "users",
+    "warehouses"
+  ],
+  "owner": "Backend",
+  "permissions": [
+    {
+      "action": "access",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/analytics.js"
+      ],
+      "key": "wms.ai_analytics",
+      "resource": "ai_analytics",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "action": "access",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/locations.js"
+      ],
+      "key": "wms.all_locations",
+      "resource": "all_locations",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "action": "access",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/approvals.js"
+      ],
+      "key": "wms.approvals",
+      "resource": "approvals",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "action": "access",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/masterdata.js"
+      ],
+      "key": "wms.audit_trail",
+      "resource": "audit_trail",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "action": "access",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/reallocation.js",
+        "server/routes/warehouse.js"
+      ],
+      "key": "wms.bin_batch_assignment",
+      "resource": "bin_batch_assignment",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "action": "access",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/masterdata.js"
+      ],
+      "key": "wms.bins_master",
+      "resource": "bins_master",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "action": "access",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/requests.js"
+      ],
+      "key": "wms.create_request",
+      "resource": "create_request",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "action": "access",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/cycleCount.js"
+      ],
+      "key": "wms.cycle_count",
+      "resource": "cycle_count",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "action": "access",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/dashboard.js"
+      ],
+      "key": "wms.dashboard",
+      "resource": "dashboard",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "action": "access",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/locations.js"
+      ],
+      "key": "wms.empty_locations",
+      "resource": "empty_locations",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "action": "access",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/erpOperator.js"
+      ],
+      "key": "wms.erp_operator",
+      "resource": "erp_operator",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "action": "access",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/masterdata.js"
+      ],
+      "key": "wms.expiry_alerts",
+      "resource": "expiry_alerts",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "action": "access",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/gi.js"
+      ],
+      "key": "wms.gi_posting",
+      "resource": "gi_posting",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "action": "access",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/receiving.js"
+      ],
+      "key": "wms.goods_receipt",
+      "resource": "goods_receipt",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "action": "access",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/kpi.js"
+      ],
+      "key": "wms.kpi_dashboard",
+      "resource": "kpi_dashboard",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "action": "access",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/locations.js"
+      ],
+      "key": "wms.locations",
+      "resource": "locations",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "action": "access",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/requests.js"
+      ],
+      "key": "wms.material_requests",
+      "resource": "material_requests",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "action": "access",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/materials.js"
+      ],
+      "key": "wms.materials",
+      "resource": "materials",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "action": "access",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/masterdata.js"
+      ],
+      "key": "wms.movement_types_master",
+      "resource": "movement_types_master",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "action": "access",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/permissions.js"
+      ],
+      "key": "wms.permissions_management",
+      "resource": "permissions_management",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "action": "access",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/warehouse.js"
+      ],
+      "key": "wms.picker_assignment",
+      "resource": "picker_assignment",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "action": "access",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/picking.js"
+      ],
+      "key": "wms.picking",
+      "resource": "picking",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "action": "access",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/masterdata.js"
+      ],
+      "key": "wms.quality",
+      "resource": "quality",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "action": "access",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/reallocation.js"
+      ],
+      "key": "wms.reallocation",
+      "resource": "reallocation",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "action": "access",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/stock.js"
+      ],
+      "key": "wms.stock_in",
+      "resource": "stock_in",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "action": "access",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/stock.js"
+      ],
+      "key": "wms.stock_out",
+      "resource": "stock_out",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "action": "access",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/users.js"
+      ],
+      "key": "wms.users_management",
+      "resource": "users_management",
+      "roles": [
+        "database-defined"
+      ]
+    },
+    {
+      "action": "access",
+      "domain": "wms",
+      "enforcedAt": [
+        "server/middleware/auth.js",
+        "server/routes/masterdata.js"
+      ],
+      "key": "wms.warehouses_master",
+      "resource": "warehouses_master",
+      "roles": [
+        "database-defined"
+      ]
+    }
+  ],
+  "publicEntryPoints": [
+    "server/index.js",
+    "server/config.js"
+  ],
+  "purpose": "Serve every warehouse operation over HTTP - materials, stock, receiving, picking, shipping, requests, approvals, cycle counts, locations, analytics and administration - and enforce database-defined permissions on each.",
+  "schemaVersion": "1.0.0"
+}

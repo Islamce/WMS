@@ -1,0 +1,22 @@
+{
+  "apis": [],
+  "confidence": "verified",
+  "consumes": [],
+  "dependsOn": [
+    "wms-api",
+    "wms-runtime-entry"
+  ],
+  "externalIntegrations": [],
+  "flows": [],
+  "id": "wms-ops-scripts",
+  "ownedEntities": [
+    "operational-procedure"
+  ],
+  "owner": "DevOps",
+  "permissions": [],
+  "publicEntryPoints": [
+    "scripts/"
+  ],
+  "purpose": "Operational and maintenance scripts. Several are destructive or production-affecting; CLAUDE.md forbids running seed, reset or fresh-start operations in production and is authoritative over this manifest.",
+  "schemaVersion": "1.0.0"
+}

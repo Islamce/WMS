@@ -1,0 +1,30 @@
+{
+  "apis": [],
+  "confidence": "verified",
+  "consumes": [],
+  "dependsOn": [
+    "wms-api"
+  ],
+  "externalIntegrations": [
+    {
+      "criticality": "required",
+      "kind": "process-manager",
+      "name": "Phusion Passenger / PM2",
+      "onUnavailable": "The production process is not supervised or restarted."
+    }
+  ],
+  "flows": [],
+  "id": "wms-runtime-entry",
+  "ownedEntities": [
+    "production-process"
+  ],
+  "owner": "DevOps",
+  "permissions": [],
+  "publicEntryPoints": [
+    "app.js",
+    "index.js",
+    "ecosystem.config.js"
+  ],
+  "purpose": "Boot the production process under the managed host. Production path, runtime path and required environment flags are defined in CLAUDE.md and are authoritative over this manifest.",
+  "schemaVersion": "1.0.0"
+}
