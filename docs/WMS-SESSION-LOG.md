@@ -2,6 +2,52 @@
 
 This is the chronological operational memory for the project. It records durable summaries of conversations and work, not secrets or necessarily verbatim transcripts.
 
+## 2026-08-01 — Retained native artifact independently inspected locally
+
+**Authorization and scope:** The owner approved the previously stated next step: download and locally inspect retained artifact `8822465615`. This did not authorize production access, Passenger restart, database operations, PR merge, or GitHub artifact deletion.
+
+**Evidence:** The exact SHA-named artifact was downloaded to a unique local temporary directory. It contained exactly `better_sqlite3.node`, `better_sqlite3.node.sha256`, `native-addon-manifest.json`, and `glibc-symbols.txt`. Binary SHA-256 `a9c4d701f59a492c538416211cc3e65257f1d74e3e4ce3d8d9862e1981676dc4` matched its checksum file. The manifest matched source SHA `e57b278e04f8cf3ed3838a524bda3f0dbb25252f`, better-sqlite3 11.10.0, the LF-normalized source `package-lock.json` SHA-256 `10ee51b4744c84eeed49076321f1dde07e97cdb92b31e7140a6284b8dfc060ae`, Node v20.19.4, ABI 115, Linux x64, GLIBC runtime/ceiling 2.28, workflow run `30667893534`, and attempt 3. GLIBC evidence SHA-256 `e2a520c68093e094229a09a1e10689e1a046a6d5e5e643fee7f8889604ff9e03` matched, and independent parsing found no required GLIBC symbol above 2.28. The binary header is ELF64 little-endian x86-64.
+
+**Result and remaining gate:** Local artifact validation passed. A Linux module-load/query test already passed in the workflow. The binary cannot be loaded by Windows, and this local review does not replace the mandatory staged-addon preflight on Hostinger. No production action occurred. Keep Passenger restart forbidden until source, effective environment, production database/record-count, initialization-lock, staged preflight, timestamped backup, atomic swap, and immediate rollback gates all pass in a separately approved window.
+
+## 2026-08-01 — Native artifact upload succeeded after quota recalculation
+
+**Authorization:** The owner authorized one additional rerun of Draft PR #53's native build at exact head SHA `e57b278e04f8cf3ed3838a524bda3f0dbb25252f`, solely to test whether the artifact-storage block had cleared.
+
+**Result:** Run `30667893534`, attempt 3, completed successfully. Source-SHA validation, checkout verification, EL8 source build, GLIBC/addon checks, provenance-manifest generation, and `Upload verified addon` all passed. GitHub retained artifact `8822465615`, exact name `better-sqlite3-11.10.0-node20-abi115-el8-x64-e57b278e04f8cf3ed3838a524bda3f0dbb25252f`, size 1,092,375 bytes, expiring 2026-08-08T18:38:39Z. Active storage is now five artifacts totaling 289,436,683 bytes.
+
+**Next gate:** The artifact has not been downloaded or inspected locally and no production action is authorized. Obtain separate approval to download and validate its binary, checksum, manifest, and GLIBC evidence. PR #53 remains open, draft, unmerged, and at the exact source SHA. No artifact deletion, production access, Passenger restart, database operation, commit, or push occurred.
+
+## 2026-08-01 — Single authorized native-build rerun completed
+
+**Authorization and identity gate:** The owner authorized exactly one rerun of Draft PR #53's native build at verified head SHA `e57b278e04f8cf3ed3838a524bda3f0dbb25252f`. Before rerun, PR #53 was confirmed open, draft, unmerged, and still at that SHA; run `30667893534` was confirmed to be the matching `Build Hostinger native addon` run.
+
+**Result:** Attempt 2 passed requested-source validation, Rocky Linux container setup, exact checkout verification, Node setup, source build on GLIBC 2.28, native-addon validation, and provenance-manifest generation. It failed only at `Upload verified addon`: GitHub still reported `Artifact storage quota has been hit` and stated that usage is recalculated every 6–12 hours. No native artifact was created. Post-run verification found the same four active retained artifacts totaling 288,344,308 bytes and zero `better-sqlite3-*` artifacts.
+
+**Gate:** The single authorized rerun has been consumed. Do not rerun again without new explicit authorization and evidence that quota accounting has recalculated. PR #53 remains draft and unmerged. No production access, Passenger restart, database operation, artifact deletion, commit, or push occurred.
+
+## 2026-08-01 — Exact approved Actions artifact cleanup executed
+
+**Authorization and scope:** The repository owner explicitly approved deletion of only the 35 exact artifact IDs in the evidence-supported cleanup pool in `docs/WMS-ACTIONS-ARTIFACT-INVENTORY-2026-08-01.md`, totaling 2,069,364,217 bytes, and explicitly protected IDs `8447368682`, `8447506723`, `8462156227`, and `8576609631`.
+
+**Preflight and execution:** A live GitHub API preflight matched all 35 approved IDs to the inventory by exact name and byte size, confirmed the exact total, found all four protected IDs, and found no active artifact outside those two sets. The 35 approved IDs were then deleted individually through exact-ID API calls. No wildcard, age filter, workflow-wide, or repository-wide deletion was used.
+
+**Postcondition:** A separate live API query found zero deleted IDs still present and exactly four active artifacts—the protected IDs above—totaling 288,344,308 bytes. Artifact deletion is not recoverable through GitHub. Quota recalculation may take 6–12 hours. The native workflow was not rerun, so the PR #53 native artifact remains unretained pending quota recalculation and a separately authorized rerun.
+
+**Safety:** No production access, Passenger restart, database operation, migration, seed, reset, initialization, PR merge, or deletion outside the exact approved set occurred.
+
+## 2026-08-01 — Read-only GitHub Actions artifact classification
+
+**Objective:** Classify all 39 active Actions artifacts after PR #53's native build passed compilation/validation but could not upload because artifact storage was full. No deletion, workflow rerun, production access, database command, Passenger restart, or PR merge occurred.
+
+**Evidence and result:** Joined every artifact to its workflow/run/attempt/event/branch/source SHA, commit-to-PR relationships, app version, tags, Releases and permanent Release assets, UAT records, and deployment/rollback documentation. Active storage is 2,357,708,525 bytes. Four artifacts totaling 288,344,308 bytes remain `RETAIN`; 35 totaling 2,069,364,217 bytes are demonstrably superseded or unreferenced. Exact rows, rationales, minimum and optional deletion sets, assumptions, and retention-policy recommendations are in `docs/WMS-ACTIONS-ARTIFACT-INVENTORY-2026-08-01.md`.
+
+**Critical uncertainty:** The 2026-07-20 physical-device UAT record omitted build commit and APK checksum. Three plausible PR #25/main artifacts therefore remain retained. The account's exact billing quota could not be read without adding an unrelated OAuth scope; the minimum-set capacity calculation is explicitly conditional on a 500 MiB ceiling.
+
+**Exact next step:** Review the inventory and request approval for exact artifact IDs and bytes. Do not delete anything until that approval is explicit.
+
+---
+
 ## 2026-08-01 — Native workflow checkout trust correction
 
 **Objective:** Correct PR #53 native-build run `30667043301`, which checked out the exact source SHA successfully but failed when the following Git verification command rejected the Rocky Linux container checkout as a dubious directory.
