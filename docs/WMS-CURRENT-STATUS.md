@@ -55,12 +55,12 @@ Passenger restart remains forbidden until every gate passes and the evidence is
 reviewed. No production access, database operation, Passenger restart, artifact
 deletion, or PR merge occurred while making this correction.
 
-**CI follow-up, 2026-08-01:** CI passed on PR head `41e2cde`, but native-build
+**Historical CI follow-up, 2026-08-01:** CI passed on PR head `41e2cde`, but native-build
 run `30667043301` stopped before compilation because Git rejected the
 container-owned checkout as a dubious directory. The workflow now scopes each
 container-side Git command with `-c safe.directory="$GITHUB_WORKSPACE"`; it does
-not add a global or wildcard trust rule. Artifact quota remains unresolved
-because the failed run never reached upload.
+not add a global or wildcard trust rule. That run never reached upload; later
+runs established the current artifact path recorded below.
 
 ## Current production data state after recovery
 
@@ -167,7 +167,7 @@ CI Run #145 succeeded before merge.
 
 Ordered by priority. Item 1 gates the rest.
 
-1. **Execute the remaining PR #53 recovery gates only in an approved production window.** Artifact `8822465615` was downloaded locally and independently inspected: exact four-file set, binary SHA-256 `a9c4d701f59a492c538416211cc3e65257f1d74e3e4ce3d8d9862e1981676dc4`, source SHA, better-sqlite3 11.10.0, normalized source lockfile hash, Node v20.19.4/ABI 115, ELF64 x86-64 identity, GLIBC evidence checksum, and GLIBC 2.28 ceiling all passed. The workflow's Linux module/query test passed; Windows cannot perform the Hostinger staged module-load preflight. Keep artifact `8822465615` retained through 2026-08-08. Production access, staged host preflight, database/environment/source gates, addon backup/swap/rollback, and Passenger restart remain separately approval-gated; do not restart Passenger yet.
+1. **Complete PR #53 merge-readiness evidence, then execute recovery gates only in an approved production window.** The current PR head must have successful CI and native-build checks plus a retained, SHA-named artifact whose four files were independently inspected for binary checksum, source and lockfile provenance, Node/ABI, ELF architecture, GLIBC evidence checksum, and the GLIBC 2.28 ceiling. Record the exact current head, run, artifact ID, checksum, and expiry in the PR description after the final build rather than committing self-invalidating transient identifiers here. Production access, staged host preflight, database/environment/source gates, addon backup/swap/rollback, and Passenger restart remain separately approval-gated; do not restart Passenger yet.
 2. **Resolve the auto-seed / runtime-environment question above.** Read `NODE_ENV`, `SKIP_AUTO_SEED`, `ALLOW_AUTO_SEED`, `PRODUCTION_INITIALIZATION_ENABLED`, and `DB_PATH` as the **Passenger process** sees them, not as an interactive SSH shell reports them. This is also a mandatory pre-restart gate in `HOSTINGER-NATIVE-RECOVERY.md`.
 3. **Verify production's deployed commit read-only** and reconcile it to `main`. Production is not known to contain PR #43 or later safety hardening.
    - **Open advisory (2026-07-27):** production may have been operated against an isolated database copy on the `hotfix/opening-stock-idempotency` branch during PR #43 verification. Confirm the checked-out branch and commit before deploying; do not assume production reflects PR #43 or any later merge.

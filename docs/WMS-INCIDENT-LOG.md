@@ -94,12 +94,13 @@ replace the mandatory Hostinger staged module-load preflight. The incident
 remains open pending all production source/environment/database/lock gates,
 staged preflight, reversible swap, and controlled Passenger restart.
 
-**Owner / next step:** Repository owner. Preserve artifact `8822465615` and
-separately authorize a production maintenance window only after the final PR
-SHA strategy is resolved. Execute the deployed-source, Passenger-environment,
-database identity/count, initialization-lock, staged-addon preflight, backup,
-atomic-swap, and rollback gates before any restart. Keep Passenger stopped
-until those server-side gates are executed and reviewed.
+**Owner / next step:** Repository owner. For the current PR head, require green
+CI/native checks and retain and independently inspect its exact SHA-named
+artifact; keep the transient SHA, run, artifact ID, checksum, and expiry in the
+PR description. Then separately authorize a production maintenance window and
+execute the deployed-source, Passenger-environment, database identity/count,
+initialization-lock, staged-addon preflight, backup, atomic-swap, and rollback
+gates before any restart. Keep Passenger stopped until those gates are reviewed.
 
 ---
 

@@ -2,6 +2,30 @@
 
 This is the chronological operational memory for the project. It records durable summaries of conversations and work, not secrets or necessarily verbatim transcripts.
 
+## 2026-08-01 — Final merge-readiness documentation strategy
+
+**Review result:** The complete PR #53 diff, GitHub metadata, checks, comments, review threads, native artifact, and local worktree were reviewed. Runtime/workflow/runbook changes had no code blocker; CI and native validation were green, the PR was mergeable/clean, and no unresolved review thread existed. Merge-readiness remained blocked only because the PR description and durable records contained transient artifact/quota claims that had become stale after later builds.
+
+**Approved correction:** Durable status, incident, inventory, and session records now state the invariant: the current PR head must have green CI/native checks and an independently inspected SHA-named artifact. Exact transient SHA/run/artifact/checksum/expiry evidence belongs in the PR description after the final build, avoiding another source commit that would invalidate its own artifact identity.
+
+**Post-commit gate:** Monitor the automatically triggered checks, inspect the new current-head artifact, and update only the PR description with its exact evidence. Keep the PR draft and unmerged until the owner separately approves a state change. No production action is part of this correction.
+
+## 2026-08-01 — Pre-final documentation-head artifact independently inspected
+
+**Authorization:** The owner approved downloading and inspecting artifact `8822626790` for documentation head `2afa14c655db1147ec1c601c56edaf129e7d0cdd`. No production access, Passenger restart, database operation, artifact deletion, PR state change, commit, or push was authorized or performed during that inspection.
+
+**Evidence and result:** The artifact was downloaded to a unique temporary directory and contained exactly the four required files. Binary SHA-256 `a9c4d701f59a492c538416211cc3e65257f1d74e3e4ce3d8d9862e1981676dc4` matched the checksum file. The manifest matched SHA `2afa14c655db1147ec1c601c56edaf129e7d0cdd`, better-sqlite3 11.10.0, LF-normalized source lockfile SHA-256 `10ee51b4744c84eeed49076321f1dde07e97cdb92b31e7140a6284b8dfc060ae`, Node v20.19.4, ABI 115, Linux x64, GLIBC runtime/ceiling 2.28, run `30713474797`, and attempt 1. GLIBC evidence SHA-256 `e2a520c68093e094229a09a1e10689e1a046a6d5e5e643fee7f8889604ff9e03` matched; independent parsing found no symbol above GLIBC 2.28. The binary is ELF64 little-endian x86-64. Workflow module-load/query validation passed; Windows did not attempt to load the Linux addon.
+
+**Next gate:** A final documentation correction will supersede this SHA. After that single commit, require successful CI/native checks, retain and inspect the new SHA-matched artifact, and record its transient exact identifiers in the PR description without another source commit. Any transition from Draft, merge, production access, staged Hostinger preflight, addon swap, rollback exercise, or Passenger restart requires its own explicit authorization.
+
+## 2026-08-01 — Recovery evidence published; documentation-head checks passed
+
+**Publication:** With owner approval, the four documentation-only changes were reviewed, staged explicitly, committed as `2afa14c655db1147ec1c601c56edaf129e7d0cdd` (`docs(ops): record native recovery evidence`), and pushed to `agent/hostinger-glibc228-native-recovery`. Local HEAD, origin branch HEAD, and Draft PR #53 head matched; the worktree was clean immediately after push.
+
+**Automatic validation:** The push automatically triggered CI run `30713474799` and native run `30713474797`; no manual rerun was issued. Both completed successfully on exact SHA `2afa14c655db1147ec1c601c56edaf129e7d0cdd`. Native artifact `8822626790`, exact name `better-sqlite3-11.10.0-node20-abi115-el8-x64-2afa14c655db1147ec1c601c56edaf129e7d0cdd`, size 1,092,375 bytes, is retained through 2026-08-08T18:53:24Z.
+
+**Next gate at that point:** The documentation-head artifact had not yet been downloaded or independently inspected; the later entry above records that completed inspection. Do not use the previously inspected `e57b278e` artifact for a deployment that claims agreement with a later PR head. PR #53 remained draft and unmerged.
+
 ## 2026-08-01 — Retained native artifact independently inspected locally
 
 **Authorization and scope:** The owner approved the previously stated next step: download and locally inspect retained artifact `8822465615`. This did not authorize production access, Passenger restart, database operations, PR merge, or GitHub artifact deletion.

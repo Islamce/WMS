@@ -26,17 +26,18 @@ GitHub quota accounting may take 6–12 hours to recalculate.
 **288,344,308 bytes (0.268542 GiB)**. Retained IDs: `8447368682`,
 `8447506723`, `8462156227`, and `8576609631`.
 
-**Post-cleanup native build:** Run `30667893534` attempt 3 subsequently passed
+**Historical post-cleanup native build:** Run `30667893534` attempt 3 passed
 and retained artifact `8822465615`, exact SHA-named recovery artifact size
-1,092,375 bytes, expiring 2026-08-08T18:38:39Z. The current active total is
-five artifacts and 289,436,683 bytes. This artifact is mandatory to retain
-pending independent inspection and the governed recovery procedure.
+1,092,375 bytes, expiring 2026-08-08T18:38:39Z. At that point the active total
+was five artifacts and 289,436,683 bytes.
 
 Local independent inspection subsequently passed for the exact four-file set,
 binary checksum, provenance manifest, normalized source lockfile checksum,
-ELF64 x86-64 identity, GLIBC evidence checksum, and GLIBC 2.28 ceiling. Retain
-artifact `8822465615` through the governed recovery; the mandatory staged host
-preflight and all production gates remain outstanding.
+ELF64 x86-64 identity, GLIBC evidence checksum, and GLIBC 2.28 ceiling. This is
+historical build evidence, not a claim that its SHA remains the current PR
+head. Retain every current-head recovery artifact until its governed recovery
+role is resolved; the mandatory staged host preflight and production gates
+remain outstanding.
 
 The account billing endpoint could not confirm the actual quota without adding
 the unrelated `user` OAuth scope. Therefore the minimum-set capacity statement
