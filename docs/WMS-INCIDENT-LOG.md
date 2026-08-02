@@ -259,6 +259,30 @@ Fix (merged to `main`, **not yet deployed** at time of writing):
 
 ## Required format for future incidents
 
+## INC-2026-08-01-01 - Hostinger native-addon outage and empty active database
+
+**Status:** Recovered; operator login confirmation remains pending.
+
+**Impact:** WMS returned HTTP 503 and no WMS Passenger process was active.
+
+**Cause/evidence:** Passenger targeted `.builds/current/nodejs` at source
+`0ba56106...`. Its addon was incompatible. Deployment of `1bd15f12...` failed
+because the upstream prebuild required GLIBC 2.29 and local compilation lacked
+`make`. The persistent database was valid but empty.
+
+**Recovery:** With explicit approval, artifact `8823437402` from run
+`30716270013` was staged and preflighted. An isolated `1bd15f12...` release was
+prepared with scripts disabled and the verified GLIBC-2.28 addon installed. The
+documented source `02745ba0...` was copied, migrated from 10 to 12 in isolation,
+validated, and atomically swapped with the release symlink.
+
+**Validation:** `/healthz` HTTP 200; effective Passenger environment matched all
+five safety values; database integrity `ok`; counts `9|11|35|9746|1|12|0|0`;
+no initialization lock. No seed, reset, or initialization ran. Rollback remains
+under `backups/emergency/production-recovery-20260801T202313Z/`.
+
+---
+
 For every incident record:
 
 - ID and title

@@ -10,15 +10,35 @@ Last updated: 2026-08-01
 - Production app path: `~/domains/wms.kynox.io/nodejs`
 - Production database: SQLite at `data/wms.db` using WAL mode
 - Production runtime: Node `v20.19.4`, npm `10.8.2`
-- Current deployed commit (last confirmed on production, 2026-07-25): `579b5091cf99ea3c4dfa3f5531202eab546b3a88`
-- `main` branch head (Verified (repo), 2026-07-31, **not** confirmed deployed): `0ba56106e7e9691930ba03d659c743561ad81614`
-- The last confirmed production commit predates PR #43 and the later auto-seed and credential hardening. The exact current production branch/SHA remains **Unverified** and must be read before any restart or deployment.
-- Health endpoint: healthy, returning `{"status":"ok","service":"wms"}` (as of the 2026-07-25 recovery check; not re-verified since)
+- Current deployed commit (Verified (production), 2026-08-01): `1bd15f12d70112a977983a96bae63e1b3c441310`
+- Active Passenger release: `.builds/versions/manual-20260801T202313Z-1bd15f12/nodejs`
+- Health endpoint: healthy, returning `{"status":"ok","service":"wms"}` on 2026-08-01.
 - Database migrations: 12 recorded in production as of the 2026-07-25 check; 12 defined in code on `main` (latest `012_opening_stock_batch_registry`)
 - Latest offsite backup reviewed during PR #53 recovery: GitHub Actions `production-backup.yml` run #15 on 2026-07-31, conclusion **success**
 - Latest CI reviewed for Draft PR #53: run #174, conclusion **success**
 
 ### Evidence classification
+
+### Production recovery update (supersedes the open native-recovery section below)
+
+The Hostinger native recovery completed on 2026-08-01 in an explicitly
+approved production window. Artifact `8823437402` from workflow run
+`30716270013` passed checksum, provenance, Node 20 / ABI 115, GLIBC 2.28,
+dependency, module-load, query, and read-only database preflight gates. The
+active addon SHA-256 is
+`a9c4d701f59a492c538416211cc3e65257f1d74e3e4ce3d8d9862e1981676dc4`.
+
+Passenger's effective root is `.builds/current/nodejs`. An isolated release at
+source `1bd15f12...` was prepared with install scripts disabled, then the
+verified addon was installed. The selected recovery source `02745ba0...` was
+copied to an isolated candidate, migrated from 10 to 12 without seed or
+initialization, validated, and atomically installed at the persistent DB path.
+Post-start counts are `9|11|35|9746|1|12|0|0`; integrity is `ok`.
+
+The effective Passenger process has all five required values, no initialization
+lock exists, and `/healthz` returns HTTP 200. Rollback evidence is retained at
+`backups/emergency/production-recovery-20260801T202313Z/`. Remaining closure is
+operator login confirmation and read-only application smoke checks.
 
 Facts in this document are labelled as follows and must not be silently upgraded:
 

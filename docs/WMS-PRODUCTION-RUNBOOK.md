@@ -1,5 +1,21 @@
 # WMS Production Runbook
 
+## Hostinger managed-build layout (verified 2026-08-01)
+
+Passenger reads `public_html/.htaccess`, whose app root is
+`~/domains/wms.kynox.io/.builds/current/nodejs`. The `current` symlink selects
+an immutable release under `.builds/versions/`. The persistent production
+database remains outside the release tree at
+`~/domains/wms.kynox.io/nodejs/data/wms.db`, selected by `DB_PATH` in
+`.builds/config/.env`.
+
+Do not infer deployed source or addon identity from the persistent `nodejs/`
+directory. Verify the resolved `.builds/current/nodejs` path, Git SHA, native
+addon, and effective Passenger environment. Preserve the prior release target
+and use an atomic symlink rename. Recovery evidence and rollback from 2026-08-01
+are retained under
+`nodejs/backups/emergency/production-recovery-20260801T202313Z/`.
+
 Last updated: 2026-08-01
 
 ## Environment

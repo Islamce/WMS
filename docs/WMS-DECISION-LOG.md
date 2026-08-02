@@ -1,5 +1,18 @@
 # WMS Decision Log
 
+## DEC-013 - Treat Hostinger `.builds/current` as deployed identity
+
+**Decision:** Verify production source and native-addon identity from the
+resolved `.builds/current/nodejs` release. Treat the persistent `nodejs/`
+directory as the DB/rollback location, not proof of active application code.
+Release changes use a separately validated version and atomic `current` symlink
+swap with the prior target retained.
+
+**Reason:** The 2026-08-01 investigation proved that the persistent directory
+and Passenger application reported different SHAs.
+
+---
+
 This document records durable product, architecture, data, security, deployment, and operating decisions. New entries must state context, decision, consequences, and status.
 
 ## DEC-001 — Production data must survive application updates

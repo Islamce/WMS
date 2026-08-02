@@ -1,5 +1,36 @@
 # WMS Session Log
 
+## 2026-08-01 - Production native recovery and deployment of merged PR #53
+
+**Objective:** Recover HTTP 503 and deploy the verified Hostinger-native build.
+
+**Starting state:** No WMS Passenger process; managed release `0ba56106...`;
+incompatible addon `e8f767...`; persistent DB structurally valid but empty.
+
+**Actions:** Verified `.builds/current` as Passenger's effective root. Preserved
+a consistent DB backup, exact SQLite files, release identity, environment
+evidence, and addon rollback under
+`backups/emergency/production-recovery-20260801T202313Z/`. Staged artifact
+`8823437402`; passed provenance, checksum, ABI, GLIBC, dependency, module-load,
+query, and DB checks. Prepared an isolated release with
+`npm ci --ignore-scripts`, installed the verified addon, copied recovery source
+`02745ba0...`, and migrated the candidate from 10 to 12. Atomically swapped the
+persistent DB and `.builds/current`, then started Passenger with one health
+request.
+
+**Result:** Active source `1bd15f12d70112a977983a96bae63e1b3c441310`;
+addon `a9c4d701...`; DB `3a864dee...`; integrity `ok`; counts
+`9|11|35|9746|1|12|0|0`; all five effective environment values correct; no
+initialization lock; `/healthz` HTTP 200. No seed, reset, or initialization ran.
+
+**Remaining work:** Operator login confirmation and read-only smoke checks.
+Retain artifact and rollback evidence until formal closure.
+
+**Exact next step:** Operator confirms login and essential read-only screens;
+do not load Opening Stock or delete recovery evidence.
+
+---
+
 This is the chronological operational memory for the project. It records durable summaries of conversations and work, not secrets or necessarily verbatim transcripts.
 
 ## 2026-08-01 — Final merge-readiness documentation strategy
