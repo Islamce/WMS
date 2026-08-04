@@ -38,9 +38,9 @@
     "qrcode": "^1.5.4"
   },
   "devDependencies": {
-    "axe-core": "^4.10.2",
-    "eslint": "^8.57.0",
-    "eslint-plugin-security": "^1.7.1",
-    "playwright": "^1.48.0"
+    "axe-core": "^4.12.1",
+    "eslint": "^10.8.0",
+    "eslint-plugin-security": "^4.0.1",
+    "playwright": "^1.62.1"
   }
 }
