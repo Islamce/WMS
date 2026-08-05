@@ -339,8 +339,10 @@ fixed artifact name to a source commit.
 - Passenger remains stopped until all independent source, environment, data,
   lock, artifact, installation, and rollback gates pass.
 
-**Evidence/links:** Draft PR #53, `HOSTINGER-NATIVE-RECOVERY.md`, workflow
-`build-hostinger-native.yml`, and `INC-2026-07-31-01`.
+**Evidence/links:** PR #53 (merged 2026-08-01), `HOSTINGER-NATIVE-RECOVERY.md`, workflow
+`build-hostinger-native.yml`, and `INC-2026-07-31-01`. Executed successfully in production on
+2026-08-01 — Passenger restarted on the verified addon; see `INC-2026-07-31-01`'s "Resolution"
+section and the 2026-08-01 session-log entry for the full gate-by-gate evidence.
 
 ---
 

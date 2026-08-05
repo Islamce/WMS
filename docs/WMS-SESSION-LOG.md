@@ -2,6 +2,122 @@
 
 This is the chronological operational memory for the project. It records durable summaries of conversations and work, not secrets or necessarily verbatim transcripts.
 
+## 2026-08-04 — Documentation reconciliation: native-recovery resolution was undocumented
+
+**Objective:** Reconcile durable documentation after discovering that the 2026-08-01 production
+native-addon recovery (Passenger restart, `INC-2026-07-31-01` resolution) had not been recorded
+anywhere in git — `main` still stated PR #53 as Draft and Passenger restart as forbidden.
+
+**Starting state:** `main` at `065736c`. `docs/WMS-CURRENT-STATUS.md` and
+`docs/WMS-INCIDENT-LOG.md` both still described the native-addon recovery as open/pending,
+contradicting the operator's report of a completed, evidence-gated recovery.
+
+**Conversation/request summary:** The operator reported the completed recovery in chat with
+specific evidence (deployed SHA, addon checksum, DB counts, Passenger environment, rollback
+path). Separately, the operator shared 5 locally-modified (uncommitted) documentation files
+from an unrelated 2026-08-03 session (`fix/workflow-context-analytics-integrity`, an ERP
+execution-context and dead-stock-analytics correction) which also had not incorporated the
+recovery evidence — they inherited the same staleness already present on `main`. The operator
+confirmed: (1) reconcile the recovery evidence into documentation before any commit; (2) leave
+the unrelated 2026-08-03 ERP/analytics work untouched and out of scope for this correction —
+it is not landed anywhere in git and stays that way.
+
+**Verification performed:** Independently confirmed `https://wms.kynox.io/healthz` returns
+`200 {"status":"ok","service":"wms"}`; cross-checked the reported addon SHA-256 against the
+value already on record for the independently-inspected artifact (`8822465615`/`8822626790`
+— matches exactly); cross-checked the reported database counts against the last recorded
+baseline (matches exactly). The remaining reported evidence (Passenger environment read-out,
+database integrity/lock check, gate execution sequence) is recorded as **Reported
+(production)**, not independently re-executed, per `DEC-010`.
+
+**Changes:** Updated `docs/WMS-CURRENT-STATUS.md` (deployed-commit line, health-check line,
+replaced the "OPEN, restart forbidden" native-recovery section with a "RESOLVED" section,
+closed items 1–5 of "Known remaining work"), `docs/WMS-INCIDENT-LOG.md` (`INC-2026-07-31-01`
+status flipped to Resolved with appended evidence), and `docs/WMS-DECISION-LOG.md` (`DEC-013`
+evidence-links note that the policy was executed successfully). Added the 2026-08-01
+session-log entry below documenting the recovery execution itself. Did not touch any content
+related to the 2026-08-03 ERP-context/analytics correction, `DEC-014`, or migration 013 — that
+work remains a separate, unlanded effort per the operator's instruction.
+
+**Decisions:** None new.
+
+**Risks/incidents:** None. This is a documentation-only correction; no production command was
+run.
+
+**Files/PRs/commits changed:** `docs/WMS-CURRENT-STATUS.md`, `docs/WMS-INCIDENT-LOG.md`,
+`docs/WMS-DECISION-LOG.md`, `docs/WMS-SESSION-LOG.md` (this entry and the one below), on branch
+`docs/native-recovery-resolved-2026-08-01`, opened as a draft PR against `main`.
+
+**Production state:** Unchanged and not accessed during this correction.
+
+**Remaining work:** Cross-table stock consistency audit and opening-stock reconciliation
+dry-run (see the entry below). The unrelated 2026-08-03 ERP-context/analytics correction
+remains unlanded and out of scope.
+
+**Exact next step:** Merge this documentation PR once CI passes, then proceed to the
+cross-table stock audit or opening-stock dry-run reconciliation, each needing separate
+operator-driven production access.
+
+---
+
+## 2026-08-01 — Production native-addon recovery executed; Passenger restarted; INC-2026-07-31-01 resolved
+
+**Objective:** Execute the reviewed `HOSTINGER-NATIVE-RECOVERY.md` gates against production to
+resolve `INC-2026-07-31-01` (GLIBC 2.28 incompatibility) and restart Passenger on a verified
+compatible `better-sqlite3` addon.
+
+**Starting state:** PR #53 merge-readiness evidence complete (see the entries below); native
+artifact `8822465615`/`8822626790` independently inspected and passed; Passenger restart still
+forbidden pending execution of the four production gates in `HOSTINGER-NATIVE-RECOVERY.md`.
+
+**Actions (per `HOSTINGER-NATIVE-RECOVERY.md`):**
+
+- Gate 1: deployed source and effective Passenger environment verified read-only from
+  `/proc/$PID/environ`.
+- Gate 2: production database integrity, record counts, and initialization-lock state
+  verified.
+- Gate 3: staged addon provenance (checksum, manifest, GLIBC evidence) and preflight
+  load/query against a read-only backup passed.
+- Gate 4: existing addon preserved in a timestamped rollback directory; new addon installed by
+  same-directory atomic rename; rollback path validated.
+- PR #53 merged; Passenger restarted.
+
+**Evidence (Reported (production) by the operator; independently corroborated by this AI
+session on 2026-08-04 for `/healthz`, the addon SHA-256, and the database counts only):**
+
+- Deployed source: `1bd15f12d70112a977983a96bae63e1b3c441310`.
+- Addon SHA-256: `a9c4d701f59a492c538416211cc3e65257f1d74e3e4ce3d8d9862e1981676dc4` — matches
+  the artifact independently inspected on 2026-08-01 (see the entry below).
+- Database: `integrity_check = ok`; counts `9|11|35|9746|1|12|0|0`.
+- Passenger environment: all 5 required variables correct.
+- No initialization lock present.
+- No seed, reset, or initialization command run.
+- Artifact, previous addon, and a database copy retained; rollback script:
+  `/home/u716763642/domains/wms.kynox.io/nodejs/backups/emergency/production-recovery-20260801T202313Z/rollback-production.sh`.
+- `/healthz`: `200 {"status":"ok","service":"wms"}` — independently re-verified by this session
+  on 2026-08-04.
+
+**Decisions:** None new; execution followed `DEC-013` in full.
+
+**Risks/incidents:** None. This entry resolves `INC-2026-07-31-01`.
+
+**Files/PRs/commits changed:** None in this entry's own scope (production-only action).
+Documentation reconciliation is recorded in the 2026-08-04 entry above.
+
+**Production state:** **Changed.** Native addon replaced; Passenger restarted. Database not
+modified.
+
+**Remaining work:** The auto-seed and credential-hardening runtime evidence needed to close
+Issue #40 is now satisfied by the confirmed Passenger environment read-out above. The
+cross-table stock consistency audit (Issue #40) remains open and is now feasible since
+production is confirmed healthy and accessible. Opening-stock reconciliation dry-run (PR #39
+follow-up) remains open.
+
+**Exact next step:** Proceed to the cross-table stock consistency audit and/or opening-stock
+dry-run reconciliation, each requiring separate operator-driven production access.
+
+---
+
 ## 2026-08-01 — Final merge-readiness documentation strategy
 
 **Review result:** The complete PR #53 diff, GitHub metadata, checks, comments, review threads, native artifact, and local worktree were reviewed. Runtime/workflow/runbook changes had no code blocker; CI and native validation were green, the PR was mergeable/clean, and no unresolved review thread existed. Merge-readiness remained blocked only because the PR description and durable records contained transient artifact/quota claims that had become stale after later builds.

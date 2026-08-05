@@ -4,8 +4,10 @@ This log records production failures, data-risk events, deployment failures, rec
 
 ## INC-2026-07-31-01 — Hostinger native addon incompatible; recovery artifact not retained
 
-**Status:** Open. Passenger restart remains forbidden pending a retained,
-provenance-bound artifact and successful completion of every recovery gate.
+**Status:** Resolved on 2026-08-01. All recovery gates passed; Passenger was restarted on the
+verified native addon. See "Resolution — 2026-08-01" at the end of this entry for the closing
+evidence. The narrative below is preserved unchanged as the historical record of how the
+incident was diagnosed and worked through.
 
 **Environment:** Hostinger shared Node.js / Passenger production environment.
 
@@ -94,13 +96,41 @@ replace the mandatory Hostinger staged module-load preflight. The incident
 remains open pending all production source/environment/database/lock gates,
 staged preflight, reversible swap, and controlled Passenger restart.
 
-**Owner / next step:** Repository owner. For the current PR head, require green
-CI/native checks and retain and independently inspect its exact SHA-named
-artifact; keep the transient SHA, run, artifact ID, checksum, and expiry in the
-PR description. Then separately authorize a production maintenance window and
-execute the deployed-source, Passenger-environment, database identity/count,
-initialization-lock, staged-addon preflight, backup, atomic-swap, and rollback
-gates before any restart. Keep Passenger stopped until those gates are reviewed.
+**Owner / next step (historical — superseded by the resolution below):** Repository owner. For
+the current PR head, require green CI/native checks and retain and independently inspect its
+exact SHA-named artifact; keep the transient SHA, run, artifact ID, checksum, and expiry in the
+PR description. Then separately authorize a production maintenance window and execute the
+deployed-source, Passenger-environment, database identity/count, initialization-lock,
+staged-addon preflight, backup, atomic-swap, and rollback gates before any restart. Keep
+Passenger stopped until those gates are reviewed.
+
+**Resolution — 2026-08-01 (Reported (production); independently corroborated 2026-08-04 for
+the items marked below):**
+
+PR #53 merged and the full `HOSTINGER-NATIVE-RECOVERY.md` gate sequence was executed against
+production and passed:
+
+- Deployed source `1bd15f12d70112a977983a96bae63e1b3c441310` matched the expected branch with a
+  clean working tree.
+- Passenger's effective environment (read from `/proc/$PID/environ`) confirmed all five
+  required variables correct.
+- Production database `PRAGMA integrity_check = ok`; record counts `9|11|35|9746|1|12|0|0`,
+  matching the reviewed baseline.
+- No initialization lock present.
+- **Independently corroborated:** staged addon SHA-256
+  `a9c4d701f59a492c538416211cc3e65257f1d74e3e4ce3d8d9862e1981676dc4` matches the artifact
+  already independently inspected above (source SHA `e57b278e`/manifest-bound). It passed
+  `ldd`, in-memory load/query, and a read-only backup query before installation.
+- The previously installed addon and a database copy were preserved; the new addon was
+  installed by same-directory atomic rename. Immediate rollback script retained at
+  `/home/u716763642/domains/wms.kynox.io/nodejs/backups/emergency/production-recovery-20260801T202313Z/rollback-production.sh`.
+- No seed, reset, initialization, or database-mutating command was run.
+- **Independently corroborated:** Passenger is running the new addon;
+  `https://wms.kynox.io/healthz` returns `200 {"status":"ok","service":"wms"}`.
+
+**This incident is closed.** `DEC-013`'s native-addon provenance/rollback requirements were
+followed in full. See `docs/WMS-SESSION-LOG.md` (2026-08-01 entry) for the complete execution
+record and `docs/WMS-CURRENT-STATUS.md` for the current production baseline.
 
 ---
 
