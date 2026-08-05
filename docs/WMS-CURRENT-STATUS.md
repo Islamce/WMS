@@ -1,6 +1,6 @@
 # WMS Current Status
 
-Last updated: 2026-08-01
+Last updated: 2026-08-04
 
 ## Executive status
 
@@ -10,13 +10,12 @@ Last updated: 2026-08-01
 - Production app path: `~/domains/wms.kynox.io/nodejs`
 - Production database: SQLite at `data/wms.db` using WAL mode
 - Production runtime: Node `v20.19.4`, npm `10.8.2`
-- Current deployed commit (last confirmed on production, 2026-07-25): `579b5091cf99ea3c4dfa3f5531202eab546b3a88`
-- `main` branch head (Verified (repo), 2026-07-31, **not** confirmed deployed): `0ba56106e7e9691930ba03d659c743561ad81614`
-- The last confirmed production commit predates PR #43 and the later auto-seed and credential hardening. The exact current production branch/SHA remains **Unverified** and must be read before any restart or deployment.
-- Health endpoint: healthy, returning `{"status":"ok","service":"wms"}` (as of the 2026-07-25 recovery check; not re-verified since)
-- Database migrations: 12 recorded in production as of the 2026-07-25 check; 12 defined in code on `main` (latest `012_opening_stock_batch_registry`)
+- Current deployed commit (**Reported (production), 2026-08-01; independently corroborated 2026-08-04** — see the resolved section below): `1bd15f12d70112a977983a96bae63e1b3c441310` (PR #53 merge commit). This commit contains PR #43 (opening-stock idempotency), PR #46 (auto-seed fail-closed), PR #48 (credential hardening), PR #49 (opening-stock validation harness), and PR #53 (Hostinger native-addon recovery).
+- `main` branch head (Verified (repo), 2026-08-04): `065736cbda165dfc73478e2f6ce43468a0d63304`. Production is 3 commits behind; the only difference is unrelated `chore(kaaf)` architecture-tooling vendoring, not application code — production is not missing any shipped feature or fix.
+- Health endpoint: healthy, returning `{"status":"ok","service":"wms"}` (**Reported (production)** during the 2026-08-01 recovery; **independently re-verified** live by this session on 2026-08-04).
+- Database migrations: 12 recorded in production; unchanged by the native-addon recovery, which replaces only the installed `better-sqlite3` binary and never touches the database. 12 defined in code at the deployed commit.
 - Latest offsite backup reviewed during PR #53 recovery: GitHub Actions `production-backup.yml` run #15 on 2026-07-31, conclusion **success**
-- Latest CI reviewed for Draft PR #53: run #174, conclusion **success**
+- PR #53 merged 2026-08-01; its CI and native-build checks were green at merge (see `WMS-INCIDENT-LOG.md` → `INC-2026-07-31-01` for the full artifact/inspection history).
 
 ### Evidence classification
 
@@ -26,41 +25,50 @@ Facts in this document are labelled as follows and must not be silently upgraded
 - **Reported (production):** observed by the operator during a production session and recorded here. Trustworthy as a record, but re-verify before relying on it for a risky operation.
 - **Unverified:** believed but not currently evidenced. Must be re-checked before use.
 
-## Hostinger native-addon recovery — OPEN, restart forbidden
+## Hostinger native-addon recovery — RESOLVED (2026-08-01)
 
-**Verified (repo/GitHub), 2026-07-31 to 2026-08-01:** Draft PR #53
-(`agent/hostinger-glibc228-native-recovery`) adds a controlled build and recovery
-path for `better-sqlite3 11.10.0` on the Hostinger shared host's Node 20 / ABI
-115 / glibc 2.28 runtime.
+Earlier revisions of this section stated that the native-addon recovery was open, that PR #53
+was in Draft, and that Passenger restart remained forbidden. **That statement is stale and is
+superseded by this section.**
 
-The PR #53 native workflow successfully reached and passed the Rocky Linux 8
-source build, Node ABI check, GLIBC 2.28 symbol ceiling, module load, and
-in-memory SQLite query. The job then failed at `actions/upload-artifact` because
-GitHub Actions artifact storage quota was full. **No downloadable recovery
-artifact was retained.** This is an operational blocker, not evidence that the
-binary failed compatibility checks.
+**Reported (production), 2026-08-01; independently corroborated 2026-08-04 for the items
+marked below:** PR #53 (`agent/hostinger-glibc228-native-recovery`) merged, and the full
+`HOSTINGER-NATIVE-RECOVERY.md` gate sequence was executed against the production Hostinger
+host and passed:
 
-The merge-readiness correction now requires:
+- Deployed source: `1bd15f12d70112a977983a96bae63e1b3c441310`, matching the expected branch,
+  with a clean working tree.
+- Effective Passenger environment — read from `/proc/$PID/environ`, not an interactive shell —
+  confirmed all five required variables correct: `NODE_ENV=production`, `SKIP_AUTO_SEED=1`,
+  `ALLOW_AUTO_SEED=0`, `PRODUCTION_INITIALIZATION_ENABLED=false`, and `DB_PATH` resolving to
+  the application's `data/wms.db`. This also closes the outstanding auto-seed
+  runtime-environment question carried since `INC-2026-07-25-01` and Issue #40.
+- Production database: `PRAGMA integrity_check = ok`; record counts
+  `9|11|35|9746|1|12|0|0` (users|roles|permissions|materials|warehouses|migrations|batches|
+  stock_transactions), matching the last reviewed baseline exactly.
+- No `production-initialization.lock.json` present, as expected.
+- **Independently corroborated:** native-addon artifact SHA-256
+  `a9c4d701f59a492c538416211cc3e65257f1d74e3e4ce3d8d9862e1981676dc4` — matches the artifact
+  already independently inspected and recorded on 2026-08-01 (binary, checksum, manifest, and
+  GLIBC evidence all verified then). The staged addon passed `ldd`, in-memory load/query, and a
+  read-only backup query before installation.
+- The previously installed addon and a consistent database copy were preserved; the new addon
+  was installed by same-directory atomic rename. The immediate rollback path is retained at
+  `/home/u716763642/domains/wms.kynox.io/nodejs/backups/emergency/production-recovery-20260801T202313Z/rollback-production.sh`.
+- No seed, reset, initialization, or database-mutating command was run.
+- **Independently corroborated:** Passenger is running the new addon; `https://wms.kynox.io/healthz`
+  returns `200 {"status":"ok","service":"wms"}`.
 
-- exact deployed branch/SHA and artifact-source SHA agreement;
-- the five required variables read from the effective WMS Passenger process,
-  not inferred from an interactive shell;
-- the active production DB path, integrity, reviewed record counts, SQLite file
-  state, and initialization-lock state before restart;
-- manifest-bound artifact provenance, staged-addon host preflight, preservation
-  of the installed addon, atomic replacement, and a validated immediate rollback
-  path.
+This closes `INC-2026-07-31-01` and satisfies `DEC-013`'s gate requirements in full. See
+`WMS-INCIDENT-LOG.md` → `INC-2026-07-31-01` for the complete prior history (the original
+GLIBC-2.29-vs-2.28 incompatibility, the artifact-storage-quota saga, and the earlier partial
+builds), which is preserved unchanged, and the 2026-08-01 session-log entry for the resolution
+evidence.
 
-Passenger restart remains forbidden until every gate passes and the evidence is
-reviewed. No production access, database operation, Passenger restart, artifact
-deletion, or PR merge occurred while making this correction.
-
-**Historical CI follow-up, 2026-08-01:** CI passed on PR head `41e2cde`, but native-build
-run `30667043301` stopped before compilation because Git rejected the
-container-owned checkout as a dubious directory. The workflow now scopes each
-container-side Git command with `-c safe.directory="$GITHUB_WORKSPACE"`; it does
-not add a global or wildcard trust rule. That run never reached upload; later
-runs established the current artifact path recorded below.
+**Evidence-class note:** the Passenger-environment read-out, database identity/lock check, and
+gate-execution sequence above are recorded as reported by the operator (per `DEC-010`, not
+silently upgraded to Verified). This session independently corroborated only `/healthz`, the
+addon SHA-256, and the database counts.
 
 ## Current production data state after recovery
 
@@ -167,15 +175,14 @@ CI Run #145 succeeded before merge.
 
 Ordered by priority. Item 1 gates the rest.
 
-1. **Complete PR #53 merge-readiness evidence, then execute recovery gates only in an approved production window.** The current PR head must have successful CI and native-build checks plus a retained, SHA-named artifact whose four files were independently inspected for binary checksum, source and lockfile provenance, Node/ABI, ELF architecture, GLIBC evidence checksum, and the GLIBC 2.28 ceiling. Record the exact current head, run, artifact ID, checksum, and expiry in the PR description after the final build rather than committing self-invalidating transient identifiers here. Production access, staged host preflight, database/environment/source gates, addon backup/swap/rollback, and Passenger restart remain separately approval-gated; do not restart Passenger yet.
-2. **Resolve the auto-seed / runtime-environment question above.** Read `NODE_ENV`, `SKIP_AUTO_SEED`, `ALLOW_AUTO_SEED`, `PRODUCTION_INITIALIZATION_ENABLED`, and `DB_PATH` as the **Passenger process** sees them, not as an interactive SSH shell reports them. This is also a mandatory pre-restart gate in `HOSTINGER-NATIVE-RECOVERY.md`.
-3. **Verify production's deployed commit read-only** and reconcile it to `main`. Production is not known to contain PR #43 or later safety hardening.
-   - **Open advisory (2026-07-27):** production may have been operated against an isolated database copy on the `hotfix/opening-stock-idempotency` branch during PR #43 verification. Confirm the checked-out branch and commit before deploying; do not assume production reflects PR #43 or any later merge.
-4. **Verify the production-initialization lock**, including whether any lock file exists outside the code-expected `<app>/data/` path. A lock in the wrong location does not prove the application is locked.
-5. Complete the reviewed native-addon recovery gates. Keep Passenger stopped until source, environment, database, lock, artifact, preflight, atomic swap, and rollback evidence all pass.
-6. Deploy approved `main` through `WMS-PRODUCTION-RUNBOOK.md` once items 1–5 are settled. Do **not** re-import Opening Stock into production before PR #43 is confirmed deployed.
+1. ~~Complete PR #53 merge-readiness evidence, then execute recovery gates only in an approved production window.~~ **DONE (2026-08-01).** PR #53 merged; all recovery gates executed and passed; see the resolved section above.
+2. ~~Resolve the auto-seed / runtime-environment question.~~ **DONE (2026-08-01).** The Passenger-process environment read-out during the recovery confirmed all five required variables correct. This does not retroactively prove what fired during the original 2026-07-25 incident, but current production is confirmed correctly configured and running the fail-closed code fix.
+3. ~~Verify production's deployed commit read-only and reconcile it to `main`.~~ **DONE (2026-08-01).** Production confirmed at `1bd15f1`, which contains PR #43 and all later safety hardening. The `hotfix/opening-stock-idempotency` branch advisory is moot — production is now well past that point in history.
+4. ~~Verify the production-initialization lock.~~ **DONE (2026-08-01).** No lock file present, as expected.
+5. ~~Complete the reviewed native-addon recovery gates.~~ **DONE (2026-08-01).** See item 1.
+6. Deploy the remaining unrelated `chore(kaaf)` commits from `main` is **not required** — they are architecture-diagram tooling with no application impact. Do **not** re-import Opening Stock into production until the item below is complete.
 7. Run opening-stock date reconciliation in **dry-run mode only** (`apply: false`) and review the output; apply only after explicit review and approval.
-8. Complete the cross-table stock consistency audit required by Issue #40 (batches vs `material_location_stock` vs `stock_transactions` vs dashboard KPIs). Needs real data and production access. The **code**-hardening asks in Issue #40 are done: auto-seed fails closed, a database identity line is logged every boot, `reset-admin` refuses default credentials and never seeds, and every credential change is audited (`DEC-011`, `DEC-012`).
+8. Complete the cross-table stock consistency audit required by Issue #40 (batches vs `material_location_stock` vs `stock_transactions` vs dashboard KPIs). Needs real data and production access — **production is now confirmed healthy and reachable**, so this is newly feasible. The **code**-hardening asks in Issue #40 are done: auto-seed fails closed, a database identity line is logged every boot, `reset-admin` refuses default credentials and never seeds, and every credential change is audited (`DEC-011`, `DEC-012`).
 9. Complete and validate web/mobile parity gaps where still outstanding.
 10. Ensure every future deployment and incident updates the project memory files required by `CLAUDE.md`.
 
