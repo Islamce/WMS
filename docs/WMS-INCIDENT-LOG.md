@@ -2,6 +2,88 @@
 
 This log records production failures, data-risk events, deployment failures, recoveries, and important near misses. Do not include secrets.
 
+## INC-2026-08-06-01 — Production offsite backup workflow failing for 6 consecutive days
+
+**Status:** Open. No corrective action taken yet; this entry records diagnosis only.
+
+**Environment:** GitHub Actions (`production-backup.yml`), SSH connection from the Actions
+runner to the Hostinger production host (aliased `hostinger` in the workflow's SSH config).
+
+**Impact:**
+
+- **Verified (repo, via GitHub Actions run history):** the scheduled `Production Offsite
+  Backup` workflow has failed on every run for 6 consecutive days, 2026-08-01 through
+  2026-08-06 (runs #16–#21). The most recent successful run was #15 on 2026-07-31.
+- No offsite backup has been produced since 2026-07-31. Per `DEC-008`, local backup retention
+  keeps only the newest 7 sets, so each further missed cycle erodes the disaster-recovery
+  safety margin; at 6 missed daily cycles this is already a material DR-risk exposure.
+- No evidence of data loss, corruption, or any change to `data/wms.db`. This is a backup
+  **delivery** failure, not a database incident.
+
+**Detection and evidence:**
+
+- Reported via a GitHub Actions failure-notification email: "[Islamce/WMS] Production
+  Offsite Backup workflow run" / "Production Offsite Backup: All jobs have failed."
+- **Verified (repo)**, from `mcp__github__get_job_logs` on the individual failed runs, the
+  failures fall into two distinct phases with two different error signatures:
+  - **Phase 1 (2026-08-01 → 2026-08-04, runs #16 and #19 confirmed by log inspection):**
+    `/sbin/nologin: No such file or directory` — the SSH connection to the Hostinger host
+    succeeds, but the remote login shell path configured for the backup account is invalid,
+    so the remote command never executes.
+  - **Phase 2 (2026-08-05 → 2026-08-06, runs #20 and #21 confirmed by log inspection):**
+    `ssh: connect to host *** port ***: Connection timed out` — a TCP-level failure. The
+    connection is not reaching the host at all; no authentication is attempted. This is a
+    different failure mode from Phase 1, not a continuation of it.
+- **Verified (repo, via `git log --oneline -- .github/workflows/production-backup.yml`):**
+  the workflow file's last change is commit `86363c5` ("Security hardening of the
+  offsite-backup workflow and scripts"), well before this failure window. The workflow
+  definition itself is not the cause of either phase.
+
+**Root cause / current hypothesis:**
+
+- Phase 1 (`/sbin/nologin`) is consistent with an account/shell-configuration problem on the
+  Hostinger host for the specific SSH account the backup workflow authenticates as — SSH
+  itself connects and authenticates, but the assigned login shell is missing or misconfigured.
+- Phase 2 (connection timeout) is consistent with a network/firewall change or an account
+  being disabled/locked at the host level, since the connection no longer completes at all.
+- **Unverified hypothesis, explicitly not asserted as fact:** the onset of Phase 1 on
+  2026-08-01 coincides with the date of the Hostinger native-addon recovery work recorded in
+  the "Resolution — 2026-08-01" section below (host-level access, Passenger restart, and
+  associated hPanel/SSH activity on the same production host). No mechanism has been
+  identified or confirmed connecting that recovery work to the backup account's shell
+  configuration or to the later loss of connectivity; this is a candidate lead for the
+  owner to check, not a conclusion.
+
+**Recovery actions:** None taken. This entry is diagnostic only, per production-safety rules
+— no SSH, credential, or host-configuration change was made from this session (no production
+SSH access exists in this environment).
+
+**Validation:** Not applicable — no corrective action has been taken yet.
+
+**Data-loss assessment:** None identified. No evidence this affects `data/wms.db` or any live
+production data; it affects only the offsite copy's freshness.
+
+**Corrective/preventive actions (proposed, not yet performed):**
+
+- Owner to check, via Hostinger hPanel, the backup SSH account's configured login shell
+  (Phase 1 cause) and its SSH/firewall access and account-enabled state (Phase 2 cause).
+- Once connectivity is restored, trigger a manual workflow run to confirm a successful
+  backup before relying on the next scheduled run.
+- Consider whether `DEC-008`'s 7-set local retention window needs a temporary extension while
+  offsite backups are down, to avoid the local safety margin also running out.
+
+**Owner / next step:** Open. Owner (repository owner, with Hostinger hPanel access) to
+investigate the backup SSH account's shell configuration and connectivity per the two phases
+above, then re-run the workflow manually to confirm recovery. No AI agent in this environment
+has production SSH access to perform this directly.
+
+**Related:** GitHub Actions workflow `production-backup.yml`, runs #16–#21 (run #16 id
+`30686266957`, run #19 id `30880841578`, run #20 id `30978213492`, run #21 id `31074388681`);
+`DEC-008` (backup retention policy); "Resolution — 2026-08-01" section of
+`INC-2026-07-31-01` below (candidate correlated event, unconfirmed).
+
+---
+
 ## INC-2026-07-31-01 — Hostinger native addon incompatible; recovery artifact not retained
 
 **Status:** Resolved on 2026-08-01. All recovery gates passed; Passenger was restarted on the
