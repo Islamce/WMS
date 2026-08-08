@@ -2,6 +2,52 @@
 
 This is the chronological operational memory for the project. It records durable summaries of conversations and work, not secrets or necessarily verbatim transcripts.
 
+## 2026-08-06 — Diagnosed and recorded offsite-backup workflow failure (6 consecutive days)
+
+**Objective:** Investigate a GitHub Actions failure-notification email ("Production Offsite
+Backup: All jobs have failed") and, if actionable, record it durably.
+
+**Starting state:** `main` at `e3dec1f` (post PR #55 merge). No open incident tracked this
+failure yet.
+
+**Actions:** Listed `production-backup.yml` run history via the GitHub Actions API; found 6
+consecutive failed daily runs, #16–#21 (2026-08-01 through 2026-08-06), following a successful
+run #15 on 2026-07-31. Pulled job logs for runs #16, #19, #20, and #21 and found two distinct
+failure signatures: `/sbin/nologin: No such file or directory` (2026-08-01 → 2026-08-04) versus
+`ssh: connect to host *** port ***: Connection timed out` (2026-08-05 → 2026-08-06). Confirmed
+via `git log --oneline -- .github/workflows/production-backup.yml` that the workflow file's
+last change (`86363c5`) predates this entire failure window, ruling out a workflow-definition
+regression as the cause.
+
+**Evidence:** Run/job IDs and exact error strings recorded in the new incident-log entry below.
+`/healthz` and application availability were not affected — this is an offsite-backup delivery
+failure, not a production outage.
+
+**Decisions:** Recorded a clearly-hedged, explicitly unconfirmed hypothesis that the onset of
+Phase 1 (2026-08-01) may correlate with the native-addon recovery host-access work recorded the
+same day, without asserting a causal mechanism. Took no corrective action — no SSH/production
+access exists in this environment, and any account/shell/firewall fix on the Hostinger host is
+an operator action.
+
+**Risks/incidents:** New open incident `INC-2026-08-06-01` (see `docs/WMS-INCIDENT-LOG.md`).
+Per `DEC-008`, local backup retention keeps only 7 sets; 6 consecutive missed offsite cycles is
+a material, growing DR-risk exposure until resolved.
+
+**Files/PRs/commits changed:** `docs/WMS-INCIDENT-LOG.md` (new `INC-2026-08-06-01` entry),
+`docs/WMS-SESSION-LOG.md` (this entry), on branch
+`docs/offsite-backup-ssh-incident-2026-08-06`, opened as a draft PR against `main`.
+
+**Production state:** Unchanged and not accessed. No SSH, credential, or host-configuration
+change was made.
+
+**Remaining work:** Owner to check the backup SSH account's login-shell configuration and
+SSH/firewall/account-enabled state via Hostinger hPanel, then trigger a manual workflow run to
+confirm recovery before relying on the next scheduled run.
+
+**Exact next step:** Merge this documentation PR once CI passes (docs-only change, CI is not
+expected to be affected). No further AI-driven action is possible on the backup failure itself
+without production SSH access.
+
 ## 2026-08-04 — Documentation reconciliation: native-recovery resolution was undocumented
 
 **Objective:** Reconcile durable documentation after discovering that the 2026-08-01 production
