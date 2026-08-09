@@ -2,6 +2,52 @@
 
 This is the chronological operational memory for the project. It records durable summaries of conversations and work, not secrets or necessarily verbatim transcripts.
 
+## 2026-08-09 — Corrected offsite-backup incident framing; now 9 consecutive failures
+
+**Objective:** Following the merge of PR #56 (`INC-2026-08-06-01`), check for new workflow
+runs and continue prior work.
+
+**Starting state:** `main` at `8aecef3` (post PR #56 merge). `INC-2026-08-06-01` described the
+failures as a clean two-phase progression: `/sbin/nologin` through 2026-08-04, then connection
+timeouts from 2026-08-05 onward, across 6 runs (#16–#21).
+
+**Actions:** Listed `production-backup.yml` run history again; found 3 more consecutive daily
+failures since the last check (#22–#24, 2026-08-07 through 2026-08-09), extending the streak to
+9 days. Re-pulled job logs for every one of the 9 failed runs (not just the 4 sampled
+previously) to build a complete per-run table. This showed the original "Phase 1 then Phase 2"
+framing was incorrect: the two error signatures **alternate intermittently** — `/sbin/nologin`
+on 6 of 9 runs (08-01, 08-03, 08-04, 08-07, 08-08, 08-09) and connection timeouts on 3 of 9
+(08-02, 08-05, 08-06) — rather than one signature cleanly succeeding the other.
+
+**Evidence:** Full per-run table (date, run ID, exact error) recorded in the corrected
+`INC-2026-08-06-01` entry. `/healthz` and application availability were not checked this
+session but were unaffected in all prior checks — this remains a backup-delivery-only issue.
+
+**Decisions:** Reframed the root-cause hypothesis: `/sbin/nologin` (the majority signature) is
+treated as the primary, persistent cause (shell-config problem on the backup SSH account); the
+connection timeouts are treated as a separate, intermittent fault (network/host-load/firewall),
+not a second lasting phase. The unconfirmed correlation with the 2026-08-01 native-addon
+recovery host-access work is retained, still explicitly labeled unconfirmed. No corrective
+action taken — no production SSH access exists in this environment.
+
+**Risks/incidents:** `INC-2026-08-06-01` updated in place (not a new incident). Per `DEC-008`,
+local retention keeps only 7 backup sets; 9 missed offsite cycles now meets or exceeds that
+window, so local DR depth may already be thinner than the missed-cycle count suggests.
+
+**Files/PRs/commits changed:** `docs/WMS-INCIDENT-LOG.md` (`INC-2026-08-06-01` corrected),
+`docs/WMS-CURRENT-STATUS.md` (backup status line and "Known remaining work" item updated),
+`docs/WMS-SESSION-LOG.md` (this entry), on branch
+`docs/offsite-backup-incident-correction-2026-08-09`, opened as a draft PR against `main`.
+
+**Production state:** Unchanged and not accessed.
+
+**Remaining work:** Same as before — owner to fix the backup SSH account's login shell via
+Hostinger hPanel and investigate the intermittent timeouts, then confirm recovery with a
+manual workflow run.
+
+**Exact next step:** Merge this documentation PR once CI passes. Continue watching
+`production-backup.yml` for a first successful run to confirm resolution once the owner acts.
+
 ## 2026-08-06 — Diagnosed and recorded offsite-backup workflow failure (6 consecutive days)
 
 **Objective:** Investigate a GitHub Actions failure-notification email ("Production Offsite
