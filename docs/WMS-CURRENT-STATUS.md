@@ -1,6 +1,6 @@
 # WMS Current Status
 
-Last updated: 2026-08-04
+Last updated: 2026-08-11
 
 ## Executive status
 
@@ -25,11 +25,11 @@ Facts in this document are labelled as follows and must not be silently upgraded
 - **Reported (production):** observed by the operator during a production session and recorded here. Trustworthy as a record, but re-verify before relying on it for a risky operation.
 - **Unverified:** believed but not currently evidenced. Must be re-checked before use.
 
-## Workflow context and analytics integrity corrective phase — local reconciliation in progress
+## Workflow context and analytics integrity corrective phase — reconciled for Draft PR
 
-**Verified (repo), 2026-08-03:** Branch
-`fix/workflow-context-analytics-integrity`, based on main
-`065736cbda165dfc73478e2f6ce43468a0d63304`, corrects two confirmed defects:
+**Verified (repo), 2026-08-11:** The original work was preserved at `a97f07f`
+and reconciled as `fix/workflow-context-analytics-integrity-v2`, based on main
+`3350d2bacbe2cd2c6610b0b575497ff104693631`, to correct two confirmed defects:
 
 - downstream queue projections omitted ERP reservation/reference, plant,
   storage location, and related request context even though the header retained
@@ -47,13 +47,15 @@ rejected-row retrieval. Historical imports remain analytically separate and do
 not write batches, location balances, reservations, or `stock_transactions`.
 Analytics now uses a canonical combined movement stream, nets issue returns and
 reversals, excludes transfers/adjustments/opening balances from demand, and
-gates definitive `DEAD` classification on complete coverage. Partial or absent
+gates definitive `DEAD` classification on continuous operational-ledger
+coverage. Sparse import files contribute observed issue dates but cannot assert
+global completeness. Partial or absent
 coverage reports stocked/no-issue materials as `UNKNOWN` with a warning.
 
 Runtime tests are defined in `tests/e2e/corrective_integrity_test.py` and the
 existing workflow/reversal suites. In this local session, execution is blocked
-because dependencies were absent and external dependency download was rejected
-by the environment usage limit. JavaScript and Python syntax checks and
+because dependencies and an npm executable are absent from the clean worktree.
+JavaScript and Python syntax checks and
 `git diff --check` passed. KAAF regeneration was also attempted and stopped on
 the repository's pre-existing declared dependency cycle
 `wms-api -> wms-ops-scripts -> wms-api` (already present among the five errors
@@ -61,8 +63,7 @@ in `.ai/drift.json`); generated `.ai/` files were not hand-edited. CI remains
 the required runtime evidence for the Draft PR; do not represent the
 unexecuted local suite as passing.
 
-The original local implementation is preserved at recovery commit `a97f07f` and
-is being reconciled on a current-main branch before Draft PR publication.
+The original local implementation remains preserved at recovery commit `a97f07f`.
 No production access, deployment, migration, historical import, Passenger
 restart, database mutation, or merge occurred in this corrective phase.
 

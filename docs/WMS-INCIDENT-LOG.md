@@ -138,8 +138,8 @@ correlated event, unconfirmed).
 
 ## INC-2026-08-03-01 — Downstream ERP context omitted and dead-stock analytics unsupported by coverage
 
-**Status:** Corrective implementation ready locally; Draft PR publication is
-blocked by the local environment usage limit. Production remains unchanged.
+**Status:** Corrective implementation preserved and reconciled on current main;
+Draft PR publication/CI evidence pending. Production remains unchanged.
 
 **Environment and impact:** Production/UAT users observed a persisted ERP
 reservation on request detail but not on Picker Assignment and later execution
@@ -169,8 +169,8 @@ execution was blocked by missing local dependencies and the environment's
 external-download usage limit; Draft PR CI is required evidence. No production
 deployment, database change/import, Passenger restart, or merge occurred.
 
-**Owner / next step:** After Git write access is available, publish the dedicated
-branch as a Draft PR and require CI plus Product Owner / Project Manager review.
+**Owner / next step:** Publish the reconciled branch as a Draft PR and require
+CI plus Product Owner / Project Manager review.
 Production action requires separate authorization and the normal production
 runbook.
 
