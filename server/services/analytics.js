@@ -77,8 +77,7 @@ function canonicalMovements() {
     const duplicate = historicalCandidates.some((candidate) => candidate.material_id === movement.material_id
       && candidate.category === movement.category && candidate.posting_date === movement.posting_date
       && Number(candidate.quantity) === Number(movement.quantity)
-      && (String(movement.reference).includes(String(candidate.reference))
-        || String(candidate.reference).includes(String(movement.reference))));
+      && String(movement.reference).trim() === String(candidate.reference).trim());
     if (!duplicate) merged.push(movement);
   });
   return merged;
@@ -109,9 +108,9 @@ function movementCoverage(movements) {
     FROM stock_movement_import_batches b
     LEFT JOIN stock_movement_history h ON h.import_batch_id=b.id
     WHERE b.status IN ('COMPLETED','COMPLETED_WITH_ERRORS')
-      AND COALESCE(b.movement_category,b.movement_type) IN ('ISSUE','RETURN','REVERSAL')
+      AND COALESCE(b.movement_category,b.movement_type)='ISSUE'
     GROUP BY b.id`).all().forEach((batch) => intervals.push({
-      start: isoDay(batch.period_start || batch.actual_start), end: isoDay(batch.period_end || batch.actual_end),
+      start: isoDay(batch.actual_start), end: isoDay(batch.actual_end),
       source: `IMPORT_BATCH_${batch.id}`,
     }));
   const merged = mergeIntervals(intervals);
@@ -122,7 +121,7 @@ function movementCoverage(movements) {
     if (clippedStart <= clippedEnd) coveredDays += dayDiff(clippedStart, clippedEnd) + 1;
   });
   coveredDays = Math.min(WINDOW_DAYS, coveredDays);
-  const complete = merged.some((interval) => interval.start <= start && interval.end >= end);
+  const complete = Boolean(operationalStart && isoDay(operationalStart) <= start);
   const status = complete ? 'COMPLETE' : coveredDays > 0 ? 'PARTIAL' : 'NONE';
   const analyticalMovements = movements.filter((movement) => movement.category !== 'OPENING_BALANCE');
   const movementDates = analyticalMovements.map((movement) => movement.posting_date).filter(Boolean).sort();
@@ -137,7 +136,7 @@ function movementCoverage(movements) {
     materials_with_history: materialIds.size,
     materials_without_history: allMaterialIds.filter((id) => !materialIds.has(id)).length,
     intervals: merged,
-    assumption: 'Operational ledger coverage is continuous from its first non-opening movement through today.',
+    assumption: 'Only the operational ledger may establish continuous global coverage. Import batches contribute observed issue dates, not completeness.',
     warning: complete ? null : 'Movement coverage is incomplete. No observed movement must not be interpreted as proof that no movement occurred.',
   };
 }

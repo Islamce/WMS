@@ -66,6 +66,12 @@ function parseDate(value) {
   return Number.isNaN(d.getTime()) ? null : d.toISOString().replace('Z', '');
 }
 
+function parseDay(value, label) {
+  const parsed = parseDate(value);
+  if (!parsed) throw new Error(`${label} must be a valid date.`);
+  return parsed.slice(0, 10);
+}
+
 function mappedRow(raw, fieldMapping) {
   const normalized = normalizeRow(raw);
   Object.entries(fieldMapping || {}).forEach(([canonical, source]) => {
@@ -103,6 +109,17 @@ function movementRecord(raw, category, filename, rowNumber, options = {}) {
   if (!postingDate) throw new Error('A valid posting date is required (DD/MM/YYYY and ISO supported).');
   if (timestampRaw && !movementTimestamp) throw new Error('Movement timestamp is invalid.');
   if (r.document_date && !documentDate) throw new Error('Document date is invalid.');
+  const today = new Date().toISOString().slice(0, 10);
+  if (postingDate.slice(0, 10) > today) throw new Error('Posting date cannot be in the future.');
+  if (documentDate && documentDate.slice(0, 10) > postingDate.slice(0, 10)) {
+    throw new Error('Document date cannot be after posting date.');
+  }
+  if (options.periodStart && postingDate.slice(0, 10) < options.periodStart) {
+    throw new Error('Posting date is before the declared period_start.');
+  }
+  if (options.periodEnd && postingDate.slice(0, 10) > options.periodEnd) {
+    throw new Error('Posting date is after the declared period_end.');
+  }
   if (category === 'REVERSAL' && !REVERSAL_TARGETS.includes(reversalOf)) {
     throw new Error(`REVERSAL requires reversal_of_category (${REVERSAL_TARGETS.join(', ')}).`);
   }
@@ -142,7 +159,8 @@ function movementRecord(raw, category, filename, rowNumber, options = {}) {
     rec.erp_movement_type, rec.material_code, rec.plant_code, rec.warehouse_code,
     rec.storage_location, rec.bin_location, rec.batch_number, rec.quantity,
     rec.posting_date, rec.document_date, rec.movement_timestamp, rec.reservation_number,
-    rec.erp_document_reference, rec.purchase_order,
+    rec.erp_document_reference, rec.purchase_order, rec.cost_center, rec.wbs_element,
+    rec.performed_by, rec.description, rec.unit, rec.source_filename,
   ])).digest('hex');
   return rec;
 }
@@ -188,11 +206,16 @@ function transactionDateColumn() {
 }
 
 function movementOptions(body) {
+  const periodStart = s(body.period_start) ? parseDay(body.period_start, 'period_start') : null;
+  const periodEnd = s(body.period_end) ? parseDay(body.period_end, 'period_end') : null;
+  if (periodStart && periodEnd && periodStart > periodEnd) throw new Error('period_start must not be after period_end.');
   return {
     fieldMapping: body.field_mapping && typeof body.field_mapping === 'object' && !Array.isArray(body.field_mapping)
       ? body.field_mapping : {},
     sourceSystem: s(body.source_system) || 'CSV',
     defaultReversalOf: s(body.reversal_of_category).toUpperCase() || null,
+    periodStart,
+    periodEnd,
   };
 }
 
@@ -320,12 +343,23 @@ router.post('/movements/chunk', (req, res) => {
          period_start, period_end, created_by, created_by_name)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(legacyMovementType(category, options.defaultReversalOf || 'ISSUE'), category,
           options.sourceSystem, filename, s(body.source_file_checksum) || null, JSON.stringify(options.fieldMapping),
-          s(body.period_start) || null, s(body.period_end) || null, req.user.id, req.user.name || req.user.email || null);
+          options.periodStart, options.periodEnd, req.user.id, req.user.name || req.user.email || null);
       batchId = Number(created.lastInsertRowid);
     } else {
       const batch = db.prepare('SELECT * FROM stock_movement_import_batches WHERE id=?').get(batchId);
       if (!batch || batch.status !== 'IN_PROGRESS') throw new Error('Import batch is missing or already closed.');
       if ((batch.movement_category || batch.movement_type) !== category) throw new Error('Chunk movement category does not match the import batch.');
+      const immutable = {
+        source_system: options.sourceSystem,
+        source_filename: filename,
+        source_file_checksum: s(body.source_file_checksum) || null,
+        field_mapping_json: JSON.stringify(options.fieldMapping),
+        period_start: options.periodStart,
+        period_end: options.periodEnd,
+      };
+      for (const [field, value] of Object.entries(immutable)) {
+        if ((batch[field] || null) !== value) throw new Error(`Chunk ${field} does not match the import batch.`);
+      }
     }
 
     const ins = db.prepare(`INSERT INTO stock_movement_history

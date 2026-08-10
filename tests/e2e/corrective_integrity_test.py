@@ -105,6 +105,32 @@ c, dry = call('POST', '/api/import/movements/chunk', admin, {
 check('chunk dry_run is non-mutating', c == 200 and dry.get('mode') == 'DRY_RUN'
       and db_rows('SELECT COUNT(*) n FROM stock_movement_history')[0]['n'] == 0, dry)
 
+c, invalid_period = call('POST', '/api/import/movements/preview', admin, {
+    'movement_category': 'ISSUE', 'period_start': iso(0), 'period_end': iso(30),
+    'rows': mapped_rows[:1],
+})
+check('reversed declared period is rejected', c == 400, invalid_period)
+
+c, outside_period = call('POST', '/api/import/movements/preview', admin, {
+    'movement_category': 'ISSUE', 'period_start': iso(10), 'period_end': iso(0),
+    'rows': mapped_rows[:1],
+})
+check('posting date outside declared period is rejected', c == 200
+      and outside_period['reconciliation']['invalid_rows'] == 1, outside_period)
+
+c, first_chunk = call('POST', '/api/import/movements/chunk', admin, {
+    'movement_category': 'ISSUE', 'source_system': 'SAP_ECC', 'source_filename': 'chunked.csv',
+    'source_file_checksum': 'immutable-checksum',
+    'rows': [{'external_id': 'CHUNK-1', 'material_code': 'MAT-0002', 'quantity': 3, 'posting_date': iso(5)}],
+})
+c2, mixed_chunk = call('POST', '/api/import/movements/chunk', admin, {
+    'batch_id': first_chunk.get('batch_id'), 'movement_category': 'ISSUE',
+    'source_system': 'OTHER', 'source_filename': 'chunked.csv',
+    'source_file_checksum': 'immutable-checksum',
+    'rows': [{'external_id': 'CHUNK-2', 'material_code': 'MAT-0002', 'quantity': 2, 'posting_date': iso(4)}],
+})
+check('continuation cannot change source provenance', c == 200 and c2 == 400, (first_chunk, mixed_chunk))
+
 before_import = live_snapshot()
 c, imported = call('POST', '/api/import/movements/chunk', admin, {
     'movement_category': 'ISSUE', 'source_system': 'SAP_ECC', 'source_filename': 'issues.csv',
@@ -178,7 +204,7 @@ check('opening stock is not interpreted as a historical receipt', known['receipt
 check('known moving material is never mislabeled dead', known['classification'] in ('SLOW', 'NORMAL', 'FAST'), known)
 check('no-issue stocked materials remain UNKNOWN under partial coverage', bool(unknown), unknown[:2])
 
-# A second declared issue-history interval closes the 90-day evidence gap.
+# A second sparse issue-history file cannot prove continuous global coverage.
 c, complete_batch = call('POST', '/api/import/movements/chunk', admin, {
     'movement_category': 'ISSUE', 'source_system': 'LEGACY_WMS', 'source_filename': 'older-issues.csv',
     'period_start': iso(120), 'period_end': iso(31), 'finalize': True,
@@ -186,10 +212,10 @@ c, complete_batch = call('POST', '/api/import/movements/chunk', admin, {
 })
 check('older issue interval imported', c == 200 and complete_batch.get('inserted') == 1, complete_batch)
 c, complete = call('GET', '/api/analytics', admin)
-check('adjacent declared intervals produce COMPLETE coverage', c == 200 and complete['coverage']['status'] == 'COMPLETE'
-      and complete['coverage']['coverage_percent'] == 100, complete['coverage'])
-check('DEAD classification is enabled only after complete coverage', complete['summary']['dead_count'] > 0
-      and complete['summary']['unknown_count'] == 0, complete['summary'])
+check('declared sparse intervals do not produce COMPLETE coverage', c == 200
+      and complete['coverage']['status'] == 'PARTIAL', complete['coverage'])
+check('sparse imports cannot enable DEAD classification', complete['summary']['dead_count'] == 0
+      and complete['summary']['unknown_count'] > 0, complete['summary'])
 
 # Append-only enforcement remains active after migration backfill.
 try:
