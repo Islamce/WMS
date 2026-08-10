@@ -2,6 +2,49 @@
 
 This is the chronological operational memory for the project. It records durable summaries of conversations and work, not secrets or necessarily verbatim transcripts.
 
+## 2026-08-10 — Offsite backup: SSH auth now rejected (new signature, run #25)
+
+**Objective:** User asked why offsite-backup failures were still occurring; checked latest
+workflow run.
+
+**Starting state:** `main` at `5b48688`. `INC-2026-08-06-01` described 9 consecutive failures
+(#16–#24) alternating between `/sbin/nologin` and connection timeouts.
+
+**Actions:** Listed `production-backup.yml` run history; found a 10th consecutive failure,
+run #25 (2026-08-10, id `31354732571`). Pulled its job log and found a third, new error
+signature: `Permission denied (publickey,password)`. Unlike the two prior signatures (both of
+which required successful SSH authentication before failing later), this one fails
+authentication itself — the offered SSH key is rejected by the host.
+
+**Evidence:** Full log for run #25 confirms `ssh hostinger ...` fails at the authentication
+step with `Permission denied, please try again.` (x2) then a final `publickey,password`
+rejection, `##[error]Process completed with exit code 255`.
+
+**Decisions:** Reframed the corrective-action priority: checking whether the backup account's
+SSH key is still present/valid on the Hostinger host (and whether the `SSH_KEY` GitHub secret
+still matches it) is now the most direct lead, ahead of the previously-dominant shell-path
+issue. Also noted for the record that this SSH key is unrelated to the HTTPS/token credential
+this session uses to push code to the repo, in case the timing raised that question.
+
+**Risks/incidents:** `INC-2026-08-06-01` updated in place (not a new incident) — escalated
+from 9 to 10 consecutive failures with the new auth-rejection finding. Per `DEC-008`, local
+retention keeps only 7 backup sets; 10 missed cycles now well exceeds that window.
+
+**Files/PRs/commits changed:** `docs/WMS-INCIDENT-LOG.md` (`INC-2026-08-06-01` updated with
+the 08-10 finding), `docs/WMS-CURRENT-STATUS.md` (backup status line and "Known remaining
+work" item updated), `docs/WMS-SESSION-LOG.md` (this entry), on branch
+`docs/offsite-backup-auth-rejected-2026-08-10`, opened as a draft PR against `main`.
+
+**Production state:** Unchanged and not accessed.
+
+**Remaining work:** Owner to check, via Hostinger hPanel, whether the backup account's public
+key is still in `authorized_keys` and the account is enabled; update the `SSH_KEY` GitHub
+secret if the key was rotated; then separately check the login-shell issue once auth is
+restored.
+
+**Exact next step:** Merge this documentation PR once CI passes. Continue watching
+`production-backup.yml` for the first successful run.
+
 ## 2026-08-09 — Corrected offsite-backup incident framing; now 9 consecutive failures
 
 **Objective:** Following the merge of PR #56 (`INC-2026-08-06-01`), check for new workflow
