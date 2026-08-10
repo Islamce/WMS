@@ -15,6 +15,7 @@ const notify = require('./../services/notify');
 const qrService = require('./../services/qr');
 const { setHeaderStatus, refreshRollups, getHeaderOr404 } = require('./../services/requests');
 const { HEADER_STATUS, LINE_STATUS, TASK_STATUS } = require('./../workflow/states');
+const { withExecutionContext, withExecutionContexts } = require('./../services/workflowContext');
 
 const router = express.Router();
 router.use(authenticate);
@@ -23,13 +24,15 @@ router.use(authenticate);
 router.get('/tasks', requirePermission('picking'), (req, res) => {
   const own = req.user.role === 'admin' ? '' : 'AND assigned_picker_id = @uid';
   const tasks = db.prepare(`
-    SELECT t.*, h.request_status, h.issue_warehouse_code, h.movement_type, h.priority AS req_priority,
-           h.requester_name, h.department, h.wbs_element AS project, h.cost_center, h.required_date
+    SELECT t.*, h.request_status, h.erp_reservation_number, h.erp_reference_number,
+           h.issue_warehouse_code, h.issue_warehouse_name, h.movement_type, h.movement_type_description,
+           h.plant, h.storage_location, h.priority AS req_priority, h.requester_id, h.requester_name,
+           h.department, h.wbs_element, h.wbs_element AS project, h.cost_center, h.required_date
     FROM picking_tasks t JOIN material_request_headers h ON h.id = t.request_id
     WHERE t.task_status NOT IN ('Picking Completed','Cancelled','Reassigned') ${own}
     ORDER BY CASE t.priority WHEN 'URGENT' THEN 0 WHEN 'HIGH' THEN 1 WHEN 'NORMAL' THEN 2 ELSE 3 END, t.assigned_at
   `).all({ uid: req.user.id });
-  res.json({ tasks });
+  res.json({ tasks: withExecutionContexts(tasks) });
 });
 
 function loadTask(res, id, user, { mustOwn = true } = {}) {
@@ -48,7 +51,7 @@ router.get('/tasks/:id', requirePermission('picking'), (req, res) => {
   const header = db.prepare('SELECT * FROM material_request_headers WHERE id=?').get(task.request_id);
   const lines = db.prepare("SELECT * FROM material_request_lines WHERE request_id=? AND line_status NOT IN ('Rejected','Cancelled') ORDER BY line_number").all(task.request_id);
   const allocations = db.prepare('SELECT * FROM picking_allocations WHERE request_id=? ORDER BY line_number, sequence').all(task.request_id);
-  res.json({ task, request: header, lines, allocations });
+  res.json({ task, request: withExecutionContext(header), lines, allocations });
 });
 
 /** POST /api/picking/tasks/:id/accept — picker accepts; task -> Accepted. */

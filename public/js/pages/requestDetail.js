@@ -56,7 +56,9 @@ Pages.requestDetail = {
           <div class="item"><div class="k">WBS</div><div class="v">${UI.esc(r.wbs_element || '—')}</div></div>
           <div class="item"><div class="k">Movement Type</div><div class="v">${UI.esc(r.movement_type || '—')}</div></div>
           <div class="item"><div class="k">Reservation #</div><div class="v">${UI.esc(r.erp_reservation_number || r.erp_reference_number || '—')}</div></div>
+          <div class="item"><div class="k">ERP Reference #</div><div class="v">${UI.esc(r.erp_reference_number || '—')}</div></div>
           <div class="item"><div class="k">Warehouse</div><div class="v">${UI.esc(r.issue_warehouse_code || '—')}</div></div>
+          <div class="item"><div class="k">Storage Location</div><div class="v">${UI.esc(r.storage_location || '—')}</div></div>
           <div class="item"><div class="k">GI Document</div><div class="v">${UI.esc(r.gi_document_number || '—')}</div></div>
           <div class="item"><div class="k">ERP Status</div><div class="v">${UI.esc(r.erp_posting_status || '—')}</div></div>
         </div>

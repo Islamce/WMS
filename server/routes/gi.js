@@ -16,6 +16,7 @@ const sod = require('./../services/sod');
 const { recordMovement } = require('./../services/ledger');
 const { setHeaderStatus, refreshRollups, getHeaderOr404, reopenForRepick } = require('./../services/requests');
 const { HEADER_STATUS, LINE_STATUS } = require('./../workflow/states');
+const { withExecutionContext, withExecutionContexts } = require('./../services/workflowContext');
 
 const router = express.Router();
 router.use(authenticate, requirePermission('gi_posting'));
@@ -39,15 +40,16 @@ function existingGiResponse(header) {
 /** GET /api/gi — GI posting queue. */
 router.get('/', (req, res) => {
   const rows = db.prepare(`
-    SELECT id, request_number, requester_name, department, wbs_element AS project, cost_center, required_date,
-           priority, issue_warehouse_code, movement_type,
+    SELECT id, request_number, requester_id, requester_name, department, wbs_element, wbs_element AS project,
+           cost_center, required_date, priority, plant, storage_location,
+           issue_warehouse_code, issue_warehouse_name, movement_type, movement_type_description,
            erp_reservation_number, erp_reference_number, request_status,
            total_lines, shortage_lines, erp_error_message
     FROM material_request_headers
     WHERE request_status IN (?, ?)
     ORDER BY id
   `).all(...GI_STAGES);
-  res.json({ requests: rows });
+  res.json({ requests: withExecutionContexts(rows) });
 });
 
 /** GET /api/gi/:id — review picked quantities, batches, bins, QR history. */
@@ -57,7 +59,7 @@ router.get('/:id', (req, res) => {
   const lines = db.prepare("SELECT * FROM material_request_lines WHERE request_id=? AND line_status NOT IN ('Rejected','Cancelled') ORDER BY line_number").all(header.id);
   const allocations = db.prepare('SELECT * FROM picking_allocations WHERE request_id=? ORDER BY line_number, sequence').all(header.id);
   const scans = db.prepare("SELECT action, new_value, changed_by_name, changed_at, line_number FROM audit_trail WHERE request_number=? AND action LIKE 'QR_SCAN%' ORDER BY id").all(header.request_number);
-  res.json({ request: header, lines, allocations, qr_scans: scans });
+  res.json({ request: withExecutionContext(header), lines, allocations, qr_scans: scans });
 });
 
 /**

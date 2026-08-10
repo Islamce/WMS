@@ -136,6 +136,46 @@ correlated event, unconfirmed).
 
 ---
 
+## INC-2026-08-03-01 — Downstream ERP context omitted and dead-stock analytics unsupported by coverage
+
+**Status:** Corrective implementation ready locally; Draft PR publication is
+blocked by the local environment usage limit. Production remains unchanged.
+
+**Environment and impact:** Production/UAT users observed a persisted ERP
+reservation on request detail but not on Picker Assignment and later execution
+screens. AI Stock Analysis simultaneously reported approximately 2,841 of
+2,844 materials as dead stock even though complete historical movement evidence
+was not available to the analytical query.
+
+**Root causes (Verified (repo)):** Queue-specific SQL projections omitted
+persisted ERP fields and each client independently chose which header values to
+render. Analytics queried only the operational `stock_transactions` ledger,
+counted every OUT (including transfers and adjustments) as consumption,
+ignored append-only historical imports and return/reversal netting, treated
+opening records as IN movement, and had no evidence-coverage gate before
+declaring dead stock.
+
+**Corrective/preventive work:** Introduce a canonical request execution-context
+contract for downstream APIs; extend the existing append-only analytical
+history schema and Import Center; preserve analytical/live-stock separation;
+derive demand from semantic movement categories; and classify stocked items
+with no observed issue as `UNKNOWN` until the analysis window is fully covered.
+Regression tests cover downstream propagation/reversals, date preservation,
+idempotency, live-stock non-mutation, reversal/return netting, and coverage
+transitions.
+
+**Validation state:** Static syntax and diff checks passed locally. Runtime
+execution was blocked by missing local dependencies and the environment's
+external-download usage limit; Draft PR CI is required evidence. No production
+deployment, database change/import, Passenger restart, or merge occurred.
+
+**Owner / next step:** After Git write access is available, publish the dedicated
+branch as a Draft PR and require CI plus Product Owner / Project Manager review.
+Production action requires separate authorization and the normal production
+runbook.
+
+---
+
 ## INC-2026-07-31-01 — Hostinger native addon incompatible; recovery artifact not retained
 
 **Status:** Resolved on 2026-08-01. All recovery gates passed; Passenger was restarted on the

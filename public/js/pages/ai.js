@@ -16,12 +16,18 @@ Pages.ai = {
     const v = UI.viz();
 
     const sevBadge = { critical: 'OUT', warning: 'pending', info: 'role', good: 'active' };
-    const clsBadge = { DEAD: 'OUT', SLOW: 'pending', NORMAL: 'role', FAST: 'active' };
+    const clsBadge = { DEAD: 'OUT', UNKNOWN: 'pending', SLOW: 'pending', NORMAL: 'role', FAST: 'active' };
+    const coverage = data.coverage || {};
 
     const reorderRows = data.items.filter((i) => i.below_reorder || (i.classification === 'FAST' && i.days_of_cover !== null && i.days_of_cover < data.parameters.lead_time_days * 2));
     const deadRows = data.items.filter((i) => i.classification === 'DEAD');
 
     el.innerHTML = `
+      <div class="inline-alert ${coverage.status === 'COMPLETE' ? 'success' : 'warning'}" style="margin-bottom:14px">
+        <strong>Movement coverage: ${UI.esc(coverage.status || 'UNKNOWN')} (${coverage.coverage_percent ?? 0}%)</strong><br>
+        ${UI.esc(coverage.warning || `Complete ${coverage.window_days}-day issue-history window: ${coverage.analysis_window_start} to ${coverage.analysis_window_end}.`)}
+        <div class="muted" style="margin-top:5px">Observed movement: ${UI.esc(coverage.earliest_movement_date || 'none')} to ${UI.esc(coverage.latest_movement_date || 'none')} · Materials with history: ${coverage.materials_with_history ?? 0} · Without: ${coverage.materials_without_history ?? 0}</div>
+      </div>
       <div class="grid kpis">
         <div class="kpi accent"><div class="label">Materials Analyzed</div><div class="value">${s.materials_analyzed}</div>
           <div class="sub">${data.parameters.window_days}-day window · ${data.parameters.lead_time_days}d lead time</div></div>
@@ -30,6 +36,7 @@ Pages.ai = {
         <div class="kpi amber"><div class="label">Slow Movers</div><div class="value">${s.slow_count}</div></div>
         <div class="kpi red"><div class="label">Dead Stock</div><div class="value">${s.dead_count}</div>
           <div class="sub">value ${UI.fmtQty(s.dead_stock_value)}</div></div>
+        <div class="kpi amber"><div class="label">Unknown / Insufficient History</div><div class="value">${s.unknown_count || 0}</div></div>
         <div class="kpi red"><div class="label">Below Reorder Point</div><div class="value">${s.below_reorder_count}</div></div>
       </div>
 
@@ -46,7 +53,7 @@ Pages.ai = {
         <div class="card"><h3>Movement classification</h3><div class="chart-box"><canvas id="ai-class"></canvas></div></div>
         <div class="card"><h3>Weekly stock IN vs OUT (12 weeks)</h3><div class="chart-box"><canvas id="ai-trend"></canvas></div></div>
       </div>
-      <div class="card"><h3>Top consumers — issued quantity (${data.parameters.window_days} days)</h3>
+      <div class="card"><h3>Top consumers — net consumption (${data.parameters.window_days} days)</h3>
         <div class="chart-box"><canvas id="ai-top"></canvas></div></div>
 
       <div class="card">
@@ -83,7 +90,7 @@ Pages.ai = {
       </div>
 
       <div class="card">
-        <h3>Dead stock (no issues in ${data.parameters.window_days}+ days)</h3>
+        <h3>Confirmed dead stock (complete coverage, no issues in ${data.parameters.window_days} days)</h3>
         <div class="table-wrap"><table>
           <thead><tr><th>Item</th><th>Group</th><th class="text-right">Stock</th><th class="text-right">Value</th>
             <th class="text-right">Days since last issue</th></tr></thead>
@@ -100,14 +107,17 @@ Pages.ai = {
       <div class="card">
         <h3>Full analysis (${data.items.length} materials)</h3>
         <div class="table-wrap" style="max-height:420px;overflow-y:auto"><table>
-          <thead><tr><th>Item</th><th>Class</th><th>ABC</th><th>XYZ</th><th>FSN</th><th class="text-right">Stock</th><th class="text-right">Issued (${data.parameters.window_days}d)</th>
-            <th class="text-right">Reorder pt</th><th class="text-right">EOQ</th><th class="text-right">Value</th><th>Flags</th></tr></thead>
+          <thead><tr><th>Item</th><th>Class</th><th>Confidence</th><th>ABC</th><th>XYZ</th><th>FSN</th><th class="text-right">Stock</th><th class="text-right">Net use (${data.parameters.window_days}d)</th>
+            <th>Last issue</th><th class="text-right">Issue freq/mo</th><th class="text-right">Reorder pt</th><th class="text-right">EOQ</th><th class="text-right">Value</th><th>Flags</th></tr></thead>
           <tbody>${data.items.map((i) => `
             <tr><td><strong>${UI.esc(i.item_code)}</strong></td>
               <td><span class="badge ${clsBadge[i.classification] || 'role'}">${i.classification}</span></td>
+              <td>${UI.esc(i.classification_confidence || '—')}</td>
               <td>${i.abc_class || '—'}</td><td>${i.xyz_class || '—'}</td><td>${i.fsn_class || '—'}</td>
               <td class="text-right">${UI.fmtQty(i.current_stock)}</td>
-              <td class="text-right">${UI.fmtQty(i.out_qty_window)}</td>
+              <td class="text-right">${UI.fmtQty(i.net_consumption)}</td>
+              <td>${UI.esc(i.last_issue_date || '—')}</td>
+              <td class="text-right">${i.issue_frequency_per_month}</td>
               <td class="text-right">${i.reorder_point}</td>
               <td class="text-right">${i.eoq ?? '—'}</td>
               <td class="text-right">${UI.fmtQty(i.stock_value)}</td>
@@ -136,9 +146,9 @@ Pages.ai = {
     this.charts.push(new Chart(document.getElementById('ai-class'), {
       type: 'doughnut',
       data: {
-        labels: ['Fast', 'Normal', 'Slow', 'Dead'],
-        datasets: [{ data: [s.fast_count, s.normal_count, s.slow_count, s.dead_count],
-          backgroundColor: [v.c2, v.c1, v.c3, v.red], borderWidth: 2,
+        labels: ['Fast', 'Normal', 'Slow', 'Dead', 'Unknown'],
+        datasets: [{ data: [s.fast_count, s.normal_count, s.slow_count, s.dead_count, s.unknown_count || 0],
+          backgroundColor: [v.c2, v.c1, v.c3, v.red, v.muted], borderWidth: 2,
           borderColor: getComputedStyle(document.documentElement).getPropertyValue('--surface').trim() || '#fff' }],
       },
       options: { responsive: true, maintainAspectRatio: false, cutout: '62%',
@@ -169,7 +179,7 @@ Pages.ai = {
     this.charts.push(new Chart(document.getElementById('ai-top'), {
       type: 'bar',
       data: { labels: top.map((x) => x.item_code),
-        datasets: [{ data: top.map((x) => x.out_qty_window), backgroundColor: v.c1, borderRadius: 4, maxBarThickness: 22 }] },
+        datasets: [{ data: top.map((x) => x.net_consumption), backgroundColor: v.c1, borderRadius: 4, maxBarThickness: 22 }] },
       options: topOpts,
     }));
   },

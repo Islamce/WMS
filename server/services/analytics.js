@@ -1,256 +1,313 @@
 /**
- * AI stock analytics engine.
- *
- * Reads the unified movement ledger (stock_transactions: IN = goods receipt,
- * OUT = goods issue) plus live batch stock, and computes per-material:
- *   - consumption velocity and movement classification (DEAD / SLOW / NORMAL / FAST)
- *   - average daily demand, demand variability
- *   - safety stock  = z * sigma_daily * sqrt(lead time)
- *   - reorder point = avg daily demand * lead time + safety stock
- *   - days of cover, stock value, below-reorder flags
- * plus warehouse-level KPIs, chart series, and rule-based natural-language
- * insights. Fully offline — no external AI service required.
+ * Inventory analytics over the canonical analytical movement contract.
+ * Historical imports are append-only and never mutate live inventory. Opening
+ * balances, transfers and adjustments are deliberately excluded from demand.
  */
 const db = require('./../db/connection');
-const { daysUntil } = require('./expiry');
 
-// Tunable parameters (could move to a settings table later).
-const WINDOW_DAYS = 90;          // analysis window
-const LEAD_TIME_DAYS = 14;       // default replenishment lead time
-const SERVICE_Z = 1.65;          // ~95% service level
-const FAST_EVENTS = 8;           // >= events in window -> FAST
-const SLOW_EVENTS = 3;           // <= events in window -> SLOW
-const DEAD_DAYS = 90;            // no issue in this many days + stock on hand -> DEAD
-const ORDER_COST = 100;          // EOQ: fixed cost per replenishment order
-const HOLDING_RATE = 0.2;        // EOQ: annual holding cost as a share of unit price
-const OVERSTOCK_DAYS = 180;      // days of cover beyond this -> overstock
+const WINDOW_DAYS = 90;
+const LEAD_TIME_DAYS = 14;
+const SERVICE_Z = 1.65;
+const FAST_EVENTS = 8;
+const SLOW_EVENTS = 3;
+const ORDER_COST = 100;
+const HOLDING_RATE = 0.2;
+const OVERSTOCK_DAYS = 180;
 
-function analyze() {
-  const materials = db.prepare(`
-    SELECT m.id, m.item_code, m.description, m.unit, m.price, m.currency, m.material_group,
-      COALESCE((SELECT SUM(remaining_quantity - reserved_quantity) FROM batches WHERE material_id = m.id), 0) AS current_stock
-    FROM materials m ORDER BY m.item_code
-  `).all();
+const isoDay = (value) => value ? String(value).slice(0, 10) : null;
+const today = () => new Date().toISOString().slice(0, 10);
+function shiftDay(day, amount) {
+  const date = new Date(`${day}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + amount);
+  return date.toISOString().slice(0, 10);
+}
+function dayDiff(earlier, later = today()) {
+  return Math.floor((new Date(`${later}T00:00:00Z`) - new Date(`${earlier}T00:00:00Z`)) / 86400000);
+}
+function round(value, digits = 2) {
+  const factor = 10 ** digits;
+  return Math.round(Number(value || 0) * factor) / factor;
+}
 
-  // OUT movements inside the window, grouped per material per day.
-  const outs = db.prepare(`
-    SELECT material_id, date(transaction_date) AS day, SUM(quantity) AS qty, COUNT(*) AS events
-    FROM stock_transactions
-    WHERE transaction_type = 'OUT' AND date(transaction_date) >= date('now', ?)
-    GROUP BY material_id, day
-  `).all(`-${WINDOW_DAYS} days`);
+function operationalCategory(row) {
+  const notes = String(row.notes || '').toLowerCase();
+  if (notes.startsWith('opening stock import')) return { category: 'OPENING_BALANCE', reversalOf: null };
+  if (notes.startsWith('gi reversal')) return { category: 'REVERSAL', reversalOf: 'ISSUE' };
+  if (notes.startsWith('reallocation')) return { category: row.transaction_type === 'IN' ? 'TRANSFER_IN' : 'TRANSFER_OUT', reversalOf: null };
+  if (notes.startsWith('cycle count') || notes.startsWith('physical inventory')) {
+    return { category: row.transaction_type === 'IN' ? 'ADJUSTMENT_IN' : 'ADJUSTMENT_OUT', reversalOf: null };
+  }
+  return { category: row.transaction_type === 'IN' ? 'RECEIPT' : 'ISSUE', reversalOf: null };
+}
 
-  const lastOut = db.prepare(`
-    SELECT material_id, MAX(date(transaction_date)) AS last_day
-    FROM stock_transactions WHERE transaction_type = 'OUT' GROUP BY material_id
-  `).all();
-  const lastOutBy = Object.fromEntries(lastOut.map((r) => [r.material_id, r.last_day]));
+function historyMovements() {
+  return db.prepare(`SELECT h.id, COALESCE(h.material_id,m.id) AS material_id, h.material_code,
+    COALESCE(h.movement_category,h.movement_type) AS movement_category, h.reversal_of_category,
+    h.quantity, COALESCE(h.posting_date,h.movement_date) AS posting_date,
+    h.reservation_number, h.erp_document_reference, h.external_id, h.source_system
+    FROM stock_movement_history h LEFT JOIN materials m ON m.item_code=h.material_code`).all().map((row) => ({
+      id: `H${row.id}`, material_id: row.material_id, material_code: row.material_code,
+      category: row.movement_category, reversal_of_category: row.reversal_of_category,
+      quantity: Number(row.quantity), posting_date: isoDay(row.posting_date),
+      reference: row.erp_document_reference || row.reservation_number || row.external_id || null,
+      source_kind: 'HISTORICAL_IMPORT', source_system: row.source_system,
+    }));
+}
 
-  const byMat = {};
-  outs.forEach((r) => {
-    (byMat[r.material_id] = byMat[r.material_id] || []).push(r);
+function operationalMovements() {
+  return db.prepare(`SELECT st.id, st.material_id, m.item_code AS material_code, st.transaction_type,
+    st.quantity, st.transaction_date, st.notes
+    FROM stock_transactions st JOIN materials m ON m.id=st.material_id`).all().map((row) => {
+      const classified = operationalCategory(row);
+      return {
+        id: `O${row.id}`, material_id: row.material_id, material_code: row.material_code,
+        category: classified.category, reversal_of_category: classified.reversalOf,
+        quantity: Number(row.quantity), posting_date: isoDay(row.transaction_date),
+        reference: row.notes || null, source_kind: 'OPERATIONAL_LEDGER', source_system: 'WMS',
+      };
+    });
+}
+
+function canonicalMovements() {
+  const history = historyMovements();
+  const operational = operationalMovements();
+  const historicalCandidates = history.filter((movement) => movement.reference);
+  const merged = [...history];
+  operational.forEach((movement) => {
+    const duplicate = historicalCandidates.some((candidate) => candidate.material_id === movement.material_id
+      && candidate.category === movement.category && candidate.posting_date === movement.posting_date
+      && Number(candidate.quantity) === Number(movement.quantity)
+      && (String(movement.reference).includes(String(candidate.reference))
+        || String(candidate.reference).includes(String(movement.reference))));
+    if (!duplicate) merged.push(movement);
   });
+  return merged;
+}
 
-  const items = materials.map((m) => {
-    const days = byMat[m.id] || [];
-    const totalOut = days.reduce((s, d) => s + d.qty, 0);
-    const events = days.reduce((s, d) => s + d.events, 0);
-    const avgDaily = totalOut / WINDOW_DAYS;
+function mergeIntervals(intervals) {
+  const sorted = intervals.filter((interval) => interval.start && interval.end && interval.start <= interval.end)
+    .sort((a, b) => a.start.localeCompare(b.start));
+  const merged = [];
+  sorted.forEach((interval) => {
+    const last = merged[merged.length - 1];
+    if (!last || interval.start > shiftDay(last.end, 1)) merged.push({ ...interval });
+    else if (interval.end > last.end) last.end = interval.end;
+  });
+  return merged;
+}
 
-    // Daily demand std-dev over the window (zero-demand days included).
-    const mean = avgDaily;
-    const sumSq = days.reduce((s, d) => s + Math.pow(d.qty - mean, 2), 0)
-      + (WINDOW_DAYS - days.length) * Math.pow(0 - mean, 2);
-    const sigma = Math.sqrt(sumSq / WINDOW_DAYS);
+function movementCoverage(movements) {
+  const end = today();
+  const start = shiftDay(end, -(WINDOW_DAYS - 1));
+  const intervals = [];
+  const operationalStart = db.prepare(`SELECT MIN(date(transaction_date)) AS day FROM stock_transactions
+    WHERE notes IS NULL OR lower(notes) NOT LIKE 'opening stock import%'`).get().day;
+  if (operationalStart) intervals.push({ start: isoDay(operationalStart), end, source: 'OPERATIONAL_LEDGER' });
+  db.prepare(`SELECT b.id, b.period_start, b.period_end,
+    MIN(COALESCE(h.posting_date,h.movement_date)) AS actual_start,
+    MAX(COALESCE(h.posting_date,h.movement_date)) AS actual_end
+    FROM stock_movement_import_batches b
+    LEFT JOIN stock_movement_history h ON h.import_batch_id=b.id
+    WHERE b.status IN ('COMPLETED','COMPLETED_WITH_ERRORS')
+      AND COALESCE(b.movement_category,b.movement_type) IN ('ISSUE','RETURN','REVERSAL')
+    GROUP BY b.id`).all().forEach((batch) => intervals.push({
+      start: isoDay(batch.period_start || batch.actual_start), end: isoDay(batch.period_end || batch.actual_end),
+      source: `IMPORT_BATCH_${batch.id}`,
+    }));
+  const merged = mergeIntervals(intervals);
+  let coveredDays = 0;
+  merged.forEach((interval) => {
+    const clippedStart = interval.start < start ? start : interval.start;
+    const clippedEnd = interval.end > end ? end : interval.end;
+    if (clippedStart <= clippedEnd) coveredDays += dayDiff(clippedStart, clippedEnd) + 1;
+  });
+  coveredDays = Math.min(WINDOW_DAYS, coveredDays);
+  const complete = merged.some((interval) => interval.start <= start && interval.end >= end);
+  const status = complete ? 'COMPLETE' : coveredDays > 0 ? 'PARTIAL' : 'NONE';
+  const analyticalMovements = movements.filter((movement) => movement.category !== 'OPENING_BALANCE');
+  const movementDates = analyticalMovements.map((movement) => movement.posting_date).filter(Boolean).sort();
+  const materialIds = new Set(analyticalMovements.map((movement) => movement.material_id).filter(Boolean));
+  const allMaterialIds = db.prepare('SELECT id FROM materials').all().map((row) => row.id);
+  return {
+    status, confidence: complete ? 'HIGH' : status === 'PARTIAL' ? 'LOW' : 'NONE',
+    analysis_window_start: start, analysis_window_end: end, window_days: WINDOW_DAYS,
+    covered_days: coveredDays, coverage_percent: round((coveredDays / WINDOW_DAYS) * 100, 1),
+    earliest_movement_date: movementDates[0] || null,
+    latest_movement_date: movementDates.at(-1) || null,
+    materials_with_history: materialIds.size,
+    materials_without_history: allMaterialIds.filter((id) => !materialIds.has(id)).length,
+    intervals: merged,
+    assumption: 'Operational ledger coverage is continuous from its first non-opening movement through today.',
+    warning: complete ? null : 'Movement coverage is incomplete. No observed movement must not be interpreted as proof that no movement occurred.',
+  };
+}
 
-    const safetyStock = Math.round(SERVICE_Z * sigma * Math.sqrt(LEAD_TIME_DAYS) * 100) / 100;
-    const reorderPoint = Math.round((avgDaily * LEAD_TIME_DAYS + safetyStock) * 100) / 100;
+function demandEffect(movement) {
+  if (movement.category === 'ISSUE') return movement.quantity;
+  if (movement.category === 'RETURN') return -movement.quantity;
+  if (movement.category === 'REVERSAL' && movement.reversal_of_category === 'ISSUE') return -movement.quantity;
+  return 0;
+}
+function receiptEffect(movement) {
+  if (movement.category === 'RECEIPT') return movement.quantity;
+  if (movement.category === 'REVERSAL' && movement.reversal_of_category === 'RECEIPT') return -movement.quantity;
+  return 0;
+}
 
-    const last = lastOutBy[m.id] || null;
-    const daysSinceLastOut = last ? -daysUntil(last) : null; // daysUntil is negative for past
+function analyzeWithCoverage() {
+  const movements = canonicalMovements();
+  const coverage = movementCoverage(movements);
+  const windowMovements = movements.filter((movement) => movement.posting_date >= coverage.analysis_window_start
+    && movement.posting_date <= coverage.analysis_window_end && movement.category !== 'OPENING_BALANCE');
+  const byMaterial = {};
+  windowMovements.forEach((movement) => { (byMaterial[movement.material_id] = byMaterial[movement.material_id] || []).push(movement); });
 
-    let classification;
-    if (m.current_stock > 0 && (events === 0 && (daysSinceLastOut === null || daysSinceLastOut > DEAD_DAYS))) {
-      classification = 'DEAD';
-    } else if (events === 0) {
-      classification = 'INACTIVE';           // no stock, no movement
-    } else if (events >= FAST_EVENTS) {
-      classification = 'FAST';
-    } else if (events <= SLOW_EVENTS) {
-      classification = 'SLOW';
-    } else {
-      classification = 'NORMAL';
+  const materials = db.prepare(`SELECT m.id, m.item_code, m.description, m.unit, m.price, m.currency, m.material_group,
+    COALESCE((SELECT SUM(remaining_quantity-reserved_quantity) FROM batches WHERE material_id=m.id),0) AS current_stock,
+    (SELECT MIN(receiving_date) FROM batches WHERE material_id=m.id AND remaining_quantity>0) AS oldest_stock_date
+    FROM materials m ORDER BY m.item_code`).all();
+
+  const items = materials.map((material) => {
+    const rows = byMaterial[material.id] || [];
+    const issues = rows.filter((movement) => movement.category === 'ISSUE');
+    const receipts = rows.filter((movement) => movement.category === 'RECEIPT');
+    const dailyDemand = {};
+    rows.forEach((movement) => { dailyDemand[movement.posting_date] = (dailyDemand[movement.posting_date] || 0) + demandEffect(movement); });
+    const netConsumption = rows.reduce((sum, movement) => sum + demandEffect(movement), 0);
+    const grossIssues = issues.reduce((sum, movement) => sum + movement.quantity, 0);
+    const netReceipts = rows.reduce((sum, movement) => sum + receiptEffect(movement), 0);
+    const averageDaily = Math.max(0, netConsumption) / WINDOW_DAYS;
+    const mean = averageDaily;
+    let sumSquares = 0;
+    for (let index = 0; index < WINDOW_DAYS; index += 1) {
+      const day = shiftDay(coverage.analysis_window_start, index);
+      sumSquares += Math.pow(Math.max(0, dailyDemand[day] || 0) - mean, 2);
     }
-
-    const daysOfCover = avgDaily > 0 ? Math.round(m.current_stock / avgDaily) : null;
-
-    // XYZ: demand variability (coefficient of variation of daily demand).
-    // X = stable (CV <= 0.5), Y = variable (<= 1.0), Z = erratic / no demand.
-    const cv = mean > 0 ? sigma / mean : null;
-    const xyzClass = cv === null ? 'Z' : cv <= 0.5 ? 'X' : cv <= 1.0 ? 'Y' : 'Z';
-
-    // FSN by issue frequency (Fast / Slow / Non-moving).
-    const fsnClass = events >= FAST_EVENTS ? 'F' : events > 0 ? 'S' : 'N';
-
-    // EOQ = sqrt(2 * annual demand * order cost / holding cost per unit).
-    const annualDemand = avgDaily * 365;
-    const holding = Math.max((m.price || 0) * HOLDING_RATE, 0.01);
+    const sigma = Math.sqrt(sumSquares / WINDOW_DAYS);
+    const safetyStock = round(SERVICE_Z * sigma * Math.sqrt(LEAD_TIME_DAYS));
+    const reorderPoint = round(averageDaily * LEAD_TIME_DAYS + safetyStock);
+    const lastIssue = issues.map((movement) => movement.posting_date).sort().at(-1) || null;
+    const lastReceipt = receipts.map((movement) => movement.posting_date).sort().at(-1) || null;
+    const issueEvents = issues.length;
+    let classification;
+    if (Number(material.current_stock) <= 0 && issueEvents === 0) classification = 'INACTIVE';
+    else if (issueEvents === 0 && coverage.status !== 'COMPLETE') classification = 'UNKNOWN';
+    else if (issueEvents === 0) classification = 'DEAD';
+    else if (issueEvents >= FAST_EVENTS) classification = 'FAST';
+    else if (issueEvents <= SLOW_EVENTS) classification = 'SLOW';
+    else classification = 'NORMAL';
+    const confidence = coverage.status === 'COMPLETE' ? 'HIGH' : issueEvents > 0 ? 'MEDIUM' : coverage.status === 'PARTIAL' ? 'LOW' : 'NONE';
+    const daysOfCover = averageDaily > 0 ? Math.round(Number(material.current_stock) / averageDaily) : null;
+    const coefficient = mean > 0 ? sigma / mean : null;
+    const annualDemand = averageDaily * 365;
+    const holding = Math.max((material.price || 0) * HOLDING_RATE, 0.01);
     const eoq = annualDemand > 0 ? Math.round(Math.sqrt((2 * annualDemand * ORDER_COST) / holding)) : null;
-
     return {
-      material_id: m.id, item_code: m.item_code, description: m.description, unit: m.unit,
-      material_group: m.material_group, price: m.price,
-      current_stock: m.current_stock,
-      stock_value: Math.round(m.current_stock * (m.price || 0) * 100) / 100,
-      out_qty_window: totalOut, out_events_window: events,
-      consumption_value: Math.round(totalOut * (m.price || 0) * 100) / 100,
-      avg_daily_demand: Math.round(avgDaily * 100) / 100,
-      demand_sigma: Math.round(sigma * 100) / 100,
-      demand_cv: cv === null ? null : Math.round(cv * 100) / 100,
-      safety_stock: safetyStock,
-      reorder_point: reorderPoint,
-      eoq,
-      below_reorder: avgDaily > 0 && m.current_stock <= reorderPoint,
+      material_id: material.id, item_code: material.item_code, description: material.description, unit: material.unit,
+      material_group: material.material_group, price: material.price, current_stock: Number(material.current_stock),
+      stock_value: round(Number(material.current_stock) * (material.price || 0)),
+      out_qty_window: round(grossIssues), out_events_window: issueEvents, net_consumption: round(netConsumption),
+      avg_monthly_consumption: round(Math.max(0, netConsumption) / WINDOW_DAYS * 30),
+      avg_daily_usage: round(averageDaily), avg_daily_demand: round(averageDaily),
+      consumption_value: round(Math.max(0, netConsumption) * (material.price || 0)),
+      receipt_qty_window: round(netReceipts), issue_frequency_per_month: round(issueEvents / WINDOW_DAYS * 30),
+      receipt_frequency_per_month: round(receipts.length / WINDOW_DAYS * 30),
+      last_issue_date: lastIssue, last_receipt_date: lastReceipt,
+      days_since_last_issue: lastIssue ? dayDiff(lastIssue) : null,
+      stock_age_days: material.oldest_stock_date ? dayDiff(isoDay(material.oldest_stock_date)) : null,
+      demand_sigma: round(sigma), demand_cv: coefficient === null ? null : round(coefficient),
+      safety_stock: safetyStock, reorder_point: reorderPoint, eoq,
+      below_reorder: averageDaily > 0 && Number(material.current_stock) <= reorderPoint,
       overstock: daysOfCover !== null && daysOfCover > OVERSTOCK_DAYS,
-      understock: avgDaily > 0 && m.current_stock <= reorderPoint,
-      days_of_cover: daysOfCover,
-      days_since_last_issue: daysSinceLastOut,
-      classification,
-      xyz_class: xyzClass,
-      fsn_class: fsnClass,
+      understock: averageDaily > 0 && Number(material.current_stock) <= reorderPoint,
+      days_of_cover: daysOfCover, classification, classification_confidence: confidence,
+      xyz_class: coefficient === null ? 'Z' : coefficient <= 0.5 ? 'X' : coefficient <= 1 ? 'Y' : 'Z',
+      fsn_class: classification === 'UNKNOWN' ? 'U' : issueEvents >= FAST_EVENTS ? 'F' : issueEvents > 0 ? 'S' : 'N',
     };
   });
 
-  // ABC by consumption value share (cumulative 80% = A, 95% = B, rest = C).
-  const totalValue = items.reduce((s, i) => s + i.consumption_value, 0);
+  const totalValue = items.reduce((sum, item) => sum + item.consumption_value, 0);
   let cumulative = 0;
-  [...items].sort((a, b) => b.consumption_value - a.consumption_value).forEach((i) => {
-    if (totalValue <= 0 || i.consumption_value <= 0) { i.abc_class = 'C'; return; }
-    const before = cumulative;
-    cumulative += i.consumption_value;
-    i.abc_class = before < totalValue * 0.8 ? 'A' : before < totalValue * 0.95 ? 'B' : 'C';
+  [...items].sort((a, b) => b.consumption_value - a.consumption_value).forEach((item) => {
+    if (totalValue <= 0 || item.consumption_value <= 0) item.abc_class = 'C';
+    else { const before = cumulative; cumulative += item.consumption_value; item.abc_class = before < totalValue * 0.8 ? 'A' : before < totalValue * 0.95 ? 'B' : 'C'; }
   });
-
-  return items;
+  return { items, coverage, movements };
 }
 
-/** Weekly IN vs OUT series for the trend chart (last 12 weeks). */
-function weeklyTrend() {
-  return db.prepare(`
-    SELECT strftime('%Y-%W', transaction_date) AS week,
-      SUM(CASE WHEN transaction_type='IN' THEN quantity ELSE 0 END) AS in_qty,
-      SUM(CASE WHEN transaction_type='OUT' THEN quantity ELSE 0 END) AS out_qty
-    FROM stock_transactions
-    WHERE date(transaction_date) >= date('now', '-84 days')
-    GROUP BY week ORDER BY week
-  `).all();
+function analyze() { return analyzeWithCoverage().items; }
+
+function weeklyTrend(movements) {
+  const cutoff = shiftDay(today(), -83);
+  const weeks = {};
+  movements.filter((movement) => movement.posting_date >= cutoff && movement.category !== 'OPENING_BALANCE').forEach((movement) => {
+    const date = new Date(`${movement.posting_date}T00:00:00Z`);
+    const weekStart = new Date(date); weekStart.setUTCDate(date.getUTCDate() - date.getUTCDay());
+    const key = weekStart.toISOString().slice(0, 10);
+    const row = weeks[key] || { week: key, in_qty: 0, out_qty: 0 };
+    if (['RECEIPT', 'RETURN', 'TRANSFER_IN', 'ADJUSTMENT_IN'].includes(movement.category)) row.in_qty += movement.quantity;
+    if (['ISSUE', 'TRANSFER_OUT', 'ADJUSTMENT_OUT'].includes(movement.category)) row.out_qty += movement.quantity;
+    if (movement.category === 'REVERSAL') {
+      if (['ISSUE', 'TRANSFER_OUT', 'ADJUSTMENT_OUT'].includes(movement.reversal_of_category)) row.in_qty += movement.quantity;
+      else row.out_qty += movement.quantity;
+    }
+    weeks[key] = row;
+  });
+  return Object.values(weeks).sort((a, b) => a.week.localeCompare(b.week)).map((row) => ({ ...row, in_qty: round(row.in_qty), out_qty: round(row.out_qty) }));
 }
 
-/** Rule-based natural-language insights over the analysis. */
-function buildInsights(items) {
+function buildInsights(items, coverage) {
   const insights = [];
-  const fmtList = (arr, n = 3) => arr.slice(0, n).map((i) => i.item_code).join(', ') + (arr.length > n ? ` (+${arr.length - n} more)` : '');
-
-  const dead = items.filter((i) => i.classification === 'DEAD');
-  if (dead.length) {
-    const value = dead.reduce((s, i) => s + i.stock_value, 0);
-    insights.push({ severity: 'warning', title: `${dead.length} dead-stock material(s) worth ${value.toFixed(2)}`,
-      detail: `No issues in ${DEAD_DAYS}+ days with stock on hand: ${fmtList(dead)}. Consider redeployment, return to supplier, or write-off.` });
-  }
-
-  const below = items.filter((i) => i.below_reorder);
-  if (below.length) {
-    insights.push({ severity: 'critical', title: `${below.length} material(s) at or below reorder point`,
-      detail: `Replenish soon: ${fmtList(below)}. Reorder point = avg daily demand × ${LEAD_TIME_DAYS}d lead time + safety stock.` });
-  }
-
-  const fastLowCover = items.filter((i) => i.classification === 'FAST' && i.days_of_cover !== null && i.days_of_cover < LEAD_TIME_DAYS);
-  if (fastLowCover.length) {
-    insights.push({ severity: 'critical', title: `${fastLowCover.length} fast mover(s) with under ${LEAD_TIME_DAYS} days of cover`,
-      detail: `${fmtList(fastLowCover)} will run out before a standard replenishment arrives.` });
-  }
-
-  const slow = items.filter((i) => i.classification === 'SLOW' && i.current_stock > 0);
-  if (slow.length) {
-    insights.push({ severity: 'info', title: `${slow.length} slow-moving material(s)`,
-      detail: `${fmtList(slow)} have very few issues in the last ${WINDOW_DAYS} days — review order quantities.` });
-  }
-
-  const over = items.filter((i) => i.overstock);
-  if (over.length) {
-    const value = over.reduce((s, i) => s + i.stock_value, 0);
-    insights.push({ severity: 'warning', title: `${over.length} overstocked material(s) worth ${value.toFixed(2)}`,
-      detail: `${fmtList(over)} carry more than ${OVERSTOCK_DAYS} days of cover — capital is tied up; pause replenishment.` });
-  }
-
-  const az = items.filter((i) => i.abc_class === 'A' && i.xyz_class === 'Z');
-  if (az.length) {
-    insights.push({ severity: 'warning', title: `${az.length} high-value erratic item(s) (A-Z class)`,
-      detail: `${fmtList(az)} drive spend but have unpredictable demand — manage manually with safety stock and short review cycles.` });
-  }
-
-  const ax = items.filter((i) => i.abc_class === 'A' && i.xyz_class === 'X');
-  if (ax.length) {
-    insights.push({ severity: 'info', title: `${ax.length} item(s) suit automatic replenishment (A-X class)`,
-      detail: `${fmtList(ax)} are high-value with stable demand — ideal for auto reorder at the reorder point (EOQ lot size).` });
-  }
-
-  const expiring = db.prepare(`
-    SELECT COUNT(*) AS n, COALESCE(SUM(remaining_quantity), 0) AS qty FROM batches
-    WHERE expiry_date IS NOT NULL AND remaining_quantity > 0
-      AND date(expiry_date) <= date('now', '+30 days') AND date(expiry_date) >= date('now')
-  `).get();
-  if (expiring.n > 0) {
-    insights.push({ severity: 'warning', title: `${expiring.n} batch(es) expiring within 30 days`,
-      detail: `${expiring.qty} units at risk — FEFO picking will prioritise them; consider promotions or transfers.` });
-  }
-
-  const hold = db.prepare("SELECT COUNT(*) AS n FROM batches WHERE quality_status='QUALITY_HOLD' AND remaining_quantity > 0").get();
-  if (hold.n > 0) {
-    insights.push({ severity: 'info', title: `${hold.n} batch(es) awaiting quality inspection`,
-      detail: 'Stock on quality hold is not available for allocation until released by the Quality team.' });
-  }
-
-  if (!insights.length) {
-    insights.push({ severity: 'good', title: 'Inventory is healthy', detail: 'No dead stock, reorder breaches, or expiry risks detected.' });
-  }
+  const list = (rows) => rows.slice(0, 3).map((item) => item.item_code).join(', ') + (rows.length > 3 ? ` (+${rows.length - 3} more)` : '');
+  if (coverage.warning) insights.push({ severity: 'warning', title: `${coverage.status.toLowerCase()} movement coverage (${coverage.coverage_percent}%)`, detail: coverage.warning });
+  const dead = items.filter((item) => item.classification === 'DEAD');
+  if (dead.length) insights.push({ severity: 'warning', title: `${dead.length} confirmed dead-stock material(s)`, detail: `Complete coverage shows no issues in the analysis window: ${list(dead)}.` });
+  const unknown = items.filter((item) => item.classification === 'UNKNOWN');
+  if (unknown.length) insights.push({ severity: 'info', title: `${unknown.length} stocked material(s) remain unclassified`, detail: `Movement evidence is insufficient to label these as dead stock: ${list(unknown)}.` });
+  const below = items.filter((item) => item.below_reorder);
+  if (below.length) insights.push({ severity: 'critical', title: `${below.length} material(s) at or below reorder point`, detail: `Replenish soon: ${list(below)}.` });
+  const fastLowCover = items.filter((item) => item.classification === 'FAST'
+    && item.days_of_cover !== null && item.days_of_cover < LEAD_TIME_DAYS);
+  if (fastLowCover.length) insights.push({ severity: 'critical', title: `${fastLowCover.length} fast mover(s) have less than ${LEAD_TIME_DAYS} days of cover`, detail: `${list(fastLowCover)} may run out before standard replenishment arrives.` });
+  const slow = items.filter((item) => item.classification === 'SLOW' && item.current_stock > 0);
+  if (slow.length) insights.push({ severity: 'info', title: `${slow.length} slow-moving material(s)`, detail: `${list(slow)} have few issue events in the analysis window.` });
+  const over = items.filter((item) => item.overstock);
+  if (over.length) insights.push({ severity: 'warning', title: `${over.length} overstocked material(s)`, detail: `${list(over)} carry more than ${OVERSTOCK_DAYS} days of cover.` });
+  const highErratic = items.filter((item) => item.abc_class === 'A' && item.xyz_class === 'Z');
+  if (highErratic.length) insights.push({ severity: 'warning', title: `${highErratic.length} high-value erratic item(s)`, detail: `${list(highErratic)} need manual replenishment review.` });
+  const expiring = db.prepare(`SELECT COUNT(*) AS n, COALESCE(SUM(remaining_quantity),0) AS qty FROM batches
+    WHERE expiry_date IS NOT NULL AND remaining_quantity>0 AND date(expiry_date) BETWEEN date('now') AND date('now','+30 days')`).get();
+  if (expiring.n > 0) insights.push({ severity: 'warning', title: `${expiring.n} batch(es) expire within 30 days`, detail: `${expiring.qty} units are at expiry risk; retain FEFO controls.` });
+  const hold = db.prepare("SELECT COUNT(*) AS n FROM batches WHERE quality_status='QUALITY_HOLD' AND remaining_quantity>0").get();
+  if (hold.n > 0) insights.push({ severity: 'info', title: `${hold.n} batch(es) await quality inspection`, detail: 'Quality-hold stock is unavailable for allocation until released.' });
+  if (!insights.length) insights.push({ severity: 'good', title: 'No analytical alert detected', detail: 'No covered dead-stock, reorder, overstock, or expiry alert was detected.' });
   return insights;
 }
 
 function fullReport() {
-  const items = analyze();
-  const active = items.filter((i) => i.classification !== 'INACTIVE');
+  const { items, coverage, movements } = analyzeWithCoverage();
+  const active = items.filter((item) => item.classification !== 'INACTIVE');
   const byClass = {};
-  active.forEach((i) => { byClass[i.classification] = (byClass[i.classification] || 0) + 1; });
-
-  // 3x3 ABC-XYZ matrix (counts + item codes per cell).
+  active.forEach((item) => { byClass[item.classification] = (byClass[item.classification] || 0) + 1; });
   const matrix = {};
-  ['A', 'B', 'C'].forEach((a) => ['X', 'Y', 'Z'].forEach((x) => { matrix[`${a}${x}`] = { count: 0, items: [] }; }));
-  active.forEach((i) => {
-    const cell = matrix[`${i.abc_class}${i.xyz_class}`];
-    if (cell) { cell.count += 1; if (cell.items.length < 10) cell.items.push(i.item_code); }
-  });
-
+  ['A', 'B', 'C'].forEach((abc) => ['X', 'Y', 'Z'].forEach((xyz) => { matrix[`${abc}${xyz}`] = { count: 0, items: [] }; }));
+  active.forEach((item) => { const cell = matrix[`${item.abc_class}${item.xyz_class}`]; if (cell) { cell.count += 1; if (cell.items.length < 10) cell.items.push(item.item_code); } });
   return {
     parameters: { window_days: WINDOW_DAYS, lead_time_days: LEAD_TIME_DAYS, service_level_z: SERVICE_Z,
       order_cost: ORDER_COST, holding_rate: HOLDING_RATE, overstock_days: OVERSTOCK_DAYS },
+    coverage,
     summary: {
-      materials_analyzed: active.length,
-      total_stock_value: Math.round(active.reduce((s, i) => s + i.stock_value, 0) * 100) / 100,
-      dead_count: byClass.DEAD || 0,
-      slow_count: byClass.SLOW || 0,
-      normal_count: byClass.NORMAL || 0,
-      fast_count: byClass.FAST || 0,
-      below_reorder_count: active.filter((i) => i.below_reorder).length,
-      overstock_count: active.filter((i) => i.overstock).length,
-      dead_stock_value: Math.round(active.filter((i) => i.classification === 'DEAD').reduce((s, i) => s + i.stock_value, 0) * 100) / 100,
+      materials_analyzed: active.length, total_stock_value: round(active.reduce((sum, item) => sum + item.stock_value, 0)),
+      dead_count: byClass.DEAD || 0, unknown_count: byClass.UNKNOWN || 0, slow_count: byClass.SLOW || 0,
+      normal_count: byClass.NORMAL || 0, fast_count: byClass.FAST || 0,
+      below_reorder_count: active.filter((item) => item.below_reorder).length,
+      overstock_count: active.filter((item) => item.overstock).length,
+      dead_stock_value: round(active.filter((item) => item.classification === 'DEAD').reduce((sum, item) => sum + item.stock_value, 0)),
     },
-    abc_xyz_matrix: matrix,
-    items: active,
-    top_consumers: [...active].sort((a, b) => b.out_qty_window - a.out_qty_window).slice(0, 10),
-    weekly_trend: weeklyTrend(),
-    insights: buildInsights(active),
+    abc_xyz_matrix: matrix, items: active,
+    top_consumers: [...active].sort((a, b) => b.net_consumption - a.net_consumption).slice(0, 10),
+    weekly_trend: weeklyTrend(movements), insights: buildInsights(active, coverage),
   };
 }
 
-module.exports = { analyze, fullReport, WINDOW_DAYS, LEAD_TIME_DAYS };
+module.exports = { analyze, fullReport, canonicalMovements, movementCoverage, WINDOW_DAYS, LEAD_TIME_DAYS };

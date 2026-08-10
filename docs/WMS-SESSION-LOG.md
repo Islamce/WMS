@@ -253,6 +253,60 @@ dry-run reconciliation, each requiring separate operator-driven production acces
 
 ---
 
+## 2026-08-03 — Controlled workflow-context and analytics-integrity corrective phase
+
+**Objective and baseline:** Investigate and correct downstream loss of ERP
+request context and unsupported dead-stock claims. Repository `Islamce/WMS` was
+clean before work; verified main was
+`065736cbda165dfc73478e2f6ce43468a0d63304`. Dedicated branch
+`fix/workflow-context-analytics-integrity` was created. Open PRs #50/#51 touched
+only package metadata; Draft PR #54 touched the mandatory continuity documents,
+so documentation collision risk is explicit. No equivalent implementation
+branch was found.
+
+**Verified root causes:** ERP values were persisted on
+`material_request_headers`, but warehouse/picker/GI queue projections and role
+screens omitted different subsets. Historical import already used separate,
+append-only tables and did not change live stock, but represented only three
+coarse types and lacked preview/mapping/reconciliation. Analytics ignored that
+history, read only the live ledger, counted all OUT transactions as demand, did
+not net returns/reversals, and declared stocked/no-issue items dead without
+checking historical coverage.
+
+**Implementation:** Added a canonical execution-context serializer to request,
+ERP, warehouse, picker, and GI APIs and displayed identifiers in compact web and
+Flutter queue/detail views. Added additive migration 013 for normalized
+movement categories and ERP/source/date traceability. Extended Import Center
+with eight categories, field mapping, preview/dry-run, date validation,
+fingerprint dedupe, batch reconciliation, audit, and rejected-row retrieval.
+Rebuilt analytics on a canonical combined movement stream, with conservative
+cross-source dedupe, demand semantics, return/reversal netting, opening-balance
+exclusion, operational/import coverage intervals, confidence, and the
+`UNKNOWN` gate for incomplete history.
+
+**Tests and evidence:** Extended workflow and reversal suites across warehouse,
+picker, GI, downstream reversal, and partial approval. Added isolated
+`corrective_integrity_test.py` for migration fields, dates, source traceability,
+dry-run/non-mutation, rejected rows, append-only enforcement, all movement
+semantics, duplicate import, live-stock invariants, and NONE/PARTIAL/COMPLETE
+coverage behavior. JavaScript syntax, Python syntax, and `git diff --check`
+passed. Runtime tests could not execute because this checkout lacked Node
+dependencies and the environment rejected external downloads after its usage
+limit was reached. KAAF regeneration was attempted and correctly stopped on
+the pre-existing `wms-api -> wms-ops-scripts -> wms-api` dependency cycle (one
+of five existing `.ai/drift.json` errors), so generated context was not edited
+manually. These are transparent validation blockers; CI is required.
+
+**Production state:** Unchanged and not inspected. No deployment, migration,
+seed, historical/opening-stock import, production database mutation, Passenger
+restart, merge, or backup deletion occurred.
+
+**Exact next step:** Commit and push the coherent branch, open a Draft PR, and
+wait for CI and Project Manager / Product Owner review. The first staging
+attempt was rejected by the environment's external-action usage limit, before
+anything entered the Git index; do not fabricate a PR number or CI state. Do
+not merge or take any production action.
+
 ## 2026-08-01 — Final merge-readiness documentation strategy
 
 **Review result:** The complete PR #53 diff, GitHub metadata, checks, comments, review threads, native artifact, and local worktree were reviewed. Runtime/workflow/runbook changes had no code blocker; CI and native validation were green, the PR was mergeable/clean, and no unresolved review thread existed. Merge-readiness remained blocked only because the PR description and durable records contained transient artifact/quota claims that had become stale after later builds.

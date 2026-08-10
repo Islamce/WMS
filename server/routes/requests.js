@@ -8,6 +8,7 @@ const audit = require('./../services/audit');
 const notify = require('./../services/notify');
 const { nextRequestNumber, setHeaderStatus, refreshRollups, getHeaderOr404, releaseOpenAllocations } = require('./../services/requests');
 const { reverseOneStep } = require('./../services/reverseWorkflow');
+const { withExecutionContext, withExecutionContexts } = require('./../services/workflowContext');
 const { HEADER_STATUS, LINE_STATUS } = require('./../workflow/states');
 
 const router = express.Router();
@@ -39,13 +40,15 @@ router.get('/', requirePermission('material_requests'), (req, res) => {
   const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
   const { total } = db.prepare(`SELECT COUNT(*) AS total FROM material_request_headers ${where}`).get(...params);
   const requests = db.prepare(`
-    SELECT id, request_number, request_type, requester_name, department, priority, required_date,
-           request_status, current_workflow_step, issue_warehouse_code, movement_type,
+    SELECT id, request_number, request_type, requester_id, requester_name, department, priority, required_date,
+           request_status, current_workflow_step, issue_warehouse_code, issue_warehouse_name,
+           movement_type, movement_type_description, erp_reservation_number, erp_reference_number,
+           plant, storage_location, cost_center, wbs_element,
            total_lines, completed_lines, shortage_lines, created_at, submitted_at
     FROM material_request_headers ${where}
     ORDER BY id DESC LIMIT ? OFFSET ?
   `).all(...params, limit, offset);
-  res.json({ requests, total, page, limit });
+  res.json({ requests: withExecutionContexts(requests), total, page, limit });
 });
 
 router.get('/:id', requirePermission('material_requests'), (req, res) => {
@@ -54,7 +57,7 @@ router.get('/:id', requirePermission('material_requests'), (req, res) => {
   if (!canView(req, header)) return res.status(403).json({ error: 'Not authorized to view this request.' });
   const lines = db.prepare('SELECT * FROM material_request_lines WHERE request_id=? ORDER BY line_number').all(header.id);
   const task = db.prepare('SELECT * FROM picking_tasks WHERE request_id=? ORDER BY id DESC LIMIT 1').get(header.id);
-  res.json({ request: header, lines, task });
+  res.json({ request: withExecutionContext(header), lines, task });
 });
 
 router.post('/', requirePermission('create_request'), (req, res) => {

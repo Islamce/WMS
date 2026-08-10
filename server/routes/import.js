@@ -5,11 +5,29 @@ const express = require('express');
 const crypto = require('crypto');
 const db = require('./../db/connection');
 const { authenticate } = require('./../middleware/auth');
+const audit = require('./../services/audit');
 
 const router = express.Router();
 router.use(authenticate);
 
 const MAX_ROWS = 5000;
+const MOVEMENT_CATEGORIES = [
+  'RECEIPT', 'ISSUE', 'RETURN', 'TRANSFER_IN', 'TRANSFER_OUT',
+  'ADJUSTMENT_IN', 'ADJUSTMENT_OUT', 'REVERSAL',
+];
+const REVERSAL_TARGETS = MOVEMENT_CATEGORIES.filter((category) => category !== 'REVERSAL');
+const LEGACY_MOVEMENT_TYPE = {
+  RECEIPT: 'RECEIPT', TRANSFER_IN: 'RECEIPT', ADJUSTMENT_IN: 'RECEIPT',
+  ISSUE: 'ISSUE', TRANSFER_OUT: 'ISSUE', ADJUSTMENT_OUT: 'ISSUE',
+  RETURN: 'RETURN',
+};
+const MAPPABLE_FIELDS = new Set([
+  'external_id', 'material_code', 'quantity', 'unit', 'posting_date', 'document_date',
+  'movement_timestamp', 'erp_movement_type', 'plant_code', 'warehouse_code',
+  'storage_location', 'bin_location', 'batch_number', 'reservation_number',
+  'erp_document_reference', 'purchase_order', 'cost_center', 'wbs_element',
+  'performed_by', 'description', 'reversal_of_category',
+]);
 const s = (v) => (v == null ? '' : String(v).trim());
 const num = (v) => {
   const normalized = typeof v === 'string' ? v.replace(/,/g, '').trim() : v;
@@ -31,43 +49,100 @@ function parseDate(value) {
     const [, dd, mm, yyyy, hh = '00', mi = '00', ss = '00'] = m;
     const iso = `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}T${hh.padStart(2, '0')}:${mi}:${ss}`;
     const d = new Date(iso);
-    return Number.isNaN(d.getTime()) ? null : iso;
+    if (Number.isNaN(d.getTime()) || d.getFullYear() !== Number(yyyy)
+        || d.getMonth() + 1 !== Number(mm) || d.getDate() !== Number(dd)) return null;
+    return iso;
+  }
+  const isoDate = raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?$/);
+  if (isoDate) {
+    const [, yyyy, mm, dd, hh = '00', mi = '00', ss = '00'] = isoDate;
+    const dateOnly = `${yyyy}-${mm}-${dd}`;
+    const d = new Date(`${dateOnly}T00:00:00Z`);
+    if (Number.isNaN(d.getTime()) || d.getUTCFullYear() !== Number(yyyy)
+        || d.getUTCMonth() + 1 !== Number(mm) || d.getUTCDate() !== Number(dd)) return null;
+    return `${dateOnly}T${hh}:${mi}:${ss}`;
   }
   const d = new Date(raw);
   return Number.isNaN(d.getTime()) ? null : d.toISOString().replace('Z', '');
 }
 
-function movementRecord(raw, movementType, filename, rowNumber) {
-  const r = normalizeRow(raw);
+function mappedRow(raw, fieldMapping) {
+  const normalized = normalizeRow(raw);
+  Object.entries(fieldMapping || {}).forEach(([canonical, source]) => {
+    const key = normalizeKey(canonical);
+    if (!MAPPABLE_FIELDS.has(key)) return;
+    normalized[key] = normalized[normalizeKey(source)];
+  });
+  return normalized;
+}
+
+function normalizedCategory(body) {
+  return s(body.movement_category || body.movement_type).toUpperCase();
+}
+
+function legacyMovementType(category, reversalOf) {
+  if (category !== 'REVERSAL') return LEGACY_MOVEMENT_TYPE[category];
+  if (['ISSUE', 'TRANSFER_OUT', 'ADJUSTMENT_OUT'].includes(reversalOf)) return 'RETURN';
+  return 'ISSUE';
+}
+
+function movementRecord(raw, category, filename, rowNumber, options = {}) {
+  const r = mappedRow(raw, options.fieldMapping);
   const materialCode = s(r.item || r.material_code || r.material || r.item_code);
   const quantity = Math.abs(num(r.quantity));
-  const dateRaw = r.last_update || r.movement_date || r.date;
+  const dateRaw = r.posting_date || r.last_update || r.movement_date || r.date;
   const timestampRaw = r.timestamp || r.movement_timestamp || dateRaw;
   const movementTimestamp = parseDate(timestampRaw);
-  const movementDate = parseDate(dateRaw || timestampRaw);
+  const postingDate = parseDate(dateRaw || timestampRaw);
+  const documentDate = parseDate(r.document_date);
+  const reversalOf = category === 'REVERSAL'
+    ? s(r.reversal_of_category || options.defaultReversalOf).toUpperCase()
+    : null;
   if (!materialCode) throw new Error('Material/item is required.');
   if (!(quantity > 0)) throw new Error('Quantity must be greater than zero.');
-  if (!movementDate) throw new Error('A valid movement date is required (DD/MM/YYYY supported).');
+  if (!postingDate) throw new Error('A valid posting date is required (DD/MM/YYYY and ISO supported).');
+  if (timestampRaw && !movementTimestamp) throw new Error('Movement timestamp is invalid.');
+  if (r.document_date && !documentDate) throw new Error('Document date is invalid.');
+  if (category === 'REVERSAL' && !REVERSAL_TARGETS.includes(reversalOf)) {
+    throw new Error(`REVERSAL requires reversal_of_category (${REVERSAL_TARGETS.join(', ')}).`);
+  }
+  const material = db.prepare('SELECT id FROM materials WHERE item_code=?').get(materialCode);
   const rec = {
     external_id: s(r.id || r.external_id) || null,
-    movement_type: movementType,
+    movement_type: legacyMovementType(category, reversalOf),
+    movement_category: category,
+    erp_movement_type: s(r.erp_movement_type || r.movement_type_code || r.movement_code) || null,
+    material_id: material ? material.id : null,
     material_code: materialCode,
     plant_code: s(r.plant || r.plant_code) || null,
     warehouse_code: s(r.warehouse || r.warehouse_code) || null,
+    storage_location: s(r.storage_location || r.sloc) || null,
     bin_location: s(r.bin_location || r.bin) || null,
+    batch_number: s(r.batch_number || r.batch) || null,
     description: s(r.description) || null,
     unit: s(r.unit || r.uom) || null,
     quantity,
-    movement_date: movementDate.slice(0, 10),
+    movement_date: postingDate.slice(0, 10),
+    posting_date: postingDate.slice(0, 10),
+    document_date: documentDate ? documentDate.slice(0, 10) : null,
     movement_timestamp: movementTimestamp,
     performed_by: s(r.user || r.performed_by || r.created_by) || null,
     reservation_number: s(r.reservation_number || r.reservation) || null,
+    erp_document_reference: s(r.erp_document_reference || r.material_document || r.document_reference || r.document_number) || null,
+    purchase_order: s(r.purchase_order || r.po_number || r.po) || null,
+    cost_center: s(r.cost_center) || null,
+    wbs_element: s(r.wbs_element || r.wbs || r.project) || null,
+    source_system: s(options.sourceSystem) || 'CSV',
+    reversal_of_category: reversalOf,
     source_filename: filename,
     source_row_number: rowNumber,
   };
   rec.row_fingerprint = crypto.createHash('sha256').update(JSON.stringify([
-    rec.movement_type, rec.external_id, rec.material_code, rec.plant_code, rec.bin_location,
-    rec.quantity, rec.movement_date, rec.movement_timestamp, rec.reservation_number,
+    rec.source_system, rec.movement_category, rec.reversal_of_category, rec.external_id,
+    rec.erp_movement_type, rec.material_code, rec.plant_code, rec.warehouse_code,
+    rec.storage_location, rec.bin_location, rec.batch_number, rec.quantity,
+    rec.posting_date, rec.document_date, rec.movement_timestamp, rec.reservation_number,
+    rec.erp_document_reference, rec.purchase_order,
   ])).digest('hex');
   return rec;
 }
@@ -80,19 +155,21 @@ function resolveReceivingDate(materialCode, warehouseCode, binLocation, explicit
     {
       source: 'HISTORICAL_BIN',
       sql: `SELECT MIN(movement_date) AS receiving_date FROM stock_movement_history
-        WHERE movement_type='RECEIPT' AND material_code=? AND warehouse_code=? AND bin_location=?`,
+        WHERE COALESCE(movement_category,movement_type)='RECEIPT'
+          AND material_code=? AND warehouse_code=? AND bin_location=?`,
       params: [materialCode, warehouseCode, binLocation],
     },
     {
       source: 'HISTORICAL_WAREHOUSE',
       sql: `SELECT MIN(movement_date) AS receiving_date FROM stock_movement_history
-        WHERE movement_type='RECEIPT' AND material_code=? AND warehouse_code=?`,
+        WHERE COALESCE(movement_category,movement_type)='RECEIPT'
+          AND material_code=? AND warehouse_code=?`,
       params: [materialCode, warehouseCode],
     },
     {
       source: 'HISTORICAL_MATERIAL',
       sql: `SELECT MIN(movement_date) AS receiving_date FROM stock_movement_history
-        WHERE movement_type='RECEIPT' AND material_code=?`,
+        WHERE COALESCE(movement_category,movement_type)='RECEIPT' AND material_code=?`,
       params: [materialCode],
     },
   ];
@@ -110,45 +187,157 @@ function transactionDateColumn() {
   return null;
 }
 
+function movementOptions(body) {
+  return {
+    fieldMapping: body.field_mapping && typeof body.field_mapping === 'object' && !Array.isArray(body.field_mapping)
+      ? body.field_mapping : {},
+    sourceSystem: s(body.source_system) || 'CSV',
+    defaultReversalOf: s(body.reversal_of_category).toUpperCase() || null,
+  };
+}
+
+function validateMovementRequest(body) {
+  const category = normalizedCategory(body);
+  if (!MOVEMENT_CATEGORIES.includes(category)) {
+    throw new Error(`movement_category must be one of: ${MOVEMENT_CATEGORIES.join(', ')}.`);
+  }
+  const rows = Array.isArray(body.rows) ? body.rows : [];
+  if (!rows.length || rows.length > MAX_ROWS) throw new Error(`Provide 1-${MAX_ROWS} rows per chunk.`);
+  return { category, rows, filename: s(body.source_filename) || 'uploaded.csv', options: movementOptions(body) };
+}
+
+function liveStockSnapshot() {
+  const batches = db.prepare(`SELECT COUNT(*) AS batch_rows,
+    COALESCE(SUM(remaining_quantity),0) AS remaining_quantity,
+    COALESCE(SUM(reserved_quantity),0) AS reserved_quantity FROM batches`).get();
+  const ledger = db.prepare(`SELECT COUNT(*) AS transaction_rows,
+    COALESCE(SUM(CASE WHEN transaction_type='IN' THEN quantity ELSE -quantity END),0) AS net_quantity
+    FROM stock_transactions`).get();
+  return { ...batches, ...ledger };
+}
+
+function inspectMovementRows(body) {
+  const { category, rows, filename, options } = validateMovementRequest(body);
+  const offset = Number(body.row_offset) || 0;
+  const valid = [];
+  const invalid = [];
+  const duplicateFingerprints = new Set();
+  const seen = new Set();
+  const exists = db.prepare('SELECT 1 FROM stock_movement_history WHERE row_fingerprint=?');
+
+  rows.forEach((raw, i) => {
+    const rowNumber = offset + i + 2;
+    try {
+      const rec = movementRecord(raw, category, filename, rowNumber, options);
+      if (seen.has(rec.row_fingerprint) || exists.get(rec.row_fingerprint)) duplicateFingerprints.add(rec.row_fingerprint);
+      seen.add(rec.row_fingerprint);
+      valid.push(rec);
+    } catch (error) {
+      invalid.push({ row_number: rowNumber, error: error.message, raw });
+    }
+  });
+
+  const unique = valid.filter((rec, index) => valid.findIndex((candidate) => candidate.row_fingerprint === rec.row_fingerprint) === index);
+  const insertable = unique.filter((rec) => !exists.get(rec.row_fingerprint));
+  const knownMaterials = new Set(insertable.filter((rec) => rec.material_id).map((rec) => rec.material_code));
+  const unknownMaterials = new Set(insertable.filter((rec) => !rec.material_id).map((rec) => rec.material_code));
+  const dates = insertable.map((rec) => rec.posting_date).filter(Boolean).sort();
+  const snapshot = liveStockSnapshot();
+  return {
+    category, rows, filename, options, valid, insertable, invalid,
+    preview: insertable.slice(0, 10),
+    reconciliation: {
+      total_rows: rows.length,
+      valid_rows: valid.length,
+      insertable_rows: insertable.length,
+      duplicate_rows: valid.length - insertable.length,
+      invalid_rows: invalid.length,
+      total_quantity: insertable.reduce((sum, rec) => sum + rec.quantity, 0),
+      period_start: dates[0] || null,
+      period_end: dates[dates.length - 1] || null,
+      matched_materials: [...knownMaterials].sort(),
+      unmatched_materials: [...unknownMaterials].sort(),
+      live_stock_before: snapshot,
+      live_stock_after: snapshot,
+      live_stock_changed: false,
+    },
+  };
+}
+
+function batchReconciliation(batchId) {
+  const summary = db.prepare(`SELECT COUNT(*) AS inserted_rows, COALESCE(SUM(quantity),0) AS total_quantity,
+    MIN(posting_date) AS actual_period_start, MAX(posting_date) AS actual_period_end,
+    COUNT(DISTINCT material_code) AS material_count,
+    SUM(CASE WHEN material_id IS NULL THEN 1 ELSE 0 END) AS unmatched_rows
+    FROM stock_movement_history WHERE import_batch_id=?`).get(batchId);
+  summary.categories = db.prepare(`SELECT DISTINCT movement_category FROM stock_movement_history
+    WHERE import_batch_id=? ORDER BY movement_category`).all(batchId).map((row) => row.movement_category);
+  return summary;
+}
+
 router.get('/movements/summary', (req, res) => {
   if (!canImportMovements(req.user)) return res.status(403).json({ error: 'You do not have permission to view movement history.' });
-  const totals = db.prepare(`SELECT movement_type, COUNT(*) rows, SUM(quantity) quantity,
-    MIN(movement_date) period_start, MAX(movement_date) period_end
-    FROM stock_movement_history GROUP BY movement_type ORDER BY movement_type`).all();
-  const batches = db.prepare(`SELECT id, movement_type, source_filename, period_start, period_end, status,
-    total_rows, inserted_rows, duplicate_rows, invalid_rows, created_by_name, created_at, completed_at
+  const totals = db.prepare(`SELECT COALESCE(movement_category,movement_type) AS movement_category,
+    COALESCE(movement_category,movement_type) AS movement_type, COUNT(*) rows, SUM(quantity) quantity,
+    MIN(COALESCE(posting_date,movement_date)) period_start, MAX(COALESCE(posting_date,movement_date)) period_end
+    FROM stock_movement_history GROUP BY COALESCE(movement_category,movement_type) ORDER BY movement_category`).all();
+  const batches = db.prepare(`SELECT id, movement_type, movement_category, source_system, source_filename,
+    source_file_checksum, period_start, period_end, status, total_rows, inserted_rows, duplicate_rows,
+    invalid_rows, reconciliation_json, created_by_name, created_at, completed_at
     FROM stock_movement_import_batches ORDER BY id DESC LIMIT 30`).all();
+  batches.forEach((batch) => { batch.reconciliation = batch.reconciliation_json ? JSON.parse(batch.reconciliation_json) : null; delete batch.reconciliation_json; });
   res.json({ totals, batches });
+});
+
+router.post('/movements/preview', (req, res) => {
+  if (!canImportMovements(req.user)) return res.status(403).json({ error: 'You do not have permission to preview movement history.' });
+  try {
+    const inspected = inspectMovementRows(req.body || {});
+    res.json({ mode: 'DRY_RUN', movement_category: inspected.category, preview: inspected.preview,
+      invalid_rows: inspected.invalid.slice(0, 100), reconciliation: inspected.reconciliation });
+  } catch (error) { res.status(400).json({ error: error.message }); }
 });
 
 router.post('/movements/chunk', (req, res) => {
   if (!canImportMovements(req.user)) return res.status(403).json({ error: 'You do not have permission to import movement history.' });
   const body = req.body || {};
-  const movementType = s(body.movement_type).toUpperCase();
-  if (!['RECEIPT', 'ISSUE', 'RETURN'].includes(movementType)) return res.status(400).json({ error: 'movement_type must be RECEIPT, ISSUE or RETURN.' });
-  const rows = Array.isArray(body.rows) ? body.rows : [];
-  if (!rows.length || rows.length > MAX_ROWS) return res.status(400).json({ error: `Provide 1-${MAX_ROWS} rows per chunk.` });
-  const filename = s(body.source_filename) || 'uploaded.csv';
+  let request;
+  try { request = validateMovementRequest(body); }
+  catch (error) { return res.status(400).json({ error: error.message }); }
+  const { category, rows, filename, options } = request;
+  if (body.dry_run === true) {
+    try {
+      const inspected = inspectMovementRows(body);
+      return res.json({ mode: 'DRY_RUN', movement_category: category, preview: inspected.preview,
+        invalid_rows: inspected.invalid.slice(0, 100), reconciliation: inspected.reconciliation });
+    } catch (error) { return res.status(400).json({ error: error.message }); }
+  }
   let batchId = Number(body.batch_id) || null;
   const run = db.transaction(() => {
     if (!batchId) {
       const created = db.prepare(`INSERT INTO stock_movement_import_batches
-        (movement_type, source_filename, period_start, period_end, created_by, created_by_name)
-        VALUES (?, ?, ?, ?, ?, ?)`).run(movementType, filename, s(body.period_start) || null, s(body.period_end) || null,
-          req.user.id, req.user.name || req.user.email || null);
+        (movement_type, movement_category, source_system, source_filename, source_file_checksum, field_mapping_json,
+         period_start, period_end, created_by, created_by_name)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(legacyMovementType(category, options.defaultReversalOf || 'ISSUE'), category,
+          options.sourceSystem, filename, s(body.source_file_checksum) || null, JSON.stringify(options.fieldMapping),
+          s(body.period_start) || null, s(body.period_end) || null, req.user.id, req.user.name || req.user.email || null);
       batchId = Number(created.lastInsertRowid);
     } else {
       const batch = db.prepare('SELECT * FROM stock_movement_import_batches WHERE id=?').get(batchId);
       if (!batch || batch.status !== 'IN_PROGRESS') throw new Error('Import batch is missing or already closed.');
-      if (batch.movement_type !== movementType) throw new Error('Chunk movement type does not match the import batch.');
+      if ((batch.movement_category || batch.movement_type) !== category) throw new Error('Chunk movement category does not match the import batch.');
     }
 
     const ins = db.prepare(`INSERT INTO stock_movement_history
-      (import_batch_id, external_id, movement_type, material_code, plant_code, warehouse_code, bin_location,
-       description, unit, quantity, movement_date, movement_timestamp, performed_by, reservation_number,
+      (import_batch_id, external_id, movement_type, movement_category, erp_movement_type, material_id, material_code,
+       plant_code, warehouse_code, storage_location, bin_location, batch_number, description, unit, quantity,
+       movement_date, posting_date, document_date, movement_timestamp, performed_by, reservation_number,
+       erp_document_reference, purchase_order, cost_center, wbs_element, source_system, reversal_of_category,
        source_filename, source_row_number, row_fingerprint)
-      VALUES (@import_batch_id,@external_id,@movement_type,@material_code,@plant_code,@warehouse_code,@bin_location,
-       @description,@unit,@quantity,@movement_date,@movement_timestamp,@performed_by,@reservation_number,
+      VALUES (@import_batch_id,@external_id,@movement_type,@movement_category,@erp_movement_type,@material_id,@material_code,
+       @plant_code,@warehouse_code,@storage_location,@bin_location,@batch_number,@description,@unit,@quantity,
+       @movement_date,@posting_date,@document_date,@movement_timestamp,@performed_by,@reservation_number,
+       @erp_document_reference,@purchase_order,@cost_center,@wbs_element,@source_system,@reversal_of_category,
        @source_filename,@source_row_number,@row_fingerprint)`);
     const errIns = db.prepare(`INSERT INTO stock_movement_import_errors
       (import_batch_id, source_row_number, external_id, error_code, error_message, raw_row_json)
@@ -158,7 +347,7 @@ router.post('/movements/chunk', (req, res) => {
     rows.forEach((raw, i) => {
       const rowNo = offset + i + 2;
       try {
-        const rec = movementRecord(raw, movementType, filename, rowNo);
+        const rec = movementRecord(raw, category, filename, rowNo, options);
         try { ins.run({ import_batch_id: batchId, ...rec }); inserted++; }
         catch (e) {
           if (/UNIQUE constraint failed: stock_movement_history.row_fingerprint/.test(e.message)) duplicates++;
@@ -174,15 +363,38 @@ router.post('/movements/chunk', (req, res) => {
       duplicate_rows=duplicate_rows+?, invalid_rows=invalid_rows+? WHERE id=?`)
       .run(rows.length, inserted, duplicates, invalid, batchId);
     if (body.finalize) {
+      const reconciliation = batchReconciliation(batchId);
       db.prepare(`UPDATE stock_movement_import_batches SET status=CASE WHEN invalid_rows>0 THEN 'COMPLETED_WITH_ERRORS' ELSE 'COMPLETED' END,
-        completed_at=datetime('now') WHERE id=?`).run(batchId);
+        period_start=COALESCE(period_start, ?), period_end=COALESCE(period_end, ?), reconciliation_json=?,
+        completed_at=datetime('now') WHERE id=?`).run(reconciliation.actual_period_start, reconciliation.actual_period_end,
+          JSON.stringify(reconciliation), batchId);
+      audit.record({ entityType: 'StockMovementImportBatch', entityId: batchId, action: 'FINALIZE_IMPORT', user: req.user,
+        newValue: { movement_category: category, source_system: options.sourceSystem, ...reconciliation },
+        sourceScreen: 'Import Center' });
     }
-    return { batch_id: batchId, inserted, duplicates, invalid };
+    return { batch_id: batchId, inserted, duplicates, invalid,
+      reconciliation: body.finalize ? batchReconciliation(batchId) : null };
   });
   try {
     const result = run();
     res.json({ message: `${result.inserted} inserted, ${result.duplicates} duplicates skipped, ${result.invalid} invalid.`, ...result });
   } catch (err) { res.status(400).json({ error: err.message }); }
+});
+
+router.get('/movements/batches/:id/errors', (req, res) => {
+  if (!canImportMovements(req.user)) return res.status(403).json({ error: 'You do not have permission to view import errors.' });
+  const batch = db.prepare('SELECT id, source_filename FROM stock_movement_import_batches WHERE id=?').get(req.params.id);
+  if (!batch) return res.status(404).json({ error: 'Import batch not found.' });
+  const errors = db.prepare(`SELECT source_row_number, external_id, error_code, error_message, raw_row_json, created_at
+    FROM stock_movement_import_errors WHERE import_batch_id=? ORDER BY source_row_number`).all(batch.id);
+  if (s(req.query.format).toLowerCase() === 'csv') {
+    const quote = (value) => `"${String(value == null ? '' : value).replace(/"/g, '""')}"`;
+    const header = ['source_row_number', 'external_id', 'error_code', 'error_message', 'raw_row_json', 'created_at'];
+    const csv = [header.join(','), ...errors.map((row) => header.map((key) => quote(row[key])).join(','))].join('\n');
+    res.type('text/csv').set('Content-Disposition', `attachment; filename="movement-import-${batch.id}-errors.csv"`).send(csv);
+    return;
+  }
+  res.json({ batch_id: batch.id, source_filename: batch.source_filename, errors });
 });
 
 router.post('/stock/reconcile-dates', (req, res) => {

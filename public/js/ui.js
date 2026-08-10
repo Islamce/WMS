@@ -328,6 +328,27 @@ const UI = {
       </div>`;
   },
 
+  /** Canonical ERP / warehouse execution context rendered on downstream steps. */
+  executionContextCard(row) {
+    const r = row.execution_context || row;
+    const item = (label, value) => `
+      <div class="req-ctx-item"><span class="muted">${UI.esc(label)}</span><strong>${UI.esc(value || '—')}</strong></div>`;
+    return `
+      <div class="req-ctx" role="group" aria-label="ERP execution context">
+        ${item('MR Number', r.request_number)}
+        ${item('ERP Reservation', r.erp_reservation_number)}
+        ${item('ERP Reference', r.erp_reference_number)}
+        ${item('Movement Type', r.movement_type)}
+        ${item('Plant', r.plant)}
+        ${item('Issue Warehouse', r.issue_warehouse_code)}
+        ${item('Storage Location', r.storage_location)}
+        ${item('Cost Center', r.cost_center)}
+        ${item('WBS / Project', r.wbs_project || r.wbs_element || r.project)}
+        ${item('Required Date', r.required_date)}
+        ${item('Requester', r.requester_name)}
+      </div>`;
+  },
+
   /**
    * Material picker: a searchable dropdown. Attaches to a text input; opens on
    * focus (showing the first materials) and filters as you type. Calls

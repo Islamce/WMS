@@ -170,6 +170,56 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    id: '013_canonical_analytical_movements',
+    description: 'Extend append-only movement history with ERP-agnostic categories, source traceability and analytical dates.',
+    up(database) {
+      addColumnIfMissing(database, 'stock_movement_import_batches', 'movement_category', 'TEXT');
+      addColumnIfMissing(database, 'stock_movement_import_batches', 'source_system', "TEXT NOT NULL DEFAULT 'CSV'");
+      addColumnIfMissing(database, 'stock_movement_import_batches', 'source_file_checksum', 'TEXT');
+      addColumnIfMissing(database, 'stock_movement_import_batches', 'field_mapping_json', 'TEXT');
+      addColumnIfMissing(database, 'stock_movement_import_batches', 'reconciliation_json', 'TEXT');
+
+      addColumnIfMissing(database, 'stock_movement_history', 'material_id', 'INTEGER REFERENCES materials(id)');
+      addColumnIfMissing(database, 'stock_movement_history', 'movement_category', 'TEXT');
+      addColumnIfMissing(database, 'stock_movement_history', 'erp_movement_type', 'TEXT');
+      addColumnIfMissing(database, 'stock_movement_history', 'posting_date', 'TEXT');
+      addColumnIfMissing(database, 'stock_movement_history', 'document_date', 'TEXT');
+      addColumnIfMissing(database, 'stock_movement_history', 'storage_location', 'TEXT');
+      addColumnIfMissing(database, 'stock_movement_history', 'batch_number', 'TEXT');
+      addColumnIfMissing(database, 'stock_movement_history', 'erp_document_reference', 'TEXT');
+      addColumnIfMissing(database, 'stock_movement_history', 'purchase_order', 'TEXT');
+      addColumnIfMissing(database, 'stock_movement_history', 'cost_center', 'TEXT');
+      addColumnIfMissing(database, 'stock_movement_history', 'wbs_element', 'TEXT');
+      addColumnIfMissing(database, 'stock_movement_history', 'source_system', "TEXT NOT NULL DEFAULT 'CSV'");
+      addColumnIfMissing(database, 'stock_movement_history', 'reversal_of_category', 'TEXT');
+
+      database.exec(`
+        DROP TRIGGER IF EXISTS movement_history_block_update;
+
+        UPDATE stock_movement_import_batches
+        SET movement_category=COALESCE(movement_category, movement_type),
+            source_system=COALESCE(NULLIF(source_system, ''), 'CSV');
+
+        UPDATE stock_movement_history
+        SET movement_category=COALESCE(movement_category, movement_type),
+            posting_date=COALESCE(posting_date, movement_date),
+            source_system=COALESCE(NULLIF(source_system, ''), 'CSV'),
+            material_id=COALESCE(material_id,
+              (SELECT id FROM materials WHERE item_code=stock_movement_history.material_code LIMIT 1));
+
+        CREATE INDEX IF NOT EXISTS idx_movement_history_posting
+          ON stock_movement_history(posting_date, movement_category);
+        CREATE INDEX IF NOT EXISTS idx_movement_history_material_id
+          ON stock_movement_history(material_id, posting_date);
+        CREATE INDEX IF NOT EXISTS idx_movement_history_erp_document
+          ON stock_movement_history(erp_document_reference);
+
+        CREATE TRIGGER IF NOT EXISTS movement_history_block_update BEFORE UPDATE ON stock_movement_history
+        BEGIN SELECT RAISE(ABORT, 'stock_movement_history is append-only'); END;
+      `);
+    },
+  },
 ];
 
 function ensureTable() {

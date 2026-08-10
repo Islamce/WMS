@@ -137,7 +137,8 @@ c, p = call('DELETE', f'/api/approvals/{rid3}/lines/{l2["id"]}', manager, {'reas
 check('S4 delete line with reason', c == 200, p)
 
 # ===== Scenario 5: partial approve on a fresh multi-line request =====
-c, p = call('POST', '/api/requests', requester, {'purpose': 'partial', 'lines': [
+c, p = call('POST', '/api/requests', requester, {'purpose': 'partial', 'cost_center': 'CC-PARTIAL',
+    'wbs_element': 'WBS-PARTIAL', 'required_date': '2026-10-01', 'lines': [
     {'material_id': BOLT, 'requested_quantity': 5}, {'material_id': BOLT, 'requested_quantity': 7}]})
 rid4 = p['id']; call('POST', f'/api/requests/{rid4}/submit', requester)
 c, det = call('GET', f'/api/requests/{rid4}', manager)
@@ -147,6 +148,10 @@ check('S5 partial approve', c == 200, p)
 c, det = call('GET', f'/api/requests/{rid4}', manager)
 statuses = sorted(l['line_status'] for l in det['lines'])
 check('S5 one line rejected one reserved/pending', 'Rejected' in statuses, statuses)
+partial_ctx = det['request'].get('execution_context', {})
+check('S5 partial approval preserves header context relationships',
+      partial_ctx.get('cost_center') == 'CC-PARTIAL' and partial_ctx.get('wbs_project') == 'WBS-PARTIAL'
+      and partial_ctx.get('required_date') == '2026-10-01', partial_ctx)
 
 # ===== Scenario 9: FIFO across multiple batches (spec example: 100 -> 40+60) =====
 c, p = call('POST', '/api/requests', requester, {'purpose': 'fifo', 'lines': [{'material_id': BOLT, 'requested_quantity': 100}]})

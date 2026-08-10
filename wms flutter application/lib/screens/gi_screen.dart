@@ -130,11 +130,10 @@ class _GiScreenState extends State<GiScreen> {
                           '${(r['project'] ?? '').toString().isNotEmpty ? ' · ${r['project']}' : ''}'
                           '${(r['cost_center'] ?? '').toString().isNotEmpty ? ' · ${r['cost_center']}' : ''}',
                           style: const TextStyle(fontSize: 13)),
-                      Text('WH ${r['issue_warehouse_code'] ?? ''} · MvT ${r['movement_type'] ?? ''} · '
+                      Text('ERP ${r['erp_reservation_number'] ?? r['erp_reference_number'] ?? '—'} · '
+                          'MvT ${r['movement_type'] ?? '—'} · Plant ${r['plant'] ?? '—'}'),
+                      Text('WH ${r['issue_warehouse_code'] ?? ''} · SLoc ${r['storage_location'] ?? '—'} · '
                           '${r['total_lines'] ?? 0} line(s)'),
-                      if ((r['erp_reservation_number'] ?? '').toString().isNotEmpty)
-                        Text('Reservation ${r['erp_reservation_number']}',
-                            style: const TextStyle(fontSize: 12, color: Colors.grey)),
                       if ((r['erp_error_message'] ?? '').toString().isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.only(top: 4),

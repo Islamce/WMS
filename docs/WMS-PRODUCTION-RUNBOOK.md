@@ -239,6 +239,31 @@ mkdir -p tmp
 touch tmp/restart.txt
 ```
 
+## Historical analytical movement import
+
+Historical movement import is separate from opening stock and live warehouse
+execution. It writes only the append-only analytical history tables.
+
+Before any production import is separately authorized:
+
+1. deploy and validate the reviewed migration through the standard deployment
+   gates; never run the import against a pre-migration database;
+2. record the exact source file, SHA-256 checksum, source system, declared
+   coverage period, row count, categories, and expected quantity totals;
+3. run Import Center preview/dry-run and review mapped fields, actual posting
+   dates, matched/unmatched materials, duplicates, and rejected rows;
+4. capture live-stock invariants (batch remaining/reserved totals, location
+   stock, and operational-ledger row/net totals) before import;
+5. obtain explicit approval for the reviewed batch, import once, download and
+   resolve rejected-row evidence, then repeat the same file to prove it is
+   duplicate-only;
+6. confirm live-stock invariants did not change and review analytics coverage
+   before treating movement classifications as operational evidence.
+
+Do not use historical movement import to establish current stock, correct an
+on-hand discrepancy, or replay ERP documents. Do not label `UNKNOWN` materials
+as dead stock when coverage is partial or absent.
+
 ## Health verification
 
 ```bash

@@ -13,17 +13,17 @@ Pages.picking = {
   async loadInbox() {
     const t = this.el.querySelector('#pk-table');
     const { tasks } = await Api.get('/api/picking/tasks');
-    t.innerHTML = `<table><thead><tr><th>Request #</th><th>Requester</th><th>Department</th><th>Project</th><th>Warehouse</th><th>Priority</th><th>Task Status</th><th>Reminders</th><th></th></tr></thead>
+    t.innerHTML = `<table><thead><tr><th>Request / ERP</th><th>Requester</th><th>Warehouse</th><th>Priority</th><th>Task Status</th><th>Reminders</th><th></th></tr></thead>
       <tbody>${tasks.map((tk) => `
         <tr data-id="${tk.id}">
-          <td><strong>${UI.esc(tk.request_number)}</strong></td>
-          <td>${UI.esc(tk.requester_name || '')}</td><td>${UI.esc(tk.department || '—')}</td><td>${UI.esc(tk.project || '—')}</td>
-          <td>${UI.esc(tk.warehouse_code || '')}</td>
+          <td><strong>${UI.esc(tk.request_number)}</strong><div class="muted sm">ERP ${UI.esc(tk.erp_reservation_number || tk.erp_reference_number || '—')} · MvT ${UI.esc(tk.movement_type || '—')} · Plant ${UI.esc(tk.plant || '—')}</div></td>
+          <td>${UI.esc(tk.requester_name || '')}<div class="muted sm">${UI.esc(tk.department || '—')} · ${UI.esc(tk.project || '—')}</div></td>
+          <td>${UI.esc(tk.warehouse_code || '')}<div class="muted sm">SLoc ${UI.esc(tk.storage_location || '—')}</div></td>
           <td><span class="badge ${tk.priority === 'URGENT' || tk.priority === 'HIGH' ? 'pending' : 'role'}">${tk.priority}</span></td>
           <td><span class="badge ${statusClass(tk.task_status)}">${UI.esc(tk.task_status)}</span></td>
           <td>${tk.reminder_count}${tk.escalation_level ? ` · esc ${tk.escalation_level}` : ''}</td>
           <td><button class="btn sm" data-open="${tk.id}">Open</button></td>
-        </tr>`).join('') || '<tr><td colspan="9" class="muted">No assigned tasks</td></tr>'}
+        </tr>`).join('') || '<tr><td colspan="7" class="muted">No assigned tasks</td></tr>'}
       </tbody></table>`;
     t.querySelectorAll('[data-open]').forEach((b) => b.addEventListener('click', () => this.openTask(b.dataset.open)));
   },
@@ -53,11 +53,7 @@ Pages.picking = {
           ${inProgress ? '<button class="btn success sm" id="pk-complete">Complete Picking</button>' : ''}
         </div>
         ${UI.requesterCard(request)}
-        <div class="details-list" style="margin-top:12px">
-          <div class="item"><div class="k">Reservation</div><div class="v">${UI.esc(request.erp_reservation_number || request.erp_reference_number || '—')}</div></div>
-          <div class="item"><div class="k">Movement</div><div class="v">${UI.esc(request.movement_type || '—')}</div></div>
-          <div class="item"><div class="k">Warehouse</div><div class="v">${UI.esc(request.issue_warehouse_code || '—')}</div></div>
-        </div>
+        <div style="margin-top:12px">${UI.executionContextCard(request)}</div>
       </div>
 
       ${lines.map((l) => this.lineCard(l, allocByLine[l.id] || [], inProgress)).join('')}`;
