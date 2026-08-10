@@ -2,31 +2,41 @@
 
 This log records production failures, data-risk events, deployment failures, recoveries, and important near misses. Do not include secrets.
 
-## INC-2026-08-06-01 — Production offsite backup workflow failing (9+ consecutive days)
+## INC-2026-08-06-01 — Production offsite backup workflow failing (10+ consecutive days, SSH auth now rejected)
 
 **Status:** Open. No corrective action taken yet; this entry records diagnosis only.
 
-**Correction (2026-08-09):** The original 2026-08-06 version of this entry described the
-failures as two clean, sequential phases (`/sbin/nologin` through 2026-08-04, then connection
-timeouts from 2026-08-05 onward). Re-inspection of every run's log on 2026-08-09 shows that
-framing was wrong: the two error signatures **alternate intermittently** rather than
-succeeding one another in a clean phase transition. This entry replaces that framing with the
-corrected, complete per-run table below. Nothing about the impact, evidence-classification, or
-safety posture changes — only the shape of the root-cause picture.
+**Escalation (2026-08-10):** A third, more serious error signature appeared today —
+`Permission denied (publickey,password)`. Until now every failure was either a connectivity
+problem (timeout) or a post-authentication shell-configuration problem (`/sbin/nologin`); in
+both of those, SSH itself was able to authenticate when it connected. Today's run shows the
+SSH key being **rejected outright**, meaning either the key was removed/rotated on the
+Hostinger host, the backup account was disabled, or the `SSH_KEY` GitHub secret no longer
+matches what the host will accept. This is a more serious condition than the prior two
+signatures and narrows the owner's investigation.
+
+**Correction (2026-08-09, preserved for history):** The original 2026-08-06 version of this
+entry described the failures as two clean, sequential phases (`/sbin/nologin` through
+2026-08-04, then connection timeouts from 2026-08-05 onward). Re-inspection of every run's log
+on 2026-08-09 showed that framing was wrong: the two error signatures alternated
+intermittently rather than succeeding one another in a clean phase transition. The per-run
+table below carries that correction forward and adds the new 2026-08-10 finding.
 
 **Environment:** GitHub Actions (`production-backup.yml`), SSH connection from the Actions
 runner to the Hostinger production host (aliased `hostinger` in the workflow's SSH config).
+The SSH key used here (`SSH_KEY` GitHub Actions secret) is unrelated to any credential used to
+push code to this repository from any AI session — code pushes go over HTTPS with a GitHub
+token, not this SSH key.
 
 **Impact:**
 
 - **Verified (repo, via GitHub Actions run history):** the scheduled `Production Offsite
-  Backup` workflow has failed on every run for 9 consecutive days, 2026-08-01 through
-  2026-08-09 (runs #16–#24). The most recent successful run was #15 on 2026-07-31.
+  Backup` workflow has failed on every run for 10 consecutive days, 2026-08-01 through
+  2026-08-10 (runs #16–#25). The most recent successful run was #15 on 2026-07-31.
 - No offsite backup has been produced since 2026-07-31. Per `DEC-008`, local backup retention
   keeps only the newest 7 sets, so each further missed cycle erodes the disaster-recovery
-  safety margin; at 9 missed daily cycles this now exceeds the local retention window itself —
-  local backup depth may already be thinner than 9 days depending on when local sets were
-  pruned.
+  safety margin; at 10 missed daily cycles this now well exceeds the local retention window —
+  local backup depth is likely already thinner than the missed-cycle count.
 - No evidence of data loss, corruption, or any change to `data/wms.db`. This is a backup
   **delivery** failure, not a database incident.
 
@@ -34,8 +44,8 @@ runner to the Hostinger production host (aliased `hostinger` in the workflow's S
 
 - Reported via a GitHub Actions failure-notification email: "[Islamce/WMS] Production
   Offsite Backup workflow run" / "Production Offsite Backup: All jobs have failed."
-- **Verified (repo)**, from `mcp__github__get_job_logs` on every one of the 9 failed runs, two
-  distinct error signatures recur, alternating rather than following a clean phase transition:
+- **Verified (repo)**, from `mcp__github__get_job_logs` on every one of the 10 failed runs,
+  three distinct error signatures now recur:
 
   | Run | Date | Error |
   |---|---|---|
@@ -48,37 +58,45 @@ runner to the Hostinger production host (aliased `hostinger` in the workflow's S
   | #22 | 2026-08-07 | `/sbin/nologin: No such file or directory` |
   | #23 | 2026-08-08 | `/sbin/nologin: No such file or directory` |
   | #24 | 2026-08-09 | `/sbin/nologin: No such file or directory` |
+  | #25 | 2026-08-10 | `Permission denied (publickey,password)` |
 
-  - `/sbin/nologin: No such file or directory` (6 of 9 runs): the SSH connection to the
-    Hostinger host succeeds and authenticates, but the remote login shell path configured for
-    the backup account is invalid, so the remote command never executes. This is the
-    dominant, persistent signature.
-  - `ssh: connect to host *** port ***: Connection timed out` (3 of 9 runs, on 08-02, 08-05,
+  - `/sbin/nologin: No such file or directory` (6 of 10 runs): SSH connects and authenticates,
+    but the remote login shell path configured for the backup account is invalid. The
+    dominant signature through 2026-08-09.
+  - `ssh: connect to host *** port ***: Connection timed out` (3 of 10 runs, on 08-02, 08-05,
     08-06): a TCP-level failure — the connection never reaches the host, so no authentication
-    is attempted. This appears intermittently rather than as a lasting state change.
+    is attempted. Appeared intermittently, not as a lasting state change.
+  - `Permission denied (publickey,password)` (1 of 10 runs, 08-10, most recent): the SSH
+    connection reaches the host, but the offered key is rejected during authentication itself
+    — a step earlier in the process than either prior signature, since the two previous
+    signatures both required successful authentication to occur.
 - **Verified (repo, via `git log --oneline -- .github/workflows/production-backup.yml`):**
   the workflow file's last change is commit `86363c5` ("Security hardening of the
   offsite-backup workflow and scripts"), well before this failure window. The workflow
-  definition itself is not the cause of either error signature.
+  definition itself is not the cause of any of the three error signatures.
 
 **Root cause / current hypothesis:**
 
-- The `/sbin/nologin` signature (the majority pattern) is consistent with a persistent
-  account/shell-configuration problem on the Hostinger host for the specific SSH account the
-  backup workflow authenticates as — SSH itself connects and authenticates every time this
-  signature occurs, but the assigned login shell is missing or misconfigured. This looks like
-  the primary, ongoing root cause.
-- The connection-timeout signature (a minority, intermittent pattern) is consistent with
-  transient network conditions, host load, or an intermittent firewall rule — it does not
-  persist run-over-run, so it reads as a separate, likely-unrelated intermittent fault layered
-  on top of the persistent shell-configuration problem, rather than a second lasting phase.
+- The `/sbin/nologin` signature (the majority pattern through 08-09) is consistent with a
+  persistent account/shell-configuration problem on the Hostinger host for the specific SSH
+  account the backup workflow authenticates as.
+- The connection-timeout signature (intermittent, 3 of 10 runs) is consistent with transient
+  network conditions, host load, or an intermittent firewall rule.
+- **The 2026-08-10 permission-denied signature is the most actionable new lead.** Because
+  authentication itself now fails, where it previously always succeeded when the connection
+  reached the host, the most likely explanations are: (a) the backup SSH key was removed or
+  rotated out of the account's `authorized_keys` on the Hostinger host — possibly as part of
+  the same account/shell remediation the owner may have already started in response to this
+  incident; (b) the backup account itself was disabled; or (c) the `SSH_KEY` GitHub secret has
+  gone stale relative to what the host will accept. This is not yet confirmed as any one of
+  these — it is the narrowed set of plausible causes for the owner to check directly.
 - **Unverified hypothesis, explicitly not asserted as fact:** the onset of the `/sbin/nologin`
   signature on 2026-08-01 coincides with the date of the Hostinger native-addon recovery work
   recorded in the "Resolution — 2026-08-01" section of `INC-2026-07-31-01` (host-level access,
   Passenger restart, and associated hPanel/SSH activity on the same production host). No
   mechanism has been identified or confirmed connecting that recovery work to the backup
-  account's shell configuration; this is a candidate lead for the owner to check, not a
-  conclusion.
+  account's shell configuration or to today's key rejection; this remains a candidate lead for
+  the owner to check, not a conclusion.
 
 **Recovery actions:** None taken. This entry is diagnostic only, per production-safety rules
 — no SSH, credential, or host-configuration change was made from this session (no production
@@ -91,25 +109,30 @@ production data; it affects only the offsite copy's freshness.
 
 **Corrective/preventive actions (proposed, not yet performed):**
 
-- Owner to check, via Hostinger hPanel, the backup SSH account's configured login shell (the
-  `/sbin/nologin` cause) and, separately, whether the intermittent connection timeouts
-  correlate with any known network/firewall maintenance windows.
-- Once connectivity is restored, trigger a manual workflow run to confirm a successful
-  backup before relying on the next scheduled run.
+- Owner to check, via Hostinger hPanel, whether the backup SSH account's public key is still
+  present in `authorized_keys` and whether the account is enabled — this is now the most
+  direct lead given the 2026-08-10 permission-denied result.
+- If the key was intentionally rotated or removed, generate a new key pair, install the public
+  key on the host, and update the `SSH_KEY` GitHub Actions secret to match.
+- Separately, still check the backup account's configured login shell (the `/sbin/nologin`
+  cause) once authentication is restored, since that was the dominant failure before today.
+- Once fixed, trigger a manual workflow run to confirm a successful backup before relying on
+  the next scheduled run.
 - Consider whether `DEC-008`'s 7-set local retention window needs a temporary extension while
-  offsite backups are down, to avoid the local safety margin also running out — 9 missed
-  cycles already meets or exceeds that window.
+  offsite backups are down — 10 missed cycles already well exceeds that window.
 
-**Owner / next step:** Open. Owner (repository owner, with Hostinger hPanel access) to fix the
-backup SSH account's login shell and investigate the intermittent connectivity, then re-run the
-workflow manually to confirm recovery. No AI agent in this environment has production SSH
-access to perform this directly.
+**Owner / next step:** Open. Owner (repository owner, with Hostinger hPanel and GitHub secrets
+access) to verify the backup SSH key/account state on the host first (2026-08-10 finding),
+then the login shell, then update the `SSH_KEY` secret if needed, then re-run the workflow
+manually to confirm recovery. No AI agent in this environment has production SSH access or
+GitHub secrets access to perform any of this directly.
 
-**Related:** GitHub Actions workflow `production-backup.yml`, runs #16–#24 (run #16 id
+**Related:** GitHub Actions workflow `production-backup.yml`, runs #16–#25 (run #16 id
 `30686266957`, run #17 id `30734539240`, run #18 id `30788579089`, run #19 id `30880841578`,
 run #20 id `30978213492`, run #21 id `31074388681`, run #22 id `31147905259`, run #23 id
-`31238049884`, run #24 id `31293504581`); `DEC-008` (backup retention policy); "Resolution —
-2026-08-01" section of `INC-2026-07-31-01` below (candidate correlated event, unconfirmed).
+`31238049884`, run #24 id `31293504581`, run #25 id `31354732571`); `DEC-008` (backup
+retention policy); "Resolution — 2026-08-01" section of `INC-2026-07-31-01` below (candidate
+correlated event, unconfirmed).
 
 ---
 
