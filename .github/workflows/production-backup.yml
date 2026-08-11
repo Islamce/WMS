@@ -267,16 +267,24 @@ jobs:
         env:
           DRY: ${{ github.event.inputs.dry_run_retention }}
         run: |
-          set -euo pipefail
+          # Deliberately not set -e here: every remote step below is chained
+          # with && and the whole chain is covered by a single || fallback,
+          # so ANY failure (missing temp dir, failed scp, or a retention
+          # script error) hits the same graceful warning path instead of
+          # failing the job — matching this step's stated intent that
+          # retention problems must not invalidate an already-verified
+          # offsite backup. See INC-2026-08-06-01 (a bare `scp` before this
+          # fix bypassed that intent because set -e killed the script before
+          # the `|| echo warning` fallback was ever reached).
+          set -uo pipefail
           # Copy the tested retention script to a TEMP path OUTSIDE the deployed
           # checkout, run it with node 20, then remove it. The deployed tree is
           # never modified.
           tmp="/home/u716763642/.logs/wms/backup-retention.$$.js"
-          scp scripts/backup-retention.js "hostinger:$tmp"
           dry=""; [ "$DRY" = "true" ] && dry="--dry-run"
-          # Retention failure must NOT invalidate the already-verified offsite
-          # backup — warn, do not fail the job.
-          ssh hostinger "'$REMOTE_NODE' '$tmp' '$REMOTE_BACKUP_DIR' --keep '$KEEP_SETS' $dry; rc=\$?; rm -f '$tmp'; exit \$rc" \
+          ssh hostinger "mkdir -p '$(dirname "$tmp")'" \
+            && scp scripts/backup-retention.js "hostinger:$tmp" \
+            && ssh hostinger "'$REMOTE_NODE' '$tmp' '$REMOTE_BACKUP_DIR' --keep '$KEEP_SETS' $dry; rc=\$?; rm -f '$tmp'; exit \$rc" \
             || echo "::warning::Local retention reported a problem; offsite backup is still valid. Inspect $REMOTE_BACKUP_DIR."
 
       - name: Job summary (metadata only)

@@ -2,6 +2,52 @@
 
 This is the chronological operational memory for the project. It records durable summaries of conversations and work, not secrets or necessarily verbatim transcripts.
 
+## 2026-08-11 (cont'd) — Offsite backup: core path confirmed working; fifth bug (retention dir) found and fixed
+
+**Objective:** Continue closing `INC-2026-08-06-01` after merging the `DB_PATH` fix (PR #64).
+
+**Starting state:** PR #64 merged. Triggered `production-backup.yml` directly via the GitHub
+API again to validate.
+
+**Actions:** Run #38 showed the actual backup succeeded completely for the first time since
+2026-07-31: written, verified, restore-drilled (`integrity_check=ok, users=9, audit_rows=96`),
+downloaded, independently re-verified on the runner, and uploaded offsite with all three
+objects size-confirmed against the bucket. This is the disaster-recovery-critical part of the
+workflow, now proven working end-to-end. The job still failed, but only on local retention
+pruning: `scp` failed because `/home/u716763642/.logs/wms/` doesn't exist on the host. Reading
+the step's own code found a real design bug alongside it: the step's comment claims retention
+failures must not fail the job, but the `scp` command ran as a bare statement before the
+`|| echo warning` fallback (which only covered the subsequent `ssh` call), so `set -e` killed
+the whole step on the `scp` failure before that fallback was ever reached — contradicting the
+step's own stated intent. Fixed by creating the temp directory first and chaining all three
+remote operations under one shared `|| echo warning` fallback.
+
+**Evidence:** Run #38 (`31533906731`) log — full backup/verify/upload success block, then the
+`scp` failure. Workflow source read to identify the `set -e`/fallback-ordering bug.
+
+**Decisions:** Kept the fix minimal and mechanical (directory creation + fallback-chain
+reordering) rather than restructuring the retention step further, since the actual bug was
+narrow and well understood.
+
+**Risks/incidents:** `INC-2026-08-06-01` updated with this fifth finding — importantly, also
+updated to record that the core backup/offsite-upload path is now confirmed working, which is
+the actual disaster-recovery-relevant fact; the remaining bug only affects local set pruning,
+not data safety.
+
+**Files/PRs/commits changed:** `.github/workflows/production-backup.yml` (retention-step
+`mkdir -p` + fallback-chain fix), `docs/WMS-INCIDENT-LOG.md`, `docs/WMS-SESSION-LOG.md` (this
+entry), on branch `fix/backup-workflow-retention-dir-2026-08-11`, opened as a draft PR against
+`main`.
+
+**Production state:** Unchanged, other than the new backup set and offsite copy the successful
+run #38 itself produced (its whole purpose) — no application, database schema, or credential
+change.
+
+**Remaining work:** Merge this PR, trigger once more, confirm full `conclusion: success`
+(including the retention step), then close `INC-2026-08-06-01`.
+
+**Exact next step:** Wait for CI, merge on explicit instruction, trigger, verify.
+
 ## 2026-08-11 (cont'd) — Offsite backup: fourth bug found (DB_PATH), fixed in code
 
 **Objective:** Continue closing `INC-2026-08-06-01` after merging the `REMOTE_APP_DIR` fix

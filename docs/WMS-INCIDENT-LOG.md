@@ -196,7 +196,25 @@ second.
    Passenger itself uses per `docs/WMS-CURRENT-STATUS.md`'s production configuration
    invariants) and passing it explicitly as `DB_PATH` to the `scripts/backup.js` invocation
    only (`scripts/verify-backup.js` never touches `DB_PATH` — it verifies the already-produced
-   backup files, not the live database).
+   backup files, not the live database). Merged as PR #64 — see item 5.
+5. **A fifth, minor bug, surfaced only once 1–4 were fixed — and the good news that came with
+   it:** run #38 (after PR #64 merged) showed the actual backup succeeded completely for the
+   first time since 2026-07-31: written, verified, restore-drilled
+   (`integrity_check=ok, users=9, audit_rows=96`), downloaded, independently re-verified, and
+   uploaded offsite with all three objects size-confirmed. The disaster-recovery-critical part
+   of this workflow is proven working end-to-end. The job still failed, but only on the lowest-
+   stakes step: local retention pruning. `scp scripts/backup-retention.js
+   hostinger:/home/u716763642/.logs/wms/backup-retention.$$.js` failed with
+   `No such file or directory` because that temp directory doesn't exist on the host. Worse,
+   this exposed a real bug in the step's own error-handling design: its comment states
+   "Retention failure must NOT invalidate the already-verified offsite backup," but the `scp`
+   ran as a bare command before the `|| echo warning` fallback, which only wrapped the
+   subsequent `ssh` call — so `set -e` killed the whole step on the `scp` failure before the
+   graceful fallback was ever reached, contradicting the step's own stated intent. Fixed by
+   creating the temp directory first (`ssh hostinger "mkdir -p ..."`) and chaining all three
+   remote steps (`mkdir` && `scp` && `ssh`) under one `|| echo warning` fallback, so any
+   failure in local retention now degrades to a warning rather than failing the job — matching
+   what the step always claimed to do.
 
 **Evidence-class note:** all hPanel/SSH/checksum evidence above is **Reported by the
 operator** (per `DEC-010`) — this session had no Hostinger or production access and directed
@@ -218,12 +236,17 @@ indefinitely.
   confirmed items 1–2 fixed.
 - Run #37 (`31533205661`), after PR #63 (`REMOTE_APP_DIR` fix) merged: SSH, host-key, and the
   GLIBC addon load all succeeded — confirmed item 3 fixed. Failed at the new `DB_PATH` issue
-  (item 4), which was not yet fixed at that point.
-- The `DB_PATH` fix (item 4) has not yet been validated by a full green run; that is the
-  immediate next step once it merges.
+  (item 4).
+- Run #38 (`31533906731`), after PR #64 (`DB_PATH` fix) merged: **the actual backup, restore
+  drill, and offsite upload all succeeded** — confirmed item 4 fixed and the
+  disaster-recovery-critical path fully working. Failed only at local retention pruning
+  (item 5), a non-data-safety issue.
+- The retention-directory fix (item 5) has not yet been validated by a full green run; that is
+  the immediate next step once it merges.
 
-**This incident remains open, narrowed to one remaining step:** merge the `DB_PATH` fix and
-confirm a fully successful (`conclusion: success`) run before closing.
+**This incident remains open, narrowed to one remaining step:** merge the retention-directory
+fix and confirm a fully successful (`conclusion: success`) run before closing. The backup and
+offsite-upload path itself is already confirmed working as of run #38.
 
 ---
 
