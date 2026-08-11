@@ -2,6 +2,71 @@
 
 This is the chronological operational memory for the project. It records durable summaries of conversations and work, not secrets or necessarily verbatim transcripts.
 
+## 2026-08-11 — Offsite backup: SSH + host-key fixed live; app-dir bug found and fixed in code
+
+**Objective:** Solve `INC-2026-08-06-01` completely, working live with the operator who had
+direct Hostinger hPanel/SSH access (this session had none throughout).
+
+**Starting state:** 10+ consecutive `production-backup.yml` failures, most recently
+`Permission denied (publickey,password)` (run #25). No production/hPanel access available to
+this session at any point.
+
+**Actions:** Guided the operator step by step in real time: verified `authorized_keys`
+permissions (already correct), diagnosed an early regenerated key as an empty file (0
+meaningful bytes) and discarded it, had the operator generate a clean key
+(`wms-gha-backup-final-2026-08-11`, confirmed 432 bytes), register its public half both
+directly in `authorized_keys` and through hPanel's own SSH-key-management UI, and run a manual
+`ssh -vvv` test that confirmed `Authentication succeeded (publickey)` against
+`185.97.145.102:65002` as `u716763642` — proof independent of GitHub Actions' redacted logs.
+Updated the `HOSTINGER_SSH_PRIVATE_KEY` GitHub secret to match. The next run then failed
+differently (`Host key verification failed`); refreshed `HOSTINGER_KNOWN_HOSTS` via
+`ssh-keyscan`, cross-checking the ECDSA fingerprint against the one shown during the operator's
+manual login (exact match — not blind trust-on-first-use). The following run passed SSH auth
+and host-key verification, but then failed the actual backup step with the same
+`GLIBC_2.29 not found` signature as `INC-2026-07-31-01`. Directed a read-only checksum
+comparison (`sha256sum` on `better_sqlite3.node`) which showed the workflow's `REMOTE_APP_DIR`
+pointed at the legacy persistent path (old, incompatible addon,
+`e8f767df39a9a934b3705d0fffc401a12932bf94d650aae2d27733311f7ff842`), while the actual live
+release at `.builds/current` → `.builds/versions/manual-20260801T202313Z-1bd15f12` has the
+correct addon (`a9c4d701f59a492c538416211cc3e65257f1d74e3e4ce3d8d9862e1981676dc4`, exact match
+to the known-good Aug 1 checksum) — confirming production itself never regressed. Fixed
+`REMOTE_APP_DIR` in `production-backup.yml` to follow the `.builds/current` symlink instead of
+the stale legacy path.
+
+**Evidence:** All hPanel/SSH/checksum findings are **Reported by the operator** per `DEC-010`
+— this session verified only what appeared in GitHub Actions run logs and what the operator
+chose to share (fingerprints, checksums). GitHub Actions run #36 (`31532235669`) is the
+validation point: SSH auth and host-key verification both succeeded, only the (now-fixed)
+`REMOTE_APP_DIR` bug remained.
+
+**Decisions:** Did not attempt to touch the `better-sqlite3` addon itself anywhere — the
+GLIBC-2.29 finding was resolved by fixing a workflow path, not by rebuilding, replacing, or
+otherwise touching any native addon on production, keeping this outside `DEC-013`'s gated
+recovery procedure entirely (correctly so, since production's own addon was never the
+problem).
+
+**Risks/incidents:** `INC-2026-08-06-01` updated in place with a full "Resolution — 2026-08-11"
+section; kept open, narrowed to confirming one green run after the `REMOTE_APP_DIR` fix merges.
+Flagged separately: the operator inadvertently pasted the new SSH private key's full content
+into this chat session. Recorded as a follow-up rotation item — not a change to this
+resolution, since exploiting it still requires host access only the operator holds, but it
+should not be left unrotated.
+
+**Files/PRs/commits changed:** `.github/workflows/production-backup.yml` (`REMOTE_APP_DIR`
+fix), `docs/WMS-INCIDENT-LOG.md` (`INC-2026-08-06-01` resolution section),
+`docs/WMS-CURRENT-STATUS.md`, `docs/WMS-SESSION-LOG.md` (this entry), on branch
+`fix/backup-workflow-app-dir-2026-08-11`, opened as a draft PR against `main`.
+
+**Production state:** Unchanged. All SSH/key/hPanel actions were performed directly by the
+operator on their own account; this session made only the workflow-file code change, which
+does not touch production until the next scheduled/manual run exercises it.
+
+**Remaining work:** Merge this PR, trigger the workflow, confirm `conclusion: success`, then
+close `INC-2026-08-06-01`. Separately: rotate the exposed SSH key as a hygiene follow-up.
+
+**Exact next step:** Wait for CI, merge on explicit instruction as usual, then trigger
+`production-backup.yml` manually and verify success before marking the incident closed.
+
 ## 2026-08-10 — Offsite backup: SSH auth now rejected (new signature, run #25)
 
 **Objective:** User asked why offsite-backup failures were still occurring; checked latest
