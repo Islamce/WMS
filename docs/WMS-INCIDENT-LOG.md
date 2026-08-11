@@ -178,9 +178,25 @@ second.
    regressed** — `DEC-013`'s warning not to infer deployed identity from the persistent
    `nodejs/` directory applies exactly here. The bug was purely that
    `production-backup.yml`'s `REMOTE_APP_DIR` predated the Aug 1 release-based layout and was
-   never updated. Fixed in a follow-up PR by pointing `REMOTE_APP_DIR` at
+   never updated. Fixed in PR #63 by pointing `REMOTE_APP_DIR` at
    `~/domains/wms.kynox.io/.builds/current/nodejs` (the symlink, so it stays correct across
-   future deploys) instead of the legacy path.
+   future deploys) instead of the legacy path. Merged and triggered — see item 4.
+4. **A third, independent bug, surfaced only once 1–3 were fixed:** the backup step then
+   failed with `Backup failed: Cannot open database because the directory does not exist`. The
+   GLIBC error was gone (confirming the item-3 fix worked), but `scripts/backup.js` resolves
+   the database via `server/config.js`'s `DB_PATH` env var, falling back to a path *relative to
+   its own directory* when unset. The workflow's remote command never set `DB_PATH` at all —
+   previously this fell back to `REMOTE_APP_DIR/data/wms.db`, which coincidentally existed back
+   when `REMOTE_APP_DIR` was the legacy persistent path (the one place the database actually
+   lives). Once `REMOTE_APP_DIR` was corrected to the release symlink in item 3, that same
+   fallback now resolved to `.builds/current/nodejs/data/wms.db` — a path that doesn't exist,
+   since releases never carry the database (it lives outside the release tree by design; see
+   `docs/WMS-PRODUCTION-RUNBOOK.md`). Fixed by adding a `REMOTE_DB_PATH` value
+   (`/home/u716763642/domains/wms.kynox.io/nodejs/data/wms.db`, matching the `DB_PATH`
+   Passenger itself uses per `docs/WMS-CURRENT-STATUS.md`'s production configuration
+   invariants) and passing it explicitly as `DB_PATH` to the `scripts/backup.js` invocation
+   only (`scripts/verify-backup.js` never touches `DB_PATH` — it verifies the already-produced
+   backup files, not the live database).
 
 **Evidence-class note:** all hPanel/SSH/checksum evidence above is **Reported by the
 operator** (per `DEC-010`) — this session had no Hostinger or production access and directed
@@ -197,13 +213,17 @@ directly without the private key passing through chat again, then remove the exp
 still requires host access held only by the operator, but should not be left unrotated
 indefinitely.
 
-**Validation:** GitHub Actions run #36 (`31532235669`) progressed through SSH authentication
-and host-key verification successfully — both original blockers are confirmed fixed. The
-`REMOTE_APP_DIR` fix has not yet been validated by a full green run; that is the immediate
-next step once the workflow-file fix is merged.
+**Validation:**
+- Run #36 (`31532235669`): SSH authentication and host-key verification both succeeded —
+  confirmed items 1–2 fixed.
+- Run #37 (`31533205661`), after PR #63 (`REMOTE_APP_DIR` fix) merged: SSH, host-key, and the
+  GLIBC addon load all succeeded — confirmed item 3 fixed. Failed at the new `DB_PATH` issue
+  (item 4), which was not yet fixed at that point.
+- The `DB_PATH` fix (item 4) has not yet been validated by a full green run; that is the
+  immediate next step once it merges.
 
-**This incident remains open, narrowed to one remaining step:** merge the `REMOTE_APP_DIR` fix
-and confirm a fully successful (`conclusion: success`) run before closing.
+**This incident remains open, narrowed to one remaining step:** merge the `DB_PATH` fix and
+confirm a fully successful (`conclusion: success`) run before closing.
 
 ---
 

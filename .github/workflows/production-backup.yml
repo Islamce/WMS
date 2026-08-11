@@ -54,6 +54,12 @@ jobs:
       REMOTE_APP_DIR: /home/u716763642/domains/wms.kynox.io/.builds/current/nodejs
       REMOTE_NODE: /opt/alt/alt-nodejs20/root/usr/bin/node
       REMOTE_BACKUP_DIR: /home/u716763642/secure/wms-backups
+      # The live database lives outside the release tree (see
+      # docs/WMS-PRODUCTION-RUNBOOK.md); scripts/backup.js falls back to a
+      # path relative to REMOTE_APP_DIR when DB_PATH is unset, which no
+      # longer exists now that REMOTE_APP_DIR points at the release symlink.
+      # Must match the DB_PATH Passenger itself uses. See INC-2026-08-06-01.
+      REMOTE_DB_PATH: /home/u716763642/domains/wms.kynox.io/nodejs/data/wms.db
       KEEP_SETS: "7"
     steps:
       # Official GitHub actions only. Floating major tags (@v4) are accepted for
@@ -117,7 +123,7 @@ jobs:
           # Exactly the commands verified manually in production. set -e on the
           # remote makes any failure abort the job. No npm/migrate/restart/git.
           ssh hostinger "set -e; cd '$REMOTE_APP_DIR'; \
-            BACKUP_DIR='$REMOTE_BACKUP_DIR' '$REMOTE_NODE' scripts/backup.js; \
+            BACKUP_DIR='$REMOTE_BACKUP_DIR' DB_PATH='$REMOTE_DB_PATH' '$REMOTE_NODE' scripts/backup.js; \
             BACKUP_DIR='$REMOTE_BACKUP_DIR' '$REMOTE_NODE' scripts/verify-backup.js"
 
       - name: Identify + validate the NEW backup set (manifest diff)

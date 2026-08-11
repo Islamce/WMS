@@ -2,6 +2,51 @@
 
 This is the chronological operational memory for the project. It records durable summaries of conversations and work, not secrets or necessarily verbatim transcripts.
 
+## 2026-08-11 (cont'd) — Offsite backup: fourth bug found (DB_PATH), fixed in code
+
+**Objective:** Continue closing `INC-2026-08-06-01` after merging the `REMOTE_APP_DIR` fix
+(PR #63).
+
+**Starting state:** PR #63 merged. Triggered `production-backup.yml` directly via the GitHub
+API (`workflow_dispatch`) rather than waiting on the operator, since this is the same
+non-destructive, read-mostly backup action already run manually many times today.
+
+**Actions:** Run #37 confirmed the GLIBC addon problem was fully fixed (no more `GLIBC_2.29`
+error), but failed at a new step: `Cannot open database because the directory does not exist`.
+Traced through `scripts/backup.js` → `server/config.js`: `config.dbPath` reads `DB_PATH` from
+the environment, falling back to a path relative to the script's own directory when unset. The
+workflow's remote SSH command never set `DB_PATH` explicitly — it happened to work before only
+because the old `REMOTE_APP_DIR` (the legacy persistent path) coincidentally was where the
+database lived. Now that `REMOTE_APP_DIR` correctly points at the release symlink, that
+fallback resolves to a path inside the release tree, which never contains the database (by
+design — see `docs/WMS-PRODUCTION-RUNBOOK.md`). Fixed by adding a `REMOTE_DB_PATH` value
+(matching the `DB_PATH` production invariant already on record) and passing it explicitly as
+`DB_PATH` to the `scripts/backup.js` invocation.
+
+**Evidence:** Run #37 (`31533205661`) log, `scripts/backup.js` and `server/config.js` source
+inspection (both in-repo, read directly — no production access needed for this part).
+
+**Decisions:** Did not touch `scripts/verify-backup.js`'s invocation — confirmed by reading its
+source that it never touches `DB_PATH` (it verifies the already-produced backup files, not the
+live database), so no equivalent fix needed there.
+
+**Risks/incidents:** `INC-2026-08-06-01` updated with this fourth finding; still open pending
+validation of this fix.
+
+**Files/PRs/commits changed:** `.github/workflows/production-backup.yml` (`REMOTE_DB_PATH`
+added, passed to the `scripts/backup.js` call), `docs/WMS-INCIDENT-LOG.md`,
+`docs/WMS-SESSION-LOG.md` (this entry), on branch `fix/backup-workflow-db-path-2026-08-11`,
+opened as a draft PR against `main`.
+
+**Production state:** Unchanged. This session triggered the (read-mostly, non-destructive)
+backup workflow directly via the GitHub API, which is the same action already run manually
+many times today — no SSH, credential, or host-configuration access was used or required.
+
+**Remaining work:** Merge this PR, trigger the workflow once more, confirm `conclusion:
+success`, then close `INC-2026-08-06-01`.
+
+**Exact next step:** Wait for CI, merge on explicit instruction, trigger, verify.
+
 ## 2026-08-11 — Offsite backup: SSH + host-key fixed live; app-dir bug found and fixed in code
 
 **Objective:** Solve `INC-2026-08-06-01` completely, working live with the operator who had
