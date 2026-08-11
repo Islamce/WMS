@@ -2,6 +2,48 @@
 
 This is the chronological operational memory for the project. It records durable summaries of conversations and work, not secrets or necessarily verbatim transcripts.
 
+## 2026-08-11 (cont'd) — INC-2026-08-06-01 closed: offsite backup fully restored
+
+**Objective:** Close out `INC-2026-08-06-01` after merging the fifth and final fix
+(PR #65, retention-directory error handling).
+
+**Starting state:** PR #65 merged. Triggered `production-backup.yml` directly via the GitHub
+API for the final validation run.
+
+**Actions:** Run #39 completed with `conclusion: success` across all 15 job steps, including
+"Prune old LOCAL sets" — the first fully clean end-to-end run since 2026-07-31 (11 days of
+failures, 5 distinct bugs found and fixed in one continuous working session with the
+operator). Updated `INC-2026-08-06-01`'s status to Resolved/Closed with this run cited as
+final validation evidence, and `docs/WMS-CURRENT-STATUS.md`'s "Known remaining work" to mark
+the backup-restoration item done, adding a separate, explicitly non-blocking item for the
+still-open SSH-key-rotation hygiene follow-up.
+
+**Evidence:** Run #39 (`31535041998`) job step list — all 15 steps `success`, confirmed via
+`list_workflow_jobs` rather than inferring from the run-level conclusion alone.
+
+**Decisions:** Kept the exposed-SSH-key rotation as a separate tracked item rather than
+folding it into this incident's closure criteria, since it's a hygiene concern (the key still
+requires host access only the operator holds) and not a defect that caused any of the five
+bugs fixed today.
+
+**Risks/incidents:** `INC-2026-08-06-01` closed. No open incidents remain from today's work.
+The SSH-key rotation remains outstanding as a tracked, non-blocking follow-up.
+
+**Files/PRs/commits changed:** `docs/WMS-INCIDENT-LOG.md` (`INC-2026-08-06-01` closed),
+`docs/WMS-CURRENT-STATUS.md`, `docs/WMS-SESSION-LOG.md` (this entry), on branch
+`docs/close-offsite-backup-incident-2026-08-11`, opened as a draft PR against `main`.
+
+**Production state:** Unchanged beyond the successful backups/offsite uploads the validation
+runs themselves produced (their entire purpose). No application, database schema, or
+credential change was made by this session at any point across the whole incident — all
+SSH/hPanel/GitHub-secret actions were performed directly by the operator, guided remotely.
+
+**Remaining work:** Rotate the exposed SSH key (tracked in `WMS-CURRENT-STATUS.md`, item 12).
+Otherwise, `production-backup.yml` needs no further attention — back on its normal 02:30 UTC
+daily schedule.
+
+**Exact next step:** Merge this documentation PR once CI passes.
+
 ## 2026-08-11 (cont'd) — Offsite backup: core path confirmed working; fifth bug (retention dir) found and fixed
 
 **Objective:** Continue closing `INC-2026-08-06-01` after merging the `DB_PATH` fix (PR #64).

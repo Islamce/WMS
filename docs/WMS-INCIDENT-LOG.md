@@ -4,10 +4,10 @@ This log records production failures, data-risk events, deployment failures, rec
 
 ## INC-2026-08-06-01 — Production offsite backup workflow failing (10+ consecutive days, SSH auth now rejected)
 
-**Status:** Root cause fixed for both the SSH authentication failures and a second,
-independent bug the SSH fix uncovered, as of 2026-08-11 — see "Resolution — 2026-08-11" at the
-end of this entry. **Not yet closed:** the `REMOTE_APP_DIR` workflow fix has not yet been
-validated by a full green run. The diagnosis below is preserved unchanged as the historical
+**Status:** Resolved and closed on 2026-08-11. All five root causes found across the day are
+fixed and validated by a fully successful run (all 15 steps, including local retention
+pruning). See "Resolution — 2026-08-11" at the end of this entry for the complete evidence
+chain and closing validation. The diagnosis below is preserved unchanged as the historical
 record of how the incident was worked through.
 
 **Escalation (2026-08-10):** A third, more serious error signature appeared today —
@@ -241,12 +241,15 @@ indefinitely.
   drill, and offsite upload all succeeded** — confirmed item 4 fixed and the
   disaster-recovery-critical path fully working. Failed only at local retention pruning
   (item 5), a non-data-safety issue.
-- The retention-directory fix (item 5) has not yet been validated by a full green run; that is
-  the immediate next step once it merges.
+- Run #39 (`31535041998`), after PR #65 (retention-directory fix) merged: **fully successful —
+  all 15 job steps completed with `conclusion: success`, including "Prune old LOCAL sets."**
+  This is the first fully clean end-to-end run since 2026-07-31.
 
-**This incident remains open, narrowed to one remaining step:** merge the retention-directory
-fix and confirm a fully successful (`conclusion: success`) run before closing. The backup and
-offsite-upload path itself is already confirmed working as of run #38.
+**Closed.** All five root causes are fixed and validated. `production-backup.yml` is back on
+its normal daily schedule with no known outstanding defects. The exposed-SSH-key rotation
+noted above remains a separate, open hygiene follow-up — it is not a defect in this incident
+and does not block closure, since exploiting it still requires host access held only by the
+operator.
 
 ---
 
