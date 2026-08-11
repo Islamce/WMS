@@ -4,7 +4,11 @@ This log records production failures, data-risk events, deployment failures, rec
 
 ## INC-2026-08-06-01 — Production offsite backup workflow failing (10+ consecutive days, SSH auth now rejected)
 
-**Status:** Open. No corrective action taken yet; this entry records diagnosis only.
+**Status:** Root cause fixed for both the SSH authentication failures and a second,
+independent bug the SSH fix uncovered, as of 2026-08-11 — see "Resolution — 2026-08-11" at the
+end of this entry. **Not yet closed:** the `REMOTE_APP_DIR` workflow fix has not yet been
+validated by a full green run. The diagnosis below is preserved unchanged as the historical
+record of how the incident was worked through.
 
 **Escalation (2026-08-10):** A third, more serious error signature appeared today —
 `Permission denied (publickey,password)`. Until now every failure was either a connectivity
@@ -133,6 +137,73 @@ run #20 id `30978213492`, run #21 id `31074388681`, run #22 id `31147905259`, ru
 `31238049884`, run #24 id `31293504581`, run #25 id `31354732571`); `DEC-008` (backup
 retention policy); "Resolution — 2026-08-01" section of `INC-2026-07-31-01` below (candidate
 correlated event, unconfirmed).
+
+**Resolution — 2026-08-11 (Reported by the operator, who had direct Hostinger hPanel/SSH
+access; this session had none and directed the diagnosis and fixes remotely):**
+
+Two independent problems were found and fixed, in sequence — fixing the first uncovered the
+second.
+
+1. **SSH authentication (the original `Permission denied` cause).** The operator confirmed via
+   hPanel that the account's `authorized_keys` and directory permissions were already correct
+   (`~/.ssh` `700`, `authorized_keys` `600`); an early regenerated key turned out to have been
+   saved as an empty file (0 meaningful bytes) and was discarded. A clean key pair
+   (`wms-gha-backup-final-2026-08-11`, ED25519, confirmed 432 bytes) was generated, its public
+   half added both directly to `authorized_keys` and through hPanel's own SSH-key-management UI
+   (hPanel appears to manage this list independently of direct file edits), and a manual
+   external `ssh -vvv` test from the operator's own session confirmed
+   `Authentication succeeded (publickey)` against host `185.97.145.102:65002` as user
+   `u716763642` — independently proving the key, host, port, and username were all correct
+   before touching GitHub. The corresponding private key was then set as the
+   `HOSTINGER_SSH_PRIVATE_KEY` GitHub Actions secret.
+2. **Host-key verification (`Host key verification failed`, surfaced only once the key problem
+   above was fixed).** The `HOSTINGER_KNOWN_HOSTS` secret was stale relative to the host's
+   current key set. Refreshed via `ssh-keyscan -p 65002 185.97.145.102`; the resulting
+   `ecdsa-sha2-nistp256` line's fingerprint (`SHA256:rFk+GudhBB0JkP03NibGoh+hCfSIVdc1SidDLeA9BXI`)
+   was independently cross-checked against the fingerprint shown during the operator's own
+   manual login moments earlier — an exact match, not blind trust-on-first-use. All three host
+   key lines (`ssh-rsa`, `ecdsa-sha2-nistp256`, `ssh-ed25519`) from the scan were set as the new
+   `HOSTINGER_KNOWN_HOSTS` secret value.
+3. **A second, independent bug, surfaced only once 1–2 were fixed:** the backup step then
+   failed with `Backup failed: /lib64/libm.so.6: version 'GLIBC_2.29' not found`, the same
+   error signature as `INC-2026-07-31-01`. Read-only checksum comparison
+   (`sha256sum` on `better_sqlite3.node`) showed the workflow's `REMOTE_APP_DIR`
+   (`~/domains/wms.kynox.io/nodejs`, the legacy persistent path) still holds the old,
+   GLIBC-2.29-requiring addon (`e8f767df39a9a934b3705d0fffc401a12932bf94d650aae2d27733311f7ff842`),
+   while the actual live release Passenger serves —
+   `~/domains/wms.kynox.io/.builds/current` → `.builds/versions/manual-20260801T202313Z-1bd15f12`
+   — has the correct, GLIBC-2.28-compatible addon
+   (`a9c4d701f59a492c538416211cc3e65257f1d74e3e4ce3d8d9862e1981676dc4`, matching the known-good
+   checksum from the Aug 1 recovery exactly). **This confirms production itself never
+   regressed** — `DEC-013`'s warning not to infer deployed identity from the persistent
+   `nodejs/` directory applies exactly here. The bug was purely that
+   `production-backup.yml`'s `REMOTE_APP_DIR` predated the Aug 1 release-based layout and was
+   never updated. Fixed in a follow-up PR by pointing `REMOTE_APP_DIR` at
+   `~/domains/wms.kynox.io/.builds/current/nodejs` (the symlink, so it stays correct across
+   future deploys) instead of the legacy path.
+
+**Evidence-class note:** all hPanel/SSH/checksum evidence above is **Reported by the
+operator** (per `DEC-010`) — this session had no Hostinger or production access and directed
+the diagnosis via chat, verifying only the public, non-sensitive artifacts the operator chose
+to share (host key fingerprints, checksums, public key fingerprints) and the GitHub Actions
+run logs directly.
+
+**Security note:** during troubleshooting, the operator inadvertently pasted the full private
+key content for `wms-gha-backup-final-2026-08-11` into this chat session. That key is treated
+as exposed and scheduled for rotation as a follow-up hygiene action (generate a fresh key,
+install only the public half via hPanel and `authorized_keys`, update the GitHub secret
+directly without the private key passing through chat again, then remove the exposed key from
+`authorized_keys`/hPanel). This does not affect the resolution above, since the exposed key
+still requires host access held only by the operator, but should not be left unrotated
+indefinitely.
+
+**Validation:** GitHub Actions run #36 (`31532235669`) progressed through SSH authentication
+and host-key verification successfully — both original blockers are confirmed fixed. The
+`REMOTE_APP_DIR` fix has not yet been validated by a full green run; that is the immediate
+next step once the workflow-file fix is merged.
+
+**This incident remains open, narrowed to one remaining step:** merge the `REMOTE_APP_DIR` fix
+and confirm a fully successful (`conclusion: success`) run before closing.
 
 ---
 
