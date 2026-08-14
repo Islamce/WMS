@@ -29,17 +29,6 @@ function round(value, digits = 2) {
   return Math.round(Number(value || 0) * factor) / factor;
 }
 
-function operationalCategory(row) {
-  const notes = String(row.notes || '').toLowerCase();
-  if (notes.startsWith('opening stock import')) return { category: 'OPENING_BALANCE', reversalOf: null };
-  if (notes.startsWith('gi reversal')) return { category: 'REVERSAL', reversalOf: 'ISSUE' };
-  if (notes.startsWith('reallocation')) return { category: row.transaction_type === 'IN' ? 'TRANSFER_IN' : 'TRANSFER_OUT', reversalOf: null };
-  if (notes.startsWith('cycle count') || notes.startsWith('physical inventory')) {
-    return { category: row.transaction_type === 'IN' ? 'ADJUSTMENT_IN' : 'ADJUSTMENT_OUT', reversalOf: null };
-  }
-  return { category: row.transaction_type === 'IN' ? 'RECEIPT' : 'ISSUE', reversalOf: null };
-}
-
 function historyMovements() {
   return db.prepare(`SELECT h.id, COALESCE(h.material_id,m.id) AS material_id, h.material_code,
     COALESCE(h.movement_category,h.movement_type) AS movement_category, h.reversal_of_category,
@@ -56,16 +45,21 @@ function historyMovements() {
 
 function operationalMovements() {
   return db.prepare(`SELECT st.id, st.material_id, m.item_code AS material_code, st.transaction_type,
-    st.quantity, st.transaction_date, st.notes
-    FROM stock_transactions st JOIN materials m ON m.id=st.material_id`).all().map((row) => {
-      const classified = operationalCategory(row);
-      return {
-        id: `O${row.id}`, material_id: row.material_id, material_code: row.material_code,
-        category: classified.category, reversal_of_category: classified.reversalOf,
-        quantity: Number(row.quantity), posting_date: isoDay(row.transaction_date),
-        reference: row.notes || null, source_kind: 'OPERATIONAL_LEDGER', source_system: 'WMS',
-      };
-    });
+    st.movement_category, st.movement_classification_status, st.reversal_of_transaction_id,
+    original.movement_category AS reversal_of_category, st.quantity, st.transaction_date,
+    st.reservation_number, st.notes
+    FROM stock_transactions st
+    JOIN materials m ON m.id=st.material_id
+    LEFT JOIN stock_transactions original ON original.id=st.reversal_of_transaction_id`).all().map((row) => ({
+      id: `O${row.id}`, material_id: row.material_id, material_code: row.material_code,
+      category: row.movement_category || 'UNCLASSIFIED',
+      reversal_of_category: row.reversal_of_category || null,
+      reversal_of_transaction_id: row.reversal_of_transaction_id || null,
+      classification_status: row.movement_classification_status,
+      quantity: Number(row.quantity), posting_date: isoDay(row.transaction_date),
+      reference: row.reservation_number || row.notes || null,
+      source_kind: 'OPERATIONAL_LEDGER', source_system: 'WMS',
+    }));
 }
 
 function canonicalMovements() {
@@ -100,7 +94,12 @@ function movementCoverage(movements) {
   const start = shiftDay(end, -(WINDOW_DAYS - 1));
   const intervals = [];
   const operationalStart = db.prepare(`SELECT MIN(date(transaction_date)) AS day FROM stock_transactions
-    WHERE notes IS NULL OR lower(notes) NOT LIKE 'opening stock import%'`).get().day;
+    WHERE movement_category IS NOT NULL
+      AND movement_category <> 'OPENING_BALANCE'
+      AND movement_classification_status IN ('EXPLICIT','BACKFILLED')`).get().day;
+  const unresolvedOperationalRows = db.prepare(`SELECT COUNT(*) AS count FROM stock_transactions
+    WHERE date(transaction_date) BETWEEN ? AND ?
+      AND (movement_category IS NULL OR movement_classification_status='NEEDS_REVIEW')`).get(start, end).count;
   if (operationalStart) intervals.push({ start: isoDay(operationalStart), end, source: 'OPERATIONAL_LEDGER' });
   db.prepare(`SELECT b.id, b.period_start, b.period_end,
     MIN(COALESCE(h.posting_date,h.movement_date)) AS actual_start,
@@ -121,7 +120,7 @@ function movementCoverage(movements) {
     if (clippedStart <= clippedEnd) coveredDays += dayDiff(clippedStart, clippedEnd) + 1;
   });
   coveredDays = Math.min(WINDOW_DAYS, coveredDays);
-  const complete = Boolean(operationalStart && isoDay(operationalStart) <= start);
+  const complete = Boolean(operationalStart && isoDay(operationalStart) <= start && unresolvedOperationalRows === 0);
   const status = complete ? 'COMPLETE' : coveredDays > 0 ? 'PARTIAL' : 'NONE';
   const analyticalMovements = movements.filter((movement) => movement.category !== 'OPENING_BALANCE');
   const movementDates = analyticalMovements.map((movement) => movement.posting_date).filter(Boolean).sort();
@@ -133,11 +132,14 @@ function movementCoverage(movements) {
     covered_days: coveredDays, coverage_percent: round((coveredDays / WINDOW_DAYS) * 100, 1),
     earliest_movement_date: movementDates[0] || null,
     latest_movement_date: movementDates.at(-1) || null,
+    unresolved_operational_rows: unresolvedOperationalRows,
     materials_with_history: materialIds.size,
     materials_without_history: allMaterialIds.filter((id) => !materialIds.has(id)).length,
     intervals: merged,
     assumption: 'Only the operational ledger may establish continuous global coverage. Import batches contribute observed issue dates, not completeness.',
-    warning: complete ? null : 'Movement coverage is incomplete. No observed movement must not be interpreted as proof that no movement occurred.',
+    warning: complete ? null : unresolvedOperationalRows > 0
+      ? `${unresolvedOperationalRows} operational movement row(s) require category review. No observed movement must not be interpreted as proof that no movement occurred.`
+      : 'Movement coverage is incomplete. No observed movement must not be interpreted as proof that no movement occurred.',
   };
 }
 

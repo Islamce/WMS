@@ -220,6 +220,88 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    id: '014_operational_movement_semantics',
+    description: 'Persist operational movement categories and traceable reversal links; backfill only unambiguous legacy records.',
+    up(database) {
+      const categories = "'RECEIPT','ISSUE','RETURN','TRANSFER_IN','TRANSFER_OUT','ADJUSTMENT_IN','ADJUSTMENT_OUT','REVERSAL','OPENING_BALANCE'";
+      addColumnIfMissing(database, 'stock_transactions', 'movement_category', `TEXT CHECK (movement_category IS NULL OR movement_category IN (${categories}))`);
+      addColumnIfMissing(database, 'stock_transactions', 'movement_classification_status', "TEXT NOT NULL DEFAULT 'NEEDS_REVIEW' CHECK (movement_classification_status IN ('EXPLICIT','BACKFILLED','NEEDS_REVIEW'))");
+      addColumnIfMissing(database, 'stock_transactions', 'category_backfill_reason', 'TEXT');
+      addColumnIfMissing(database, 'stock_transactions', 'reversal_of_transaction_id', 'INTEGER REFERENCES stock_transactions(id) ON DELETE SET NULL');
+      addColumnIfMissing(database, 'stock_transactions', 'request_line_id', 'INTEGER REFERENCES material_request_lines(id) ON DELETE SET NULL');
+
+      database.exec(`
+        UPDATE stock_transactions
+        SET movement_category = CASE
+          WHEN lower(COALESCE(notes, '')) LIKE 'opening stock import — batch %' AND transaction_type='IN' THEN 'OPENING_BALANCE'
+          WHEN lower(COALESCE(notes, '')) LIKE 'gi reversal %' AND transaction_type='IN' THEN 'REVERSAL'
+          WHEN lower(COALESCE(notes, '')) LIKE 'gi % / %' AND transaction_type='OUT' THEN 'ISSUE'
+          WHEN lower(COALESCE(notes, '')) LIKE 'reallocation % to %' AND transaction_type='OUT' THEN 'TRANSFER_OUT'
+          WHEN lower(COALESCE(notes, '')) LIKE 'reallocation % from %' AND transaction_type='IN' THEN 'TRANSFER_IN'
+          WHEN lower(COALESCE(notes, '')) LIKE 'cycle count % adjustment (%' AND transaction_type='IN' THEN 'ADJUSTMENT_IN'
+          WHEN lower(COALESCE(notes, '')) LIKE 'cycle count % adjustment (%' AND transaction_type='OUT' THEN 'ADJUSTMENT_OUT'
+          WHEN lower(COALESCE(notes, '')) LIKE 'physical inventory % adjustment (%' AND transaction_type='IN' THEN 'ADJUSTMENT_IN'
+          WHEN lower(COALESCE(notes, '')) LIKE 'physical inventory % adjustment (%' AND transaction_type='OUT' THEN 'ADJUSTMENT_OUT'
+          WHEN lower(COALESCE(notes, '')) = 'sample gi history' AND transaction_type='OUT' THEN 'ISSUE'
+          WHEN lower(COALESCE(notes, '')) = 'sample gr history' AND transaction_type='IN' THEN 'RECEIPT'
+          ELSE NULL
+        END
+        WHERE movement_category IS NULL;
+
+        UPDATE stock_transactions
+        SET movement_classification_status = CASE
+              WHEN movement_category='REVERSAL' THEN 'NEEDS_REVIEW'
+              WHEN movement_category IS NULL THEN 'NEEDS_REVIEW'
+              ELSE 'BACKFILLED'
+            END,
+            category_backfill_reason = CASE
+              WHEN movement_category='REVERSAL' THEN 'REVERSAL_ORIGINAL_NOT_UNAMBIGUOUS'
+              WHEN movement_category IS NULL THEN 'UNRECOGNIZED_LEGACY_NOTES'
+              ELSE NULL
+            END
+        WHERE movement_classification_status='NEEDS_REVIEW';
+
+        UPDATE stock_transactions AS reversal
+        SET reversal_of_transaction_id = (
+          SELECT original.id
+          FROM stock_transactions AS original
+          WHERE original.id < reversal.id
+            AND original.transaction_type='OUT'
+            AND original.movement_category='ISSUE'
+            AND original.material_id=reversal.material_id
+            AND original.reservation_number=reversal.reservation_number
+          ORDER BY original.id DESC
+          LIMIT 1
+        )
+        WHERE reversal.movement_category='REVERSAL'
+          AND reversal.reversal_of_transaction_id IS NULL
+          AND reversal.reservation_number IS NOT NULL
+          AND 1 = (
+            SELECT COUNT(*)
+            FROM stock_transactions AS original
+            WHERE original.id < reversal.id
+              AND original.transaction_type='OUT'
+              AND original.movement_category='ISSUE'
+              AND original.material_id=reversal.material_id
+              AND original.reservation_number=reversal.reservation_number
+          );
+
+        UPDATE stock_transactions
+        SET movement_classification_status='BACKFILLED', category_backfill_reason=NULL
+        WHERE movement_category='REVERSAL'
+          AND reversal_of_transaction_id IS NOT NULL
+          AND movement_classification_status='NEEDS_REVIEW';
+
+        CREATE INDEX IF NOT EXISTS idx_stock_tx_category_date
+          ON stock_transactions(movement_category, transaction_date);
+        CREATE INDEX IF NOT EXISTS idx_stock_tx_reversal_original
+          ON stock_transactions(reversal_of_transaction_id);
+        CREATE INDEX IF NOT EXISTS idx_stock_tx_request_line
+          ON stock_transactions(request_line_id);
+      `);
+    },
+  },
 ];
 
 function ensureTable() {

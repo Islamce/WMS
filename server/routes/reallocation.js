@@ -275,9 +275,11 @@ router.post('/:id/execute', requirePermission('bin_batch_assignment'), (req, res
 
     if (target.toWarehouse !== batch.warehouse_code) {
       recordMovement({ type: 'OUT', materialId: batch.material_id, warehouseCode: batch.warehouse_code,
-        quantity: qty, userId: req.user.id, notes: `Reallocation ${move.realloc_number} to ${target.toWarehouse}` });
+        quantity: qty, userId: req.user.id, movementCategory: 'TRANSFER_OUT',
+        notes: `Reallocation ${move.realloc_number} to ${target.toWarehouse}` });
       recordMovement({ type: 'IN', materialId: batch.material_id, warehouseCode: target.toWarehouse,
-        quantity: qty, userId: req.user.id, notes: `Reallocation ${move.realloc_number} from ${batch.warehouse_code}` });
+        quantity: qty, userId: req.user.id, movementCategory: 'TRANSFER_IN',
+        notes: `Reallocation ${move.realloc_number} from ${batch.warehouse_code}` });
     }
 
     db.prepare(`UPDATE stock_reallocations SET status='EXECUTED', new_batch_id=?, moved_by=?, moved_by_name=?,

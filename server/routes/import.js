@@ -522,11 +522,11 @@ const ENTITIES = {
       const txDateColumn = transactionDateColumn();
       const insertTransaction = txDateColumn
         ? db.prepare(`INSERT INTO stock_transactions
-          (transaction_type,material_id,location_id,quantity,user_id,notes,${txDateColumn})
-          VALUES('IN',@material_id,@location_id,@quantity,@user_id,@notes,@receiving_date)`)
+          (transaction_type,material_id,location_id,quantity,user_id,movement_category,movement_classification_status,notes,${txDateColumn})
+          VALUES('IN',@material_id,@location_id,@quantity,@user_id,'OPENING_BALANCE','EXPLICIT',@notes,@receiving_date)`)
         : db.prepare(`INSERT INTO stock_transactions
-          (transaction_type,material_id,location_id,quantity,user_id,notes)
-          VALUES('IN',@material_id,@location_id,@quantity,@user_id,@notes)`);
+          (transaction_type,material_id,location_id,quantity,user_id,movement_category,movement_classification_status,notes)
+          VALUES('IN',@material_id,@location_id,@quantity,@user_id,'OPENING_BALANCE','EXPLICIT',@notes)`);
 
       return applyRows(rows, (r) => {
         const materialCode = s(r.material_code);

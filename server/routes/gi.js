@@ -167,7 +167,7 @@ router.post('/:id/post', (req, res) => {
     // Movement ledger: goods issue = stock OUT (one row per issued line).
     picked.forEach((l) => recordMovement({
       type: 'OUT', materialId: l.material_id, warehouseCode: header.issue_warehouse_code,
-      quantity: l.picked_quantity, userId: req.user.id,
+      quantity: l.picked_quantity, userId: req.user.id, movementCategory: 'ISSUE', requestLineId: l.id,
       reservationNumber: header.erp_reservation_number || header.erp_reference_number,
       notes: `GI ${result.response.giDocumentNumber} / ${header.request_number}`,
     }));
@@ -220,6 +220,25 @@ router.post('/:id/reverse', (req, res) => {
     return res.status(400).json({ error: 'Nothing was issued on this request; nothing to reverse.' });
   }
 
+  const originalMovementByLine = new Map();
+  for (const line of issuedLines) {
+    let originals = db.prepare(`SELECT id FROM stock_transactions
+      WHERE request_line_id=? AND material_id=? AND movement_category='ISSUE'
+      ORDER BY id DESC`).all(line.id, line.material_id);
+    if (originals.length !== 1) {
+      // Pre-migration GI rows lack request_line_id. Their exact document and
+      // material may be used only when that evidence identifies one row.
+      originals = db.prepare(`SELECT id FROM stock_transactions
+        WHERE material_id=? AND transaction_type='OUT'
+          AND notes=?
+        ORDER BY id DESC`).all(line.material_id, `GI ${header.gi_document_number} / ${header.request_number}`);
+    }
+    if (originals.length !== 1) {
+      return res.status(409).json({ error: 'Cannot safely identify the original goods-issue ledger row for reversal; it has been left for audited review.' });
+    }
+    originalMovementByLine.set(line.id, originals[0].id);
+  }
+
   const result = erp.connector().reverseGoodsIssue({
     requestNumber: header.request_number,
     originalGiDocument: header.gi_document_number,
@@ -238,7 +257,8 @@ router.post('/:id/reverse', (req, res) => {
     issuedLines.forEach((l) => {
       recordMovement({
         type: 'IN', materialId: l.material_id, warehouseCode: header.issue_warehouse_code,
-        quantity: l.issued_quantity, userId: req.user.id,
+        quantity: l.issued_quantity, userId: req.user.id, movementCategory: 'REVERSAL',
+        reversalOfTransactionId: originalMovementByLine.get(l.id), requestLineId: l.id,
         reservationNumber: header.erp_reservation_number || header.erp_reference_number,
         notes: `GI reversal ${result.response.reversalDocumentNumber} / ${header.request_number}`,
       });

@@ -78,6 +78,7 @@ echo "=== Phase 2B: corrective workflow context + analytical integrity (clean da
 fresh_db || exit 1
 start_server || exit 1
 run_suite corrective_integrity_test.py
+if ! node tests/e2e/operational_semantics_migration_test.js; then FAILED=1; fi
 stop_server
 
 echo ""

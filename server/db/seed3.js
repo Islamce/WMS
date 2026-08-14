@@ -87,8 +87,8 @@ function seed3() {
     VALUES (?, ?, ?, ?, 'SUP10', 'Sample Supplies Co', ?, ?, ?, ?, ?, ?, 'R-01-01-05', 'RELEASED', ?)`);
   const insTx = db.prepare(`
     INSERT INTO stock_transactions
-      (transaction_type, material_id, location_id, quantity, user_id, notes, transaction_date)
-    VALUES (?, ?, (SELECT id FROM locations WHERE code=?), ?, ?, ?, ?)`);
+      (transaction_type, movement_category, movement_classification_status, material_id, location_id, quantity, user_id, notes, transaction_date)
+    VALUES (?, ?, 'EXPLICIT', ?, (SELECT id FROM locations WHERE code=?), ?, ?, ?, ?)`);
 
   const run = db.transaction(() => {
     SAMPLE_MATERIALS.forEach(([code, desc, unit, price, group, profileName], idx) => {
@@ -100,7 +100,7 @@ function seed3() {
       for (let e = 0; e < p.eventsIn90; e++) {
         const day = Math.floor(rand() * 88) + 1;
         const qty = Math.round(p.qtyMin + rand() * (p.qtyMax - p.qtyMin));
-        insTx.run('OUT', matId, WH, qty, userId, 'Sample GI history', daysAgo(day));
+        insTx.run('OUT', 'ISSUE', matId, WH, qty, userId, 'Sample GI history', daysAgo(day));
         consumed += qty;
       }
       // Dead stock: one old receipt ~110 days ago, nothing since.
@@ -109,7 +109,7 @@ function seed3() {
       let received = 0;
       receipts.forEach(([day, qty], rIdx) => {
         if (qty <= 0) return;
-        insTx.run('IN', matId, WH, qty, userId, 'Sample GR history', daysAgo(day));
+        insTx.run('IN', 'RECEIPT', matId, WH, qty, userId, 'Sample GR history', daysAgo(day));
         received += qty;
       });
 

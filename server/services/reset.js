@@ -21,9 +21,8 @@ const TRANSACTIONAL = [
   'notification_log', 'erp_integration_log',
   'shipments', 'stock_reallocations', 'inventory_count_lines', 'inventory_sessions',
   'picking_allocations', 'picking_tasks', 'request_attachments',
-  'material_request_lines', 'material_request_headers',
-  'qr_codes', 'cycle_counts', 'batches',
-  'stock_transactions', 'material_location_stock',
+  'stock_transactions', 'material_request_lines', 'material_request_headers',
+  'qr_codes', 'cycle_counts', 'batches', 'material_location_stock',
 ];
 const MASTER = ['bin_locations', 'locations', 'materials', 'warehouses'];
 
