@@ -235,6 +235,7 @@ router.post('/:id/post', (req, res) => {
         db.prepare("UPDATE batches SET remaining_quantity=?, updated_at=datetime('now') WHERE id=?").run(finalQty, l.batch_id);
         recordMovement({ type: variance > 0 ? 'IN' : 'OUT', materialId: l.material_id,
           warehouseCode: l.warehouse_code, quantity: Math.abs(variance), userId: req.user.id,
+          movementCategory: variance > 0 ? 'ADJUSTMENT_IN' : 'ADJUSTMENT_OUT',
           notes: `Physical inventory ${session.session_number} adjustment (${variance > 0 ? '+' : ''}${variance})` });
       }
     });

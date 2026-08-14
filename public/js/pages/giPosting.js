@@ -18,7 +18,7 @@ Pages.giPosting = {
         <tr data-id="${r.id}">
           <td><strong>${UI.esc(r.request_number)}</strong></td>
           <td>${UI.esc(r.requester_name || '')}</td><td>${UI.esc(r.department || '—')}</td><td>${UI.esc(r.project || '—')}</td>
-          <td>${UI.esc(r.issue_warehouse_code || '')}</td>
+          <td>${UI.esc(r.issue_warehouse_code || '')}<div class="muted sm">Plant ${UI.esc(r.plant || '—')} · SLoc ${UI.esc(r.storage_location || '—')}</div></td>
           <td>${UI.esc(r.movement_type || '')}</td><td>${UI.esc(r.erp_reservation_number || r.erp_reference_number || '')}</td>
           <td><span class="badge ${statusClass(r.request_status)}">${UI.esc(r.request_status)}</span></td>
           <td><button class="btn sm" data-open="${r.id}">Review</button></td>
@@ -34,6 +34,7 @@ Pages.giPosting = {
       <div class="card">
         <h3>${UI.esc(r.request_number)} — Goods Issue</h3>
         ${UI.requesterCard(r)}
+        <div style="margin-top:12px">${UI.executionContextCard(r)}</div>
         ${r.erp_error_message ? `<div class="inline-alert error">Previous ERP error: ${UI.esc(r.erp_error_message)}</div>` : ''}
         <div class="table-wrap"><table>
           <thead><tr><th>#</th><th>Item</th><th class="text-right">Approved</th><th class="text-right">Picked</th>
@@ -86,9 +87,9 @@ Pages.warehouse = {
       <table><thead><tr><th>Request #</th><th>Requester</th><th>Department</th><th>Project</th><th>Warehouse</th><th>Priority</th><th>Movement</th><th>Status</th><th>Lines</th></tr></thead>
       <tbody>${requests.map((r) => `
         <tr style="cursor:pointer" data-id="${r.id}">
-          <td><strong>${UI.esc(r.request_number)}</strong></td>
+          <td><strong>${UI.esc(r.request_number)}</strong><div class="muted sm">ERP ${UI.esc(r.erp_reservation_number || r.erp_reference_number || '—')}</div></td>
           <td>${UI.esc(r.requester_name || '')}</td><td>${UI.esc(r.department || '—')}</td><td>${UI.esc(r.project || '—')}</td>
-          <td>${UI.esc(r.issue_warehouse_code || '')}</td>
+          <td>${UI.esc(r.issue_warehouse_code || '')}<div class="muted sm">Plant ${UI.esc(r.plant || '—')} · SLoc ${UI.esc(r.storage_location || '—')}</div></td>
           <td><span class="badge ${r.priority === 'URGENT' || r.priority === 'HIGH' ? 'pending' : 'role'}">${r.priority}</span></td>
           <td>${UI.esc(r.movement_type || '')}</td>
           <td><span class="badge ${statusClass(r.request_status)}">${UI.esc(r.request_status)}</span></td>

@@ -8,6 +8,7 @@ const express = require('express');
 const db = require('../db/connection');
 const { authenticate, requirePermission } = require('../middleware/auth');
 const { isNonEmptyString, isPositiveNumber, isId, parsePagination } = require('../utils/validate');
+const { recordMovement } = require('../services/ledger');
 
 const router = express.Router();
 
@@ -70,18 +71,12 @@ router.post('/in', requirePermission('stock_in'), (req, res) => {
       DO UPDATE SET quantity = quantity + excluded.quantity, updated_at = datetime('now')
     `).run(body.material_id, body.location_id, quantity);
 
-    db.prepare(`
-      INSERT INTO stock_transactions
-        (transaction_type, material_id, location_id, quantity, reservation_number, user_id, notes)
-      VALUES ('IN', ?, ?, ?, ?, ?, ?)
-    `).run(
-      body.material_id,
-      body.location_id,
-      quantity,
-      isNonEmptyString(body.reservation_number) ? body.reservation_number.trim() : null,
-      req.user.id,
-      isNonEmptyString(body.notes) ? body.notes.trim() : null
-    );
+    recordMovement({
+      type: 'IN', materialId: body.material_id, locationId: body.location_id, quantity, userId: req.user.id,
+      movementCategory: 'RECEIPT',
+      reservationNumber: isNonEmptyString(body.reservation_number) ? body.reservation_number.trim() : null,
+      notes: isNonEmptyString(body.notes) ? body.notes.trim() : null,
+    });
   });
 
   try {
@@ -124,18 +119,11 @@ router.post('/out', requirePermission('stock_out'), (req, res) => {
       WHERE material_id = ? AND location_id = ?
     `).run(quantity, body.material_id, body.location_id);
 
-    db.prepare(`
-      INSERT INTO stock_transactions
-        (transaction_type, material_id, location_id, quantity, reservation_number, user_id, notes)
-      VALUES ('OUT', ?, ?, ?, ?, ?, ?)
-    `).run(
-      body.material_id,
-      body.location_id,
-      quantity,
-      body.reservation_number.trim(),
-      req.user.id,
-      isNonEmptyString(body.notes) ? body.notes.trim() : null
-    );
+    recordMovement({
+      type: 'OUT', materialId: body.material_id, locationId: body.location_id, quantity, userId: req.user.id,
+      movementCategory: 'ISSUE', reservationNumber: body.reservation_number.trim(),
+      notes: isNonEmptyString(body.notes) ? body.notes.trim() : null,
+    });
   });
 
   try {
@@ -173,7 +161,8 @@ router.get('/transactions', requirePermission(['stock_in', 'stock_out', 'dashboa
   `).get(...params);
 
   const transactions = db.prepare(`
-    SELECT st.id, st.transaction_type, st.quantity, st.reservation_number,
+    SELECT st.id, st.transaction_type, st.movement_category, st.movement_classification_status,
+           st.reversal_of_transaction_id, st.quantity, st.reservation_number,
            st.transaction_date, st.notes,
            m.item_code, m.description AS material_description, m.unit,
            l.code AS location_code, u.name AS user_name

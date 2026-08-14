@@ -2,6 +2,39 @@
 
 This is the chronological operational memory for the project. It records durable summaries of conversations and work, not secrets or necessarily verbatim transcripts.
 
+## 2026-08-11 — Preserve-first corrective reconciliation
+
+**Starting state:** The uncommitted 2026-08-03 corrective implementation was
+still present at `065736c` on `fix/workflow-context-analytics-integrity` with 28
+modified tracked files and two substantive untracked files. Disposable package
+and Python caches were not part of the work. Remote main was verified at
+`3350d2b`; Draft PR #59 remained clean/green and touched only `CLAUDE.md`.
+
+**Preservation and reconciliation:** The complete substantive state was
+checkpointed at `a97f07f` on
+`recovery/workflow-context-analytics-20260803`. A separate worktree and branch,
+`fix/workflow-context-analytics-integrity-v2`, were created from current main.
+Newer backup/native-recovery records were retained while the corrective patch
+was reconciled.
+
+**Integrity refinement:** Sparse operator-declared ranges no longer establish
+global movement completeness; only ISSUE evidence contributes imported coverage
+and only continuous operational-ledger evidence can enable global `DEAD`
+classification. Import periods are validated and contain their rows; future
+posting dates and document dates after posting are rejected; continuation
+chunks cannot change provenance/configuration. Dedupe now uses additional cost,
+actor, unit, description, and filename discriminators, and cross-ledger matching
+requires exact references rather than substrings.
+
+**Validation:** Changed JavaScript files passed `node --check` with bundled Node
+v24.14.0; changed Python tests passed compilation; `git diff --check` passed.
+Runtime/e2e execution remains pending because this clean worktree has no
+installed dependencies and the bundled runtime exposes no npm executable.
+
+**Production state:** Unchanged. No deployment, migration, import, database
+mutation, Passenger restart, PR merge, or production credential operation was
+performed.
+
 ## 2026-08-11 (cont'd) — INC-2026-08-06-01 closed: offsite backup fully restored
 
 **Objective:** Close out `INC-2026-08-06-01` after merging the fifth and final fix

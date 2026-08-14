@@ -1,6 +1,6 @@
 # WMS Current Status
 
-Last updated: 2026-08-04
+Last updated: 2026-08-11
 
 ## Executive status
 
@@ -24,6 +24,48 @@ Facts in this document are labelled as follows and must not be silently upgraded
 - **Verified (repo):** confirmed directly against Git/GitHub in the stated session.
 - **Reported (production):** observed by the operator during a production session and recorded here. Trustworthy as a record, but re-verify before relying on it for a risky operation.
 - **Unverified:** believed but not currently evidenced. Must be re-checked before use.
+
+## Workflow context and analytics integrity corrective phase — reconciled for Draft PR
+
+**Verified (repo), 2026-08-11:** The original work was preserved at `a97f07f`
+and reconciled as `fix/workflow-context-analytics-integrity-v2`, based on main
+`3350d2bacbe2cd2c6610b0b575497ff104693631`, to correct two confirmed defects:
+
+- downstream queue projections omitted ERP reservation/reference, plant,
+  storage location, and related request context even though the header retained
+  those fields; a canonical execution-context response is now attached to
+  request, ERP, warehouse, picker, and GI APIs and rendered by web/Flutter
+  operations screens;
+- analytics read only `stock_transactions`, treated all OUT rows as demand,
+  ignored the append-only imported history, and declared stocked materials
+  dead without proving that the 90-day issue-history window was covered.
+
+The branch extends the existing append-only movement-history architecture with
+normalized categories, original ERP movement type, analytical dates, source
+and batch traceability, preview/dry-run, field mapping, reconciliation, and
+rejected-row retrieval. Historical imports remain analytically separate and do
+not write batches, location balances, reservations, or `stock_transactions`.
+Analytics now uses a canonical combined movement stream, nets issue returns and
+reversals, excludes transfers/adjustments/opening balances from demand, and
+gates definitive `DEAD` classification on continuous operational-ledger
+coverage. Sparse import files contribute observed issue dates but cannot assert
+global completeness. Partial or absent
+coverage reports stocked/no-issue materials as `UNKNOWN` with a warning.
+
+Runtime tests are defined in `tests/e2e/corrective_integrity_test.py` and the
+existing workflow/reversal suites. In this local session, execution is blocked
+because dependencies and an npm executable are absent from the clean worktree.
+JavaScript and Python syntax checks and
+`git diff --check` passed. KAAF regeneration was also attempted and stopped on
+the repository's pre-existing declared dependency cycle
+`wms-api -> wms-ops-scripts -> wms-api` (already present among the five errors
+in `.ai/drift.json`); generated `.ai/` files were not hand-edited. CI remains
+the required runtime evidence for the Draft PR; do not represent the
+unexecuted local suite as passing.
+
+The original local implementation remains preserved at recovery commit `a97f07f`.
+No production access, deployment, migration, historical import, Passenger
+restart, database mutation, or merge occurred in this corrective phase.
 
 ## Hostinger native-addon recovery — RESOLVED (2026-08-01)
 

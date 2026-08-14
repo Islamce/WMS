@@ -98,7 +98,8 @@ router.post('/', requirePermission('goods_receipt'), (req, res) => {
     const qrId = qrService.generateForBatch(batch, { uom: material.unit });
     db.prepare('UPDATE batches SET qr_code_id=? WHERE id=?').run(qrId, batch.id);
     recordMovement({ type: 'IN', materialId: material.id, warehouseCode: b.warehouse_code,
-      quantity: qty, userId: req.user.id, notes: `GR batch ${batchNumber} (PO ${b.po_number.trim()})` });
+      quantity: qty, userId: req.user.id, movementCategory: 'RECEIPT',
+      notes: `GR batch ${batchNumber} (PO ${b.po_number.trim()})` });
     audit.record({ entityType: 'Batch', entityId: batch.id, action: 'GOODS_RECEIPT',
       newValue: { batch: batchNumber, qty, po: b.po_number, expiry, warehouse: b.warehouse_code, quality: 'QUALITY_HOLD' },
       user: req.user, sourceScreen: 'Goods Receipt' });

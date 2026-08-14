@@ -16,6 +16,7 @@ const sod = require('./../services/sod');
 const { recordMovement } = require('./../services/ledger');
 const { setHeaderStatus, refreshRollups, getHeaderOr404, reopenForRepick } = require('./../services/requests');
 const { HEADER_STATUS, LINE_STATUS } = require('./../workflow/states');
+const { withExecutionContext, withExecutionContexts } = require('./../services/workflowContext');
 
 const router = express.Router();
 router.use(authenticate, requirePermission('gi_posting'));
@@ -39,15 +40,16 @@ function existingGiResponse(header) {
 /** GET /api/gi — GI posting queue. */
 router.get('/', (req, res) => {
   const rows = db.prepare(`
-    SELECT id, request_number, requester_name, department, wbs_element AS project, cost_center, required_date,
-           priority, issue_warehouse_code, movement_type,
+    SELECT id, request_number, requester_id, requester_name, department, wbs_element, wbs_element AS project,
+           cost_center, required_date, priority, plant, storage_location,
+           issue_warehouse_code, issue_warehouse_name, movement_type, movement_type_description,
            erp_reservation_number, erp_reference_number, request_status,
            total_lines, shortage_lines, erp_error_message
     FROM material_request_headers
     WHERE request_status IN (?, ?)
     ORDER BY id
   `).all(...GI_STAGES);
-  res.json({ requests: rows });
+  res.json({ requests: withExecutionContexts(rows) });
 });
 
 /** GET /api/gi/:id — review picked quantities, batches, bins, QR history. */
@@ -57,7 +59,7 @@ router.get('/:id', (req, res) => {
   const lines = db.prepare("SELECT * FROM material_request_lines WHERE request_id=? AND line_status NOT IN ('Rejected','Cancelled') ORDER BY line_number").all(header.id);
   const allocations = db.prepare('SELECT * FROM picking_allocations WHERE request_id=? ORDER BY line_number, sequence').all(header.id);
   const scans = db.prepare("SELECT action, new_value, changed_by_name, changed_at, line_number FROM audit_trail WHERE request_number=? AND action LIKE 'QR_SCAN%' ORDER BY id").all(header.request_number);
-  res.json({ request: header, lines, allocations, qr_scans: scans });
+  res.json({ request: withExecutionContext(header), lines, allocations, qr_scans: scans });
 });
 
 /**
@@ -165,7 +167,7 @@ router.post('/:id/post', (req, res) => {
     // Movement ledger: goods issue = stock OUT (one row per issued line).
     picked.forEach((l) => recordMovement({
       type: 'OUT', materialId: l.material_id, warehouseCode: header.issue_warehouse_code,
-      quantity: l.picked_quantity, userId: req.user.id,
+      quantity: l.picked_quantity, userId: req.user.id, movementCategory: 'ISSUE', requestLineId: l.id,
       reservationNumber: header.erp_reservation_number || header.erp_reference_number,
       notes: `GI ${result.response.giDocumentNumber} / ${header.request_number}`,
     }));
@@ -218,6 +220,25 @@ router.post('/:id/reverse', (req, res) => {
     return res.status(400).json({ error: 'Nothing was issued on this request; nothing to reverse.' });
   }
 
+  const originalMovementByLine = new Map();
+  for (const line of issuedLines) {
+    let originals = db.prepare(`SELECT id FROM stock_transactions
+      WHERE request_line_id=? AND material_id=? AND movement_category='ISSUE'
+      ORDER BY id DESC`).all(line.id, line.material_id);
+    if (originals.length !== 1) {
+      // Pre-migration GI rows lack request_line_id. Their exact document and
+      // material may be used only when that evidence identifies one row.
+      originals = db.prepare(`SELECT id FROM stock_transactions
+        WHERE material_id=? AND transaction_type='OUT'
+          AND notes=?
+        ORDER BY id DESC`).all(line.material_id, `GI ${header.gi_document_number} / ${header.request_number}`);
+    }
+    if (originals.length !== 1) {
+      return res.status(409).json({ error: 'Cannot safely identify the original goods-issue ledger row for reversal; it has been left for audited review.' });
+    }
+    originalMovementByLine.set(line.id, originals[0].id);
+  }
+
   const result = erp.connector().reverseGoodsIssue({
     requestNumber: header.request_number,
     originalGiDocument: header.gi_document_number,
@@ -236,7 +257,8 @@ router.post('/:id/reverse', (req, res) => {
     issuedLines.forEach((l) => {
       recordMovement({
         type: 'IN', materialId: l.material_id, warehouseCode: header.issue_warehouse_code,
-        quantity: l.issued_quantity, userId: req.user.id,
+        quantity: l.issued_quantity, userId: req.user.id, movementCategory: 'REVERSAL',
+        reversalOfTransactionId: originalMovementByLine.get(l.id), requestLineId: l.id,
         reservationNumber: header.erp_reservation_number || header.erp_reference_number,
         notes: `GI reversal ${result.response.reversalDocumentNumber} / ${header.request_number}`,
       });

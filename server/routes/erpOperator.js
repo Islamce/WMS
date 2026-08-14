@@ -15,6 +15,7 @@ const erp = require('./../services/erp');
 const sod = require('./../services/sod');
 const { setHeaderStatus, getHeaderOr404 } = require('./../services/requests');
 const { HEADER_STATUS, LINE_STATUS } = require('./../workflow/states');
+const { withExecutionContexts } = require('./../services/workflowContext');
 
 const router = express.Router();
 router.use(authenticate, requirePermission('erp_operator'));
@@ -27,14 +28,15 @@ const ERP_STAGES = [
 /** GET /api/erp-operator — queue of approved requests awaiting ERP processing. */
 router.get('/', (req, res) => {
   const rows = db.prepare(`
-    SELECT id, request_number, requester_name, department, wbs_element AS project, cost_center, required_date,
-           priority, request_status, movement_type,
-           erp_reservation_number, erp_reference_number, issue_warehouse_code, approved_at, created_at
+    SELECT id, request_number, requester_id, requester_name, department, wbs_element, wbs_element AS project,
+           cost_center, required_date, priority, request_status, movement_type, movement_type_description,
+           erp_reservation_number, erp_reference_number, plant, storage_location,
+           issue_warehouse_code, issue_warehouse_name, approved_at, created_at
     FROM material_request_headers
     WHERE request_status IN (${ERP_STAGES.map(() => '?').join(',')})
     ORDER BY approved_at
   `).all(...ERP_STAGES);
-  res.json({ requests: rows });
+  res.json({ requests: withExecutionContexts(rows) });
 });
 
 /**

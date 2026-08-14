@@ -87,6 +87,19 @@ c, r = call('POST', f'/api/gi/{rid}/reverse', whop, {})
 check('reverse without reason rejected (400)', c == 400, (c, r))
 c, r = call('POST', f'/api/gi/{rid}/reverse', whop, {'reason': 'wrong cost center'})
 check('reverse succeeds', c == 200 and r.get('reversal'), (c, r))
+con = sqlite3.connect(DB, timeout=5)
+try:
+    rows = con.execute('''SELECT issued.id, issued.movement_category, issued.movement_classification_status,
+      reversal.movement_category, reversal.movement_classification_status, reversal.reversal_of_transaction_id
+      FROM material_request_lines line
+      JOIN stock_transactions issued ON issued.request_line_id=line.id AND issued.movement_category='ISSUE'
+      JOIN stock_transactions reversal ON reversal.reversal_of_transaction_id=issued.id AND reversal.movement_category='REVERSAL'
+      WHERE line.request_id=?''', (rid,)).fetchall()
+    check('GI rows persist ISSUE/REVERSAL semantics with an exact original link', len(rows) == 1
+          and rows[0][1:5] == ('ISSUE', 'EXPLICIT', 'REVERSAL', 'EXPLICIT')
+          and rows[0][5] == rows[0][0], rows)
+finally:
+    con.close()
 check('reversal returns 30 units to stock', bolt_remaining() - after_gi >= 30 - 0.001, (after_gi, bolt_remaining()))
 _, det = call('GET', f'/api/requests/{rid}', requester)
 check('request now Reversed', det['request']['request_status'] == 'Reversed', det['request']['request_status'])

@@ -170,6 +170,138 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    id: '013_canonical_analytical_movements',
+    description: 'Extend append-only movement history with ERP-agnostic categories, source traceability and analytical dates.',
+    up(database) {
+      addColumnIfMissing(database, 'stock_movement_import_batches', 'movement_category', 'TEXT');
+      addColumnIfMissing(database, 'stock_movement_import_batches', 'source_system', "TEXT NOT NULL DEFAULT 'CSV'");
+      addColumnIfMissing(database, 'stock_movement_import_batches', 'source_file_checksum', 'TEXT');
+      addColumnIfMissing(database, 'stock_movement_import_batches', 'field_mapping_json', 'TEXT');
+      addColumnIfMissing(database, 'stock_movement_import_batches', 'reconciliation_json', 'TEXT');
+
+      addColumnIfMissing(database, 'stock_movement_history', 'material_id', 'INTEGER REFERENCES materials(id)');
+      addColumnIfMissing(database, 'stock_movement_history', 'movement_category', 'TEXT');
+      addColumnIfMissing(database, 'stock_movement_history', 'erp_movement_type', 'TEXT');
+      addColumnIfMissing(database, 'stock_movement_history', 'posting_date', 'TEXT');
+      addColumnIfMissing(database, 'stock_movement_history', 'document_date', 'TEXT');
+      addColumnIfMissing(database, 'stock_movement_history', 'storage_location', 'TEXT');
+      addColumnIfMissing(database, 'stock_movement_history', 'batch_number', 'TEXT');
+      addColumnIfMissing(database, 'stock_movement_history', 'erp_document_reference', 'TEXT');
+      addColumnIfMissing(database, 'stock_movement_history', 'purchase_order', 'TEXT');
+      addColumnIfMissing(database, 'stock_movement_history', 'cost_center', 'TEXT');
+      addColumnIfMissing(database, 'stock_movement_history', 'wbs_element', 'TEXT');
+      addColumnIfMissing(database, 'stock_movement_history', 'source_system', "TEXT NOT NULL DEFAULT 'CSV'");
+      addColumnIfMissing(database, 'stock_movement_history', 'reversal_of_category', 'TEXT');
+
+      database.exec(`
+        DROP TRIGGER IF EXISTS movement_history_block_update;
+
+        UPDATE stock_movement_import_batches
+        SET movement_category=COALESCE(movement_category, movement_type),
+            source_system=COALESCE(NULLIF(source_system, ''), 'CSV');
+
+        UPDATE stock_movement_history
+        SET movement_category=COALESCE(movement_category, movement_type),
+            posting_date=COALESCE(posting_date, movement_date),
+            source_system=COALESCE(NULLIF(source_system, ''), 'CSV'),
+            material_id=COALESCE(material_id,
+              (SELECT id FROM materials WHERE item_code=stock_movement_history.material_code LIMIT 1));
+
+        CREATE INDEX IF NOT EXISTS idx_movement_history_posting
+          ON stock_movement_history(posting_date, movement_category);
+        CREATE INDEX IF NOT EXISTS idx_movement_history_material_id
+          ON stock_movement_history(material_id, posting_date);
+        CREATE INDEX IF NOT EXISTS idx_movement_history_erp_document
+          ON stock_movement_history(erp_document_reference);
+
+        CREATE TRIGGER IF NOT EXISTS movement_history_block_update BEFORE UPDATE ON stock_movement_history
+        BEGIN SELECT RAISE(ABORT, 'stock_movement_history is append-only'); END;
+      `);
+    },
+  },
+  {
+    id: '014_operational_movement_semantics',
+    description: 'Persist operational movement categories and traceable reversal links; backfill only unambiguous legacy records.',
+    up(database) {
+      const categories = "'RECEIPT','ISSUE','RETURN','TRANSFER_IN','TRANSFER_OUT','ADJUSTMENT_IN','ADJUSTMENT_OUT','REVERSAL','OPENING_BALANCE'";
+      addColumnIfMissing(database, 'stock_transactions', 'movement_category', `TEXT CHECK (movement_category IS NULL OR movement_category IN (${categories}))`);
+      addColumnIfMissing(database, 'stock_transactions', 'movement_classification_status', "TEXT NOT NULL DEFAULT 'NEEDS_REVIEW' CHECK (movement_classification_status IN ('EXPLICIT','BACKFILLED','NEEDS_REVIEW'))");
+      addColumnIfMissing(database, 'stock_transactions', 'category_backfill_reason', 'TEXT');
+      addColumnIfMissing(database, 'stock_transactions', 'reversal_of_transaction_id', 'INTEGER REFERENCES stock_transactions(id) ON DELETE SET NULL');
+      addColumnIfMissing(database, 'stock_transactions', 'request_line_id', 'INTEGER REFERENCES material_request_lines(id) ON DELETE SET NULL');
+
+      database.exec(`
+        UPDATE stock_transactions
+        SET movement_category = CASE
+          WHEN lower(COALESCE(notes, '')) LIKE 'opening stock import — batch %' AND transaction_type='IN' THEN 'OPENING_BALANCE'
+          WHEN lower(COALESCE(notes, '')) LIKE 'gi reversal %' AND transaction_type='IN' THEN 'REVERSAL'
+          WHEN lower(COALESCE(notes, '')) LIKE 'gi % / %' AND transaction_type='OUT' THEN 'ISSUE'
+          WHEN lower(COALESCE(notes, '')) LIKE 'reallocation % to %' AND transaction_type='OUT' THEN 'TRANSFER_OUT'
+          WHEN lower(COALESCE(notes, '')) LIKE 'reallocation % from %' AND transaction_type='IN' THEN 'TRANSFER_IN'
+          WHEN lower(COALESCE(notes, '')) LIKE 'cycle count % adjustment (%' AND transaction_type='IN' THEN 'ADJUSTMENT_IN'
+          WHEN lower(COALESCE(notes, '')) LIKE 'cycle count % adjustment (%' AND transaction_type='OUT' THEN 'ADJUSTMENT_OUT'
+          WHEN lower(COALESCE(notes, '')) LIKE 'physical inventory % adjustment (%' AND transaction_type='IN' THEN 'ADJUSTMENT_IN'
+          WHEN lower(COALESCE(notes, '')) LIKE 'physical inventory % adjustment (%' AND transaction_type='OUT' THEN 'ADJUSTMENT_OUT'
+          WHEN lower(COALESCE(notes, '')) = 'sample gi history' AND transaction_type='OUT' THEN 'ISSUE'
+          WHEN lower(COALESCE(notes, '')) = 'sample gr history' AND transaction_type='IN' THEN 'RECEIPT'
+          ELSE NULL
+        END
+        WHERE movement_category IS NULL;
+
+        UPDATE stock_transactions
+        SET movement_classification_status = CASE
+              WHEN movement_category='REVERSAL' THEN 'NEEDS_REVIEW'
+              WHEN movement_category IS NULL THEN 'NEEDS_REVIEW'
+              ELSE 'BACKFILLED'
+            END,
+            category_backfill_reason = CASE
+              WHEN movement_category='REVERSAL' THEN 'REVERSAL_ORIGINAL_NOT_UNAMBIGUOUS'
+              WHEN movement_category IS NULL THEN 'UNRECOGNIZED_LEGACY_NOTES'
+              ELSE NULL
+            END
+        WHERE movement_classification_status='NEEDS_REVIEW';
+
+        UPDATE stock_transactions AS reversal
+        SET reversal_of_transaction_id = (
+          SELECT original.id
+          FROM stock_transactions AS original
+          WHERE original.id < reversal.id
+            AND original.transaction_type='OUT'
+            AND original.movement_category='ISSUE'
+            AND original.material_id=reversal.material_id
+            AND original.reservation_number=reversal.reservation_number
+          ORDER BY original.id DESC
+          LIMIT 1
+        )
+        WHERE reversal.movement_category='REVERSAL'
+          AND reversal.reversal_of_transaction_id IS NULL
+          AND reversal.reservation_number IS NOT NULL
+          AND 1 = (
+            SELECT COUNT(*)
+            FROM stock_transactions AS original
+            WHERE original.id < reversal.id
+              AND original.transaction_type='OUT'
+              AND original.movement_category='ISSUE'
+              AND original.material_id=reversal.material_id
+              AND original.reservation_number=reversal.reservation_number
+          );
+
+        UPDATE stock_transactions
+        SET movement_classification_status='BACKFILLED', category_backfill_reason=NULL
+        WHERE movement_category='REVERSAL'
+          AND reversal_of_transaction_id IS NOT NULL
+          AND movement_classification_status='NEEDS_REVIEW';
+
+        CREATE INDEX IF NOT EXISTS idx_stock_tx_category_date
+          ON stock_transactions(movement_category, transaction_date);
+        CREATE INDEX IF NOT EXISTS idx_stock_tx_reversal_original
+          ON stock_transactions(reversal_of_transaction_id);
+        CREATE INDEX IF NOT EXISTS idx_stock_tx_request_line
+          ON stock_transactions(request_line_id);
+      `);
+    },
+  },
 ];
 
 function ensureTable() {

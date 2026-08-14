@@ -2,6 +2,43 @@
 
 This document records durable product, architecture, data, security, deployment, and operating decisions. New entries must state context, decision, consequences, and status.
 
+## DEC-014 — Analytical movement history is append-only and coverage-gated
+
+**Status:** Proposed on the corrective branch on 2026-08-03; Draft PR
+publication pending.
+
+**Context:** Live inventory establishes current on-hand state, while historical
+issues/receipts/returns are required to infer movement velocity. Replaying old
+transactions into live balances would corrupt stock. Conversely, absence of
+rows cannot prove non-movement when the historical window is incomplete.
+
+**Decision:**
+
+- Keep imported analytical movements in `stock_movement_history`; imports must
+  never mutate batches, reservations, location stock, or the operational ledger.
+- Preserve original ERP movement types and normalize ERP-agnostic categories:
+  receipt, issue, return, transfer in/out, adjustment in/out, and reversal.
+- Demand includes issues net of returns and issue reversals. Transfers,
+  adjustments, receipts, and opening balances do not become consumption.
+- A material with stock and no observed issue is `DEAD` only when issue-history
+  coverage spans the full configured analysis window. Otherwise it is
+  `UNKNOWN`, and the UI must disclose incomplete evidence.
+- Existing velocity thresholds and planning formulas remain authoritative; this
+  correction changes evidence semantics, not business thresholds.
+
+**Consequences:** Imports require traceable batches, validation, idempotency,
+preview/dry-run, reconciliation, rejected rows, and audit evidence. Operational
+ledger and completed analytical-import intervals jointly establish coverage,
+with the continuity assumption disclosed by the API/UI. Duplicate suppression
+across sources requires a strong matching reference; ambiguous rows are not
+silently discarded.
+
+**Evidence/links:** `server/services/analytics.js`, migration
+`013_canonical_analytical_movements`, Import Center routes/UI, and
+`tests/e2e/corrective_integrity_test.py`.
+
+---
+
 ## DEC-001 — Production data must survive application updates
 
 **Status:** Accepted.

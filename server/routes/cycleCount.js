@@ -109,6 +109,7 @@ router.post('/:id/post', (req, res) => {
       recordMovement({
         type: variance > 0 ? 'IN' : 'OUT', materialId: cc.material_id, warehouseCode: cc.warehouse_code,
         quantity: Math.abs(variance), userId: req.user.id,
+        movementCategory: variance > 0 ? 'ADJUSTMENT_IN' : 'ADJUSTMENT_OUT',
         notes: `Cycle count ${cc.count_number} adjustment (${variance > 0 ? '+' : ''}${variance})`,
       });
     }

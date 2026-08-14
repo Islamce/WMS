@@ -14,6 +14,7 @@ const allocation = require('./../services/allocation');
 const { activeFreeze, freezeMessage } = require('./../services/freeze');
 const { setHeaderStatus, getHeaderOr404, releaseOpenAllocations, sweepReservations } = require('./../services/requests');
 const { HEADER_STATUS, LINE_STATUS, TASK_STATUS } = require('./../workflow/states');
+const { withExecutionContexts } = require('./../services/workflowContext');
 
 const router = express.Router();
 router.use(authenticate);
@@ -27,14 +28,15 @@ router.get('/queue', requirePermission(['warehouse_dashboard', 'bin_batch_assign
     HEADER_STATUS.PICKING_IN_PROGRESS, HEADER_STATUS.PICKING_COMPLETED, HEADER_STATUS.PARTIALLY_PICKED,
   ];
   const rows = db.prepare(`
-    SELECT id, request_number, requester_name, department, wbs_element AS project, cost_center, required_date,
-           priority, request_status, issue_warehouse_code,
-           movement_type, total_lines, created_at
+    SELECT id, request_number, requester_id, requester_name, department, wbs_element, wbs_element AS project,
+           cost_center, required_date, priority, request_status,
+           erp_reservation_number, erp_reference_number, movement_type, movement_type_description,
+           plant, storage_location, issue_warehouse_code, issue_warehouse_name, total_lines, created_at
     FROM material_request_headers
     WHERE request_status IN (${stages.map(() => '?').join(',')})
     ORDER BY CASE priority WHEN 'URGENT' THEN 0 WHEN 'HIGH' THEN 1 WHEN 'NORMAL' THEN 2 ELSE 3 END, id
   `).all(...stages);
-  res.json({ requests: rows });
+  res.json({ requests: withExecutionContexts(rows) });
 });
 
 /**
