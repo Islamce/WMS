@@ -35,6 +35,8 @@ const PERMISSIONS = [
   { key: 'reallocation', label: 'Stock Reallocation' },
   { key: 'inventory_count', label: 'Physical Inventory (Annual/Periodic)' },
   { key: 'shipping', label: 'Shipping & Outbound' },
+  { key: 'analytical_attestation_submit', label: 'Submit Analytical Scope Attestation' },
+  { key: 'analytical_attestation_approve', label: 'Approve Analytical Scope Attestation' },
 ];
 
 // Roles for the end-to-end process and the screens each one gets by default.

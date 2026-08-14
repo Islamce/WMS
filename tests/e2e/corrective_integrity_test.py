@@ -231,6 +231,117 @@ c, invalid_category = call('POST', '/api/import/movements/preview', admin, {
 })
 check('ambiguous movement category is rejected', c == 400, invalid_category)
 
+# COR-002: material-and-plant scope attestations are review-only evidence.
+attestation_columns = {row['name'] for row in db_rows('PRAGMA table_info(analytical_scope_attestations)')}
+check('attestation migration is additive with immutable provenance fields',
+      {'import_batch_id', 'material_id', 'material_code', 'plant_code', 'source_extract_reference',
+       'period_start', 'period_end', 'evidence_state', 'supersedes_attestation_id',
+       'submitted_by', 'approved_by'} <= attestation_columns, attestation_columns)
+
+with sqlite3.connect(DB) as connection:
+    connection.execute("INSERT OR IGNORE INTO user_permissions(user_id, permission_id) SELECT u.id, p.id FROM users u, permissions p WHERE u.email='requester@example.com' AND p.key='analytical_attestation_submit'")
+    connection.execute("INSERT OR IGNORE INTO user_permissions(user_id, permission_id) SELECT u.id, p.id FROM users u, permissions p WHERE u.email='requester@example.com' AND p.key='analytical_attestation_approve'")
+    connection.execute("INSERT OR IGNORE INTO user_permissions(user_id, permission_id) SELECT u.id, p.id FROM users u, permissions p WHERE u.email='manager@example.com' AND p.key='analytical_attestation_approve'")
+source_owner = login('requester@example.com', 'Passw0rd!')
+steward = login('manager@example.com', 'Passw0rd!')
+supervisor = login('supervisor@example.com', 'Passw0rd!')
+check('attestation source owner and steward logins work', bool(source_owner and steward))
+
+scope_period_start, scope_period_end = iso(30), iso(10)
+c, scope_import = call('POST', '/api/import/movements/chunk', admin, {
+    'movement_category': 'RECEIPT', 'source_system': 'SAP_SCOPE', 'source_filename': 'mat-0003-p100.csv',
+    'period_start': scope_period_start, 'period_end': scope_period_end, 'finalize': True,
+    'rows': [{'external_id': 'SCOPE-MAT3-1', 'material_code': 'MAT-0003', 'plant_code': 'P100',
+              'quantity': 1, 'posting_date': iso(20), 'erp_document_reference': 'SCOPE-REF-1'}],
+})
+scope_batch = scope_import.get('batch_id')
+check('single-material single-plant scope batch imports cleanly', c == 200 and scope_import.get('invalid') == 0, scope_import)
+
+scope_body = {
+    'import_batch_id': scope_batch, 'material_code': 'MAT-0003', 'plant_code': 'P100',
+    'source_system': 'SAP_SCOPE', 'source_extract_reference': 'SAP report ZMM_SCOPE/2026-08-14/001',
+    'data_generated_at': f'{iso(9)}T12:00:00Z', 'period_start': scope_period_start,
+    'period_end': scope_period_end, 'covered_material_codes': ['MAT-0003'],
+}
+c, broad_denied = call('POST', '/api/analytical-attestations', supervisor, scope_body)
+check('broad goods-receipt permission cannot submit narrow attestation', c == 403, broad_denied)
+c, before_attestation = call('GET', '/api/analytics', admin)
+before_mat3 = next(item for item in before_attestation['items'] if item['item_code'] == 'MAT-0003')
+check('unsigned imported scope remains PARTIAL and UNKNOWN', before_attestation['coverage']['status'] == 'PARTIAL'
+      and before_mat3['classification'] == 'UNKNOWN' and before_mat3['attestation'] is None, before_mat3)
+
+for name, body in [
+    ('mismatched source prevents attestation', {**scope_body, 'source_system': 'OTHER_SOURCE'}),
+    ('mismatched period prevents attestation', {**scope_body, 'period_start': iso(29)}),
+    ('excluded material list prevents attestation', {**scope_body, 'covered_material_codes': ['MAT-0001']}),
+    ('undocumented exception window prevents attestation', {**scope_body, 'exception_window': {
+        'start_date': iso(25), 'end_date': iso(24), 'reason': 'ERP outage'}}),
+]:
+    c, rejected_scope = call('POST', '/api/analytical-attestations', source_owner, body)
+    check(name, c == 400, rejected_scope)
+
+c, submitted_scope = call('POST', '/api/analytical-attestations', source_owner, scope_body)
+scope_attestation_id = submitted_scope.get('attestation', {}).get('id')
+check('source owner submits payload-unverified material-and-plant evidence', c == 201
+      and submitted_scope.get('attestation', {}).get('evidence_state') == 'ATTESTED_PAYLOAD_UNVERIFIED'
+      and submitted_scope.get('attestation', {}).get('status') == 'SUBMITTED', submitted_scope)
+c, self_approval = call('POST', f'/api/analytical-attestations/{scope_attestation_id}/approve', source_owner)
+check('same user submit and approve is rejected', c == 400, self_approval)
+c, approved_scope = call('POST', f'/api/analytical-attestations/{scope_attestation_id}/approve', steward)
+check('separate internal data steward approves after five-business-day cut-off', c == 200
+      and approved_scope.get('attestation', {}).get('status') == 'APPROVED', approved_scope)
+
+c, attested_report = call('GET', '/api/analytics', admin)
+attested_mat3 = next(item for item in attested_report['items'] if item['item_code'] == 'MAT-0003')
+check('attested scope affects only declared plant and material as review evidence', attested_mat3['classification'] == 'UNKNOWN'
+      and attested_mat3['attested_review_required'] is True
+      and attested_mat3['attestation']['plant_code'] == 'P100'
+      and attested_mat3['attestation']['label'] == 'ATTESTED_PAYLOAD_UNVERIFIED', attested_mat3)
+check('attested payload-unverified evidence cannot yield direct DEAD or change global coverage',
+      attested_report['coverage']['status'] == 'PARTIAL' and attested_report['summary']['dead_count'] == 0, attested_report['summary'])
+
+# A late period is submittable but cannot become an attestation until five business days pass.
+c, cutoff_import = call('POST', '/api/import/movements/chunk', admin, {
+    'movement_category': 'RECEIPT', 'source_system': 'SAP_CUTOFF', 'source_filename': 'mat-0003-cutoff.csv',
+    'period_start': iso(5), 'period_end': iso(1), 'finalize': True,
+    'rows': [{'external_id': 'SCOPE-MAT3-CUTOFF', 'material_code': 'MAT-0003', 'plant_code': 'P100',
+              'quantity': 1, 'posting_date': iso(2), 'erp_document_reference': 'SCOPE-CUTOFF'}],
+})
+cutoff_body = {**scope_body, 'import_batch_id': cutoff_import.get('batch_id'), 'source_system': 'SAP_CUTOFF',
+               'source_extract_reference': 'SAP report ZMM_SCOPE/recent', 'period_start': iso(5), 'period_end': iso(1)}
+c, cutoff_submitted = call('POST', '/api/analytical-attestations', source_owner, cutoff_body)
+c2, cutoff_approval = call('POST', f"/api/analytical-attestations/{cutoff_submitted.get('attestation', {}).get('id')}/approve", steward)
+check('five-business-day posting cut-off is enforced', c == 201 and c2 == 400
+      and 'cut-off' in (cutoff_approval.get('error') or ''), cutoff_approval)
+
+# A correction uses a new batch and an append-only supersession link; the prior
+# approved attestation is neither edited nor deleted.
+c, replacement_import = call('POST', '/api/import/movements/chunk', admin, {
+    'movement_category': 'RECEIPT', 'source_system': 'SAP_SCOPE_CORRECTED', 'source_filename': 'mat-0003-p100-corrected.csv',
+    'period_start': scope_period_start, 'period_end': scope_period_end, 'finalize': True,
+    'rows': [{'external_id': 'SCOPE-MAT3-REPLACEMENT', 'material_code': 'MAT-0003', 'plant_code': 'P100',
+              'quantity': 1, 'posting_date': iso(20), 'erp_document_reference': 'SCOPE-REF-REPLACEMENT'}],
+})
+replacement_body = {**scope_body, 'import_batch_id': replacement_import.get('batch_id'),
+                    'source_system': 'SAP_SCOPE_CORRECTED',
+                    'source_extract_reference': 'SAP report ZMM_SCOPE/2026-08-14/001 corrected',
+                    'supersedes_attestation_id': scope_attestation_id}
+c, replacement_submitted = call('POST', '/api/analytical-attestations', source_owner, replacement_body)
+replacement_id = replacement_submitted.get('attestation', {}).get('id')
+c2, replacement_approved = call('POST', f'/api/analytical-attestations/{replacement_id}/approve', steward)
+supersession = db_rows('SELECT * FROM analytical_scope_attestation_supersessions WHERE prior_attestation_id=?', (scope_attestation_id,))
+prior_row = db_rows('SELECT status, approved_at, evidence_state FROM analytical_scope_attestations WHERE id=?', (scope_attestation_id,))[0]
+try:
+    with sqlite3.connect(DB) as connection:
+        connection.execute("UPDATE analytical_scope_attestations SET source_extract_reference='mutated' WHERE id=?", (scope_attestation_id,))
+    prior_immutable = False
+except sqlite3.IntegrityError as error:
+    prior_immutable = 'immutable' in str(error)
+check('replacement attestation is separately approved and supersedes prior evidence', c == 201 and c2 == 200
+      and supersession and supersession[0]['replacement_attestation_id'] == replacement_id, replacement_approved)
+check('supersession preserves prior approved attestation without editing it', prior_row['status'] == 'APPROVED'
+      and prior_row['evidence_state'] == 'ATTESTED_PAYLOAD_UNVERIFIED' and prior_immutable, prior_row)
+
 print(f'\n===== RESULT: {passed} passed, {failed} failed =====')
 if fails:
     print('Failed:', fails)

@@ -18,6 +18,8 @@ const LOCK_FILE = path.join(DATA_DIR, 'production-initialization.lock.json');
 
 // Order matters: children/logs first.
 const TRANSACTIONAL = [
+  'analytical_scope_attestation_supersessions', 'analytical_scope_attestations',
+  'stock_movement_import_errors', 'stock_movement_history', 'stock_movement_import_batches',
   'notification_log', 'erp_integration_log',
   'shipments', 'stock_reallocations', 'inventory_count_lines', 'inventory_sessions',
   'picking_allocations', 'picking_tasks', 'request_attachments',
