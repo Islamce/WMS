@@ -44,9 +44,22 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      REMOTE_APP_DIR: /home/u716763642/domains/wms.kynox.io/nodejs
+      # Follows the atomically-swapped release symlink Passenger actually
+      # serves from (see DEC-013 / HOSTINGER-NATIVE-RECOVERY.md). Do NOT point
+      # this at the legacy persistent .../nodejs directory: that path predates
+      # the 2026-08-01 release-based layout and still holds the old,
+      # GLIBC_2.29-requiring better-sqlite3 build, which is why the backup
+      # step failed with "GLIBC_2.29 not found" even though production itself
+      # runs the fixed, GLIBC-2.28-compatible addon. See INC-2026-08-06-01.
+      REMOTE_APP_DIR: /home/u716763642/domains/wms.kynox.io/.builds/current/nodejs
       REMOTE_NODE: /opt/alt/alt-nodejs20/root/usr/bin/node
       REMOTE_BACKUP_DIR: /home/u716763642/secure/wms-backups
+      # The live database lives outside the release tree (see
+      # docs/WMS-PRODUCTION-RUNBOOK.md); scripts/backup.js falls back to a
+      # path relative to REMOTE_APP_DIR when DB_PATH is unset, which no
+      # longer exists now that REMOTE_APP_DIR points at the release symlink.
+      # Must match the DB_PATH Passenger itself uses. See INC-2026-08-06-01.
+      REMOTE_DB_PATH: /home/u716763642/domains/wms.kynox.io/nodejs/data/wms.db
       KEEP_SETS: "7"
     steps:
       # Official GitHub actions only. Floating major tags (@v4) are accepted for
@@ -110,7 +123,7 @@ jobs:
           # Exactly the commands verified manually in production. set -e on the
           # remote makes any failure abort the job. No npm/migrate/restart/git.
           ssh hostinger "set -e; cd '$REMOTE_APP_DIR'; \
-            BACKUP_DIR='$REMOTE_BACKUP_DIR' '$REMOTE_NODE' scripts/backup.js; \
+            BACKUP_DIR='$REMOTE_BACKUP_DIR' DB_PATH='$REMOTE_DB_PATH' '$REMOTE_NODE' scripts/backup.js; \
             BACKUP_DIR='$REMOTE_BACKUP_DIR' '$REMOTE_NODE' scripts/verify-backup.js"
 
       - name: Identify + validate the NEW backup set (manifest diff)
@@ -254,16 +267,24 @@ jobs:
         env:
           DRY: ${{ github.event.inputs.dry_run_retention }}
         run: |
-          set -euo pipefail
+          # Deliberately not set -e here: every remote step below is chained
+          # with && and the whole chain is covered by a single || fallback,
+          # so ANY failure (missing temp dir, failed scp, or a retention
+          # script error) hits the same graceful warning path instead of
+          # failing the job — matching this step's stated intent that
+          # retention problems must not invalidate an already-verified
+          # offsite backup. See INC-2026-08-06-01 (a bare `scp` before this
+          # fix bypassed that intent because set -e killed the script before
+          # the `|| echo warning` fallback was ever reached).
+          set -uo pipefail
           # Copy the tested retention script to a TEMP path OUTSIDE the deployed
           # checkout, run it with node 20, then remove it. The deployed tree is
           # never modified.
           tmp="/home/u716763642/.logs/wms/backup-retention.$$.js"
-          scp scripts/backup-retention.js "hostinger:$tmp"
           dry=""; [ "$DRY" = "true" ] && dry="--dry-run"
-          # Retention failure must NOT invalidate the already-verified offsite
-          # backup — warn, do not fail the job.
-          ssh hostinger "'$REMOTE_NODE' '$tmp' '$REMOTE_BACKUP_DIR' --keep '$KEEP_SETS' $dry; rc=\$?; rm -f '$tmp'; exit \$rc" \
+          ssh hostinger "mkdir -p '$(dirname "$tmp")'" \
+            && scp scripts/backup-retention.js "hostinger:$tmp" \
+            && ssh hostinger "'$REMOTE_NODE' '$tmp' '$REMOTE_BACKUP_DIR' --keep '$KEEP_SETS' $dry; rc=\$?; rm -f '$tmp'; exit \$rc" \
             || echo "::warning::Local retention reported a problem; offsite backup is still valid. Inspect $REMOTE_BACKUP_DIR."
 
       - name: Job summary (metadata only)

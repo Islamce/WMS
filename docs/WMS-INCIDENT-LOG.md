@@ -4,7 +4,11 @@ This log records production failures, data-risk events, deployment failures, rec
 
 ## INC-2026-08-06-01 — Production offsite backup workflow failing (10+ consecutive days, SSH auth now rejected)
 
-**Status:** Open. No corrective action taken yet; this entry records diagnosis only.
+**Status:** Resolved and closed on 2026-08-11. All five root causes found across the day are
+fixed and validated by a fully successful run (all 15 steps, including local retention
+pruning). See "Resolution — 2026-08-11" at the end of this entry for the complete evidence
+chain and closing validation. The diagnosis below is preserved unchanged as the historical
+record of how the incident was worked through.
 
 **Escalation (2026-08-10):** A third, more serious error signature appeared today —
 `Permission denied (publickey,password)`. Until now every failure was either a connectivity
@@ -133,6 +137,119 @@ run #20 id `30978213492`, run #21 id `31074388681`, run #22 id `31147905259`, ru
 `31238049884`, run #24 id `31293504581`, run #25 id `31354732571`); `DEC-008` (backup
 retention policy); "Resolution — 2026-08-01" section of `INC-2026-07-31-01` below (candidate
 correlated event, unconfirmed).
+
+**Resolution — 2026-08-11 (Reported by the operator, who had direct Hostinger hPanel/SSH
+access; this session had none and directed the diagnosis and fixes remotely):**
+
+Two independent problems were found and fixed, in sequence — fixing the first uncovered the
+second.
+
+1. **SSH authentication (the original `Permission denied` cause).** The operator confirmed via
+   hPanel that the account's `authorized_keys` and directory permissions were already correct
+   (`~/.ssh` `700`, `authorized_keys` `600`); an early regenerated key turned out to have been
+   saved as an empty file (0 meaningful bytes) and was discarded. A clean key pair
+   (`wms-gha-backup-final-2026-08-11`, ED25519, confirmed 432 bytes) was generated, its public
+   half added both directly to `authorized_keys` and through hPanel's own SSH-key-management UI
+   (hPanel appears to manage this list independently of direct file edits), and a manual
+   external `ssh -vvv` test from the operator's own session confirmed
+   `Authentication succeeded (publickey)` against host `185.97.145.102:65002` as user
+   `u716763642` — independently proving the key, host, port, and username were all correct
+   before touching GitHub. The corresponding private key was then set as the
+   `HOSTINGER_SSH_PRIVATE_KEY` GitHub Actions secret.
+2. **Host-key verification (`Host key verification failed`, surfaced only once the key problem
+   above was fixed).** The `HOSTINGER_KNOWN_HOSTS` secret was stale relative to the host's
+   current key set. Refreshed via `ssh-keyscan -p 65002 185.97.145.102`; the resulting
+   `ecdsa-sha2-nistp256` line's fingerprint (`SHA256:rFk+GudhBB0JkP03NibGoh+hCfSIVdc1SidDLeA9BXI`)
+   was independently cross-checked against the fingerprint shown during the operator's own
+   manual login moments earlier — an exact match, not blind trust-on-first-use. All three host
+   key lines (`ssh-rsa`, `ecdsa-sha2-nistp256`, `ssh-ed25519`) from the scan were set as the new
+   `HOSTINGER_KNOWN_HOSTS` secret value.
+3. **A second, independent bug, surfaced only once 1–2 were fixed:** the backup step then
+   failed with `Backup failed: /lib64/libm.so.6: version 'GLIBC_2.29' not found`, the same
+   error signature as `INC-2026-07-31-01`. Read-only checksum comparison
+   (`sha256sum` on `better_sqlite3.node`) showed the workflow's `REMOTE_APP_DIR`
+   (`~/domains/wms.kynox.io/nodejs`, the legacy persistent path) still holds the old,
+   GLIBC-2.29-requiring addon (`e8f767df39a9a934b3705d0fffc401a12932bf94d650aae2d27733311f7ff842`),
+   while the actual live release Passenger serves —
+   `~/domains/wms.kynox.io/.builds/current` → `.builds/versions/manual-20260801T202313Z-1bd15f12`
+   — has the correct, GLIBC-2.28-compatible addon
+   (`a9c4d701f59a492c538416211cc3e65257f1d74e3e4ce3d8d9862e1981676dc4`, matching the known-good
+   checksum from the Aug 1 recovery exactly). **This confirms production itself never
+   regressed** — `DEC-013`'s warning not to infer deployed identity from the persistent
+   `nodejs/` directory applies exactly here. The bug was purely that
+   `production-backup.yml`'s `REMOTE_APP_DIR` predated the Aug 1 release-based layout and was
+   never updated. Fixed in PR #63 by pointing `REMOTE_APP_DIR` at
+   `~/domains/wms.kynox.io/.builds/current/nodejs` (the symlink, so it stays correct across
+   future deploys) instead of the legacy path. Merged and triggered — see item 4.
+4. **A third, independent bug, surfaced only once 1–3 were fixed:** the backup step then
+   failed with `Backup failed: Cannot open database because the directory does not exist`. The
+   GLIBC error was gone (confirming the item-3 fix worked), but `scripts/backup.js` resolves
+   the database via `server/config.js`'s `DB_PATH` env var, falling back to a path *relative to
+   its own directory* when unset. The workflow's remote command never set `DB_PATH` at all —
+   previously this fell back to `REMOTE_APP_DIR/data/wms.db`, which coincidentally existed back
+   when `REMOTE_APP_DIR` was the legacy persistent path (the one place the database actually
+   lives). Once `REMOTE_APP_DIR` was corrected to the release symlink in item 3, that same
+   fallback now resolved to `.builds/current/nodejs/data/wms.db` — a path that doesn't exist,
+   since releases never carry the database (it lives outside the release tree by design; see
+   `docs/WMS-PRODUCTION-RUNBOOK.md`). Fixed by adding a `REMOTE_DB_PATH` value
+   (`/home/u716763642/domains/wms.kynox.io/nodejs/data/wms.db`, matching the `DB_PATH`
+   Passenger itself uses per `docs/WMS-CURRENT-STATUS.md`'s production configuration
+   invariants) and passing it explicitly as `DB_PATH` to the `scripts/backup.js` invocation
+   only (`scripts/verify-backup.js` never touches `DB_PATH` — it verifies the already-produced
+   backup files, not the live database). Merged as PR #64 — see item 5.
+5. **A fifth, minor bug, surfaced only once 1–4 were fixed — and the good news that came with
+   it:** run #38 (after PR #64 merged) showed the actual backup succeeded completely for the
+   first time since 2026-07-31: written, verified, restore-drilled
+   (`integrity_check=ok, users=9, audit_rows=96`), downloaded, independently re-verified, and
+   uploaded offsite with all three objects size-confirmed. The disaster-recovery-critical part
+   of this workflow is proven working end-to-end. The job still failed, but only on the lowest-
+   stakes step: local retention pruning. `scp scripts/backup-retention.js
+   hostinger:/home/u716763642/.logs/wms/backup-retention.$$.js` failed with
+   `No such file or directory` because that temp directory doesn't exist on the host. Worse,
+   this exposed a real bug in the step's own error-handling design: its comment states
+   "Retention failure must NOT invalidate the already-verified offsite backup," but the `scp`
+   ran as a bare command before the `|| echo warning` fallback, which only wrapped the
+   subsequent `ssh` call — so `set -e` killed the whole step on the `scp` failure before the
+   graceful fallback was ever reached, contradicting the step's own stated intent. Fixed by
+   creating the temp directory first (`ssh hostinger "mkdir -p ..."`) and chaining all three
+   remote steps (`mkdir` && `scp` && `ssh`) under one `|| echo warning` fallback, so any
+   failure in local retention now degrades to a warning rather than failing the job — matching
+   what the step always claimed to do.
+
+**Evidence-class note:** all hPanel/SSH/checksum evidence above is **Reported by the
+operator** (per `DEC-010`) — this session had no Hostinger or production access and directed
+the diagnosis via chat, verifying only the public, non-sensitive artifacts the operator chose
+to share (host key fingerprints, checksums, public key fingerprints) and the GitHub Actions
+run logs directly.
+
+**Security note:** during troubleshooting, the operator inadvertently pasted the full private
+key content for `wms-gha-backup-final-2026-08-11` into this chat session. That key is treated
+as exposed and scheduled for rotation as a follow-up hygiene action (generate a fresh key,
+install only the public half via hPanel and `authorized_keys`, update the GitHub secret
+directly without the private key passing through chat again, then remove the exposed key from
+`authorized_keys`/hPanel). This does not affect the resolution above, since the exposed key
+still requires host access held only by the operator, but should not be left unrotated
+indefinitely.
+
+**Validation:**
+- Run #36 (`31532235669`): SSH authentication and host-key verification both succeeded —
+  confirmed items 1–2 fixed.
+- Run #37 (`31533205661`), after PR #63 (`REMOTE_APP_DIR` fix) merged: SSH, host-key, and the
+  GLIBC addon load all succeeded — confirmed item 3 fixed. Failed at the new `DB_PATH` issue
+  (item 4).
+- Run #38 (`31533906731`), after PR #64 (`DB_PATH` fix) merged: **the actual backup, restore
+  drill, and offsite upload all succeeded** — confirmed item 4 fixed and the
+  disaster-recovery-critical path fully working. Failed only at local retention pruning
+  (item 5), a non-data-safety issue.
+- Run #39 (`31535041998`), after PR #65 (retention-directory fix) merged: **fully successful —
+  all 15 job steps completed with `conclusion: success`, including "Prune old LOCAL sets."**
+  This is the first fully clean end-to-end run since 2026-07-31.
+
+**Closed.** All five root causes are fixed and validated. `production-backup.yml` is back on
+its normal daily schedule with no known outstanding defects. The exposed-SSH-key rotation
+noted above remains a separate, open hygiene follow-up — it is not a defect in this incident
+and does not block closure, since exploiting it still requires host access held only by the
+operator.
 
 ---
 

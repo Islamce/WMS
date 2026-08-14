@@ -35,6 +35,204 @@ installed dependencies and the bundled runtime exposes no npm executable.
 mutation, Passenger restart, PR merge, or production credential operation was
 performed.
 
+## 2026-08-11 (cont'd) — INC-2026-08-06-01 closed: offsite backup fully restored
+
+**Objective:** Close out `INC-2026-08-06-01` after merging the fifth and final fix
+(PR #65, retention-directory error handling).
+
+**Starting state:** PR #65 merged. Triggered `production-backup.yml` directly via the GitHub
+API for the final validation run.
+
+**Actions:** Run #39 completed with `conclusion: success` across all 15 job steps, including
+"Prune old LOCAL sets" — the first fully clean end-to-end run since 2026-07-31 (11 days of
+failures, 5 distinct bugs found and fixed in one continuous working session with the
+operator). Updated `INC-2026-08-06-01`'s status to Resolved/Closed with this run cited as
+final validation evidence, and `docs/WMS-CURRENT-STATUS.md`'s "Known remaining work" to mark
+the backup-restoration item done, adding a separate, explicitly non-blocking item for the
+still-open SSH-key-rotation hygiene follow-up.
+
+**Evidence:** Run #39 (`31535041998`) job step list — all 15 steps `success`, confirmed via
+`list_workflow_jobs` rather than inferring from the run-level conclusion alone.
+
+**Decisions:** Kept the exposed-SSH-key rotation as a separate tracked item rather than
+folding it into this incident's closure criteria, since it's a hygiene concern (the key still
+requires host access only the operator holds) and not a defect that caused any of the five
+bugs fixed today.
+
+**Risks/incidents:** `INC-2026-08-06-01` closed. No open incidents remain from today's work.
+The SSH-key rotation remains outstanding as a tracked, non-blocking follow-up.
+
+**Files/PRs/commits changed:** `docs/WMS-INCIDENT-LOG.md` (`INC-2026-08-06-01` closed),
+`docs/WMS-CURRENT-STATUS.md`, `docs/WMS-SESSION-LOG.md` (this entry), on branch
+`docs/close-offsite-backup-incident-2026-08-11`, opened as a draft PR against `main`.
+
+**Production state:** Unchanged beyond the successful backups/offsite uploads the validation
+runs themselves produced (their entire purpose). No application, database schema, or
+credential change was made by this session at any point across the whole incident — all
+SSH/hPanel/GitHub-secret actions were performed directly by the operator, guided remotely.
+
+**Remaining work:** Rotate the exposed SSH key (tracked in `WMS-CURRENT-STATUS.md`, item 12).
+Otherwise, `production-backup.yml` needs no further attention — back on its normal 02:30 UTC
+daily schedule.
+
+**Exact next step:** Merge this documentation PR once CI passes.
+
+## 2026-08-11 (cont'd) — Offsite backup: core path confirmed working; fifth bug (retention dir) found and fixed
+
+**Objective:** Continue closing `INC-2026-08-06-01` after merging the `DB_PATH` fix (PR #64).
+
+**Starting state:** PR #64 merged. Triggered `production-backup.yml` directly via the GitHub
+API again to validate.
+
+**Actions:** Run #38 showed the actual backup succeeded completely for the first time since
+2026-07-31: written, verified, restore-drilled (`integrity_check=ok, users=9, audit_rows=96`),
+downloaded, independently re-verified on the runner, and uploaded offsite with all three
+objects size-confirmed against the bucket. This is the disaster-recovery-critical part of the
+workflow, now proven working end-to-end. The job still failed, but only on local retention
+pruning: `scp` failed because `/home/u716763642/.logs/wms/` doesn't exist on the host. Reading
+the step's own code found a real design bug alongside it: the step's comment claims retention
+failures must not fail the job, but the `scp` command ran as a bare statement before the
+`|| echo warning` fallback (which only covered the subsequent `ssh` call), so `set -e` killed
+the whole step on the `scp` failure before that fallback was ever reached — contradicting the
+step's own stated intent. Fixed by creating the temp directory first and chaining all three
+remote operations under one shared `|| echo warning` fallback.
+
+**Evidence:** Run #38 (`31533906731`) log — full backup/verify/upload success block, then the
+`scp` failure. Workflow source read to identify the `set -e`/fallback-ordering bug.
+
+**Decisions:** Kept the fix minimal and mechanical (directory creation + fallback-chain
+reordering) rather than restructuring the retention step further, since the actual bug was
+narrow and well understood.
+
+**Risks/incidents:** `INC-2026-08-06-01` updated with this fifth finding — importantly, also
+updated to record that the core backup/offsite-upload path is now confirmed working, which is
+the actual disaster-recovery-relevant fact; the remaining bug only affects local set pruning,
+not data safety.
+
+**Files/PRs/commits changed:** `.github/workflows/production-backup.yml` (retention-step
+`mkdir -p` + fallback-chain fix), `docs/WMS-INCIDENT-LOG.md`, `docs/WMS-SESSION-LOG.md` (this
+entry), on branch `fix/backup-workflow-retention-dir-2026-08-11`, opened as a draft PR against
+`main`.
+
+**Production state:** Unchanged, other than the new backup set and offsite copy the successful
+run #38 itself produced (its whole purpose) — no application, database schema, or credential
+change.
+
+**Remaining work:** Merge this PR, trigger once more, confirm full `conclusion: success`
+(including the retention step), then close `INC-2026-08-06-01`.
+
+**Exact next step:** Wait for CI, merge on explicit instruction, trigger, verify.
+
+## 2026-08-11 (cont'd) — Offsite backup: fourth bug found (DB_PATH), fixed in code
+
+**Objective:** Continue closing `INC-2026-08-06-01` after merging the `REMOTE_APP_DIR` fix
+(PR #63).
+
+**Starting state:** PR #63 merged. Triggered `production-backup.yml` directly via the GitHub
+API (`workflow_dispatch`) rather than waiting on the operator, since this is the same
+non-destructive, read-mostly backup action already run manually many times today.
+
+**Actions:** Run #37 confirmed the GLIBC addon problem was fully fixed (no more `GLIBC_2.29`
+error), but failed at a new step: `Cannot open database because the directory does not exist`.
+Traced through `scripts/backup.js` → `server/config.js`: `config.dbPath` reads `DB_PATH` from
+the environment, falling back to a path relative to the script's own directory when unset. The
+workflow's remote SSH command never set `DB_PATH` explicitly — it happened to work before only
+because the old `REMOTE_APP_DIR` (the legacy persistent path) coincidentally was where the
+database lived. Now that `REMOTE_APP_DIR` correctly points at the release symlink, that
+fallback resolves to a path inside the release tree, which never contains the database (by
+design — see `docs/WMS-PRODUCTION-RUNBOOK.md`). Fixed by adding a `REMOTE_DB_PATH` value
+(matching the `DB_PATH` production invariant already on record) and passing it explicitly as
+`DB_PATH` to the `scripts/backup.js` invocation.
+
+**Evidence:** Run #37 (`31533205661`) log, `scripts/backup.js` and `server/config.js` source
+inspection (both in-repo, read directly — no production access needed for this part).
+
+**Decisions:** Did not touch `scripts/verify-backup.js`'s invocation — confirmed by reading its
+source that it never touches `DB_PATH` (it verifies the already-produced backup files, not the
+live database), so no equivalent fix needed there.
+
+**Risks/incidents:** `INC-2026-08-06-01` updated with this fourth finding; still open pending
+validation of this fix.
+
+**Files/PRs/commits changed:** `.github/workflows/production-backup.yml` (`REMOTE_DB_PATH`
+added, passed to the `scripts/backup.js` call), `docs/WMS-INCIDENT-LOG.md`,
+`docs/WMS-SESSION-LOG.md` (this entry), on branch `fix/backup-workflow-db-path-2026-08-11`,
+opened as a draft PR against `main`.
+
+**Production state:** Unchanged. This session triggered the (read-mostly, non-destructive)
+backup workflow directly via the GitHub API, which is the same action already run manually
+many times today — no SSH, credential, or host-configuration access was used or required.
+
+**Remaining work:** Merge this PR, trigger the workflow once more, confirm `conclusion:
+success`, then close `INC-2026-08-06-01`.
+
+**Exact next step:** Wait for CI, merge on explicit instruction, trigger, verify.
+
+## 2026-08-11 — Offsite backup: SSH + host-key fixed live; app-dir bug found and fixed in code
+
+**Objective:** Solve `INC-2026-08-06-01` completely, working live with the operator who had
+direct Hostinger hPanel/SSH access (this session had none throughout).
+
+**Starting state:** 10+ consecutive `production-backup.yml` failures, most recently
+`Permission denied (publickey,password)` (run #25). No production/hPanel access available to
+this session at any point.
+
+**Actions:** Guided the operator step by step in real time: verified `authorized_keys`
+permissions (already correct), diagnosed an early regenerated key as an empty file (0
+meaningful bytes) and discarded it, had the operator generate a clean key
+(`wms-gha-backup-final-2026-08-11`, confirmed 432 bytes), register its public half both
+directly in `authorized_keys` and through hPanel's own SSH-key-management UI, and run a manual
+`ssh -vvv` test that confirmed `Authentication succeeded (publickey)` against
+`185.97.145.102:65002` as `u716763642` — proof independent of GitHub Actions' redacted logs.
+Updated the `HOSTINGER_SSH_PRIVATE_KEY` GitHub secret to match. The next run then failed
+differently (`Host key verification failed`); refreshed `HOSTINGER_KNOWN_HOSTS` via
+`ssh-keyscan`, cross-checking the ECDSA fingerprint against the one shown during the operator's
+manual login (exact match — not blind trust-on-first-use). The following run passed SSH auth
+and host-key verification, but then failed the actual backup step with the same
+`GLIBC_2.29 not found` signature as `INC-2026-07-31-01`. Directed a read-only checksum
+comparison (`sha256sum` on `better_sqlite3.node`) which showed the workflow's `REMOTE_APP_DIR`
+pointed at the legacy persistent path (old, incompatible addon,
+`e8f767df39a9a934b3705d0fffc401a12932bf94d650aae2d27733311f7ff842`), while the actual live
+release at `.builds/current` → `.builds/versions/manual-20260801T202313Z-1bd15f12` has the
+correct addon (`a9c4d701f59a492c538416211cc3e65257f1d74e3e4ce3d8d9862e1981676dc4`, exact match
+to the known-good Aug 1 checksum) — confirming production itself never regressed. Fixed
+`REMOTE_APP_DIR` in `production-backup.yml` to follow the `.builds/current` symlink instead of
+the stale legacy path.
+
+**Evidence:** All hPanel/SSH/checksum findings are **Reported by the operator** per `DEC-010`
+— this session verified only what appeared in GitHub Actions run logs and what the operator
+chose to share (fingerprints, checksums). GitHub Actions run #36 (`31532235669`) is the
+validation point: SSH auth and host-key verification both succeeded, only the (now-fixed)
+`REMOTE_APP_DIR` bug remained.
+
+**Decisions:** Did not attempt to touch the `better-sqlite3` addon itself anywhere — the
+GLIBC-2.29 finding was resolved by fixing a workflow path, not by rebuilding, replacing, or
+otherwise touching any native addon on production, keeping this outside `DEC-013`'s gated
+recovery procedure entirely (correctly so, since production's own addon was never the
+problem).
+
+**Risks/incidents:** `INC-2026-08-06-01` updated in place with a full "Resolution — 2026-08-11"
+section; kept open, narrowed to confirming one green run after the `REMOTE_APP_DIR` fix merges.
+Flagged separately: the operator inadvertently pasted the new SSH private key's full content
+into this chat session. Recorded as a follow-up rotation item — not a change to this
+resolution, since exploiting it still requires host access only the operator holds, but it
+should not be left unrotated.
+
+**Files/PRs/commits changed:** `.github/workflows/production-backup.yml` (`REMOTE_APP_DIR`
+fix), `docs/WMS-INCIDENT-LOG.md` (`INC-2026-08-06-01` resolution section),
+`docs/WMS-CURRENT-STATUS.md`, `docs/WMS-SESSION-LOG.md` (this entry), on branch
+`fix/backup-workflow-app-dir-2026-08-11`, opened as a draft PR against `main`.
+
+**Production state:** Unchanged. All SSH/key/hPanel actions were performed directly by the
+operator on their own account; this session made only the workflow-file code change, which
+does not touch production until the next scheduled/manual run exercises it.
+
+**Remaining work:** Merge this PR, trigger the workflow, confirm `conclusion: success`, then
+close `INC-2026-08-06-01`. Separately: rotate the exposed SSH key as a hygiene follow-up.
+
+**Exact next step:** Wait for CI, merge on explicit instruction as usual, then trigger
+`production-backup.yml` manually and verify success before marking the incident closed.
+
 ## 2026-08-10 — Offsite backup: SSH auth now rejected (new signature, run #25)
 
 **Objective:** User asked why offsite-backup failures were still occurring; checked latest
@@ -285,60 +483,6 @@ follow-up) remains open.
 dry-run reconciliation, each requiring separate operator-driven production access.
 
 ---
-
-## 2026-08-03 — Controlled workflow-context and analytics-integrity corrective phase
-
-**Objective and baseline:** Investigate and correct downstream loss of ERP
-request context and unsupported dead-stock claims. Repository `Islamce/WMS` was
-clean before work; verified main was
-`065736cbda165dfc73478e2f6ce43468a0d63304`. Dedicated branch
-`fix/workflow-context-analytics-integrity` was created. Open PRs #50/#51 touched
-only package metadata; Draft PR #54 touched the mandatory continuity documents,
-so documentation collision risk is explicit. No equivalent implementation
-branch was found.
-
-**Verified root causes:** ERP values were persisted on
-`material_request_headers`, but warehouse/picker/GI queue projections and role
-screens omitted different subsets. Historical import already used separate,
-append-only tables and did not change live stock, but represented only three
-coarse types and lacked preview/mapping/reconciliation. Analytics ignored that
-history, read only the live ledger, counted all OUT transactions as demand, did
-not net returns/reversals, and declared stocked/no-issue items dead without
-checking historical coverage.
-
-**Implementation:** Added a canonical execution-context serializer to request,
-ERP, warehouse, picker, and GI APIs and displayed identifiers in compact web and
-Flutter queue/detail views. Added additive migration 013 for normalized
-movement categories and ERP/source/date traceability. Extended Import Center
-with eight categories, field mapping, preview/dry-run, date validation,
-fingerprint dedupe, batch reconciliation, audit, and rejected-row retrieval.
-Rebuilt analytics on a canonical combined movement stream, with conservative
-cross-source dedupe, demand semantics, return/reversal netting, opening-balance
-exclusion, operational/import coverage intervals, confidence, and the
-`UNKNOWN` gate for incomplete history.
-
-**Tests and evidence:** Extended workflow and reversal suites across warehouse,
-picker, GI, downstream reversal, and partial approval. Added isolated
-`corrective_integrity_test.py` for migration fields, dates, source traceability,
-dry-run/non-mutation, rejected rows, append-only enforcement, all movement
-semantics, duplicate import, live-stock invariants, and NONE/PARTIAL/COMPLETE
-coverage behavior. JavaScript syntax, Python syntax, and `git diff --check`
-passed. Runtime tests could not execute because this checkout lacked Node
-dependencies and the environment rejected external downloads after its usage
-limit was reached. KAAF regeneration was attempted and correctly stopped on
-the pre-existing `wms-api -> wms-ops-scripts -> wms-api` dependency cycle (one
-of five existing `.ai/drift.json` errors), so generated context was not edited
-manually. These are transparent validation blockers; CI is required.
-
-**Production state:** Unchanged and not inspected. No deployment, migration,
-seed, historical/opening-stock import, production database mutation, Passenger
-restart, merge, or backup deletion occurred.
-
-**Exact next step:** Commit and push the coherent branch, open a Draft PR, and
-wait for CI and Project Manager / Product Owner review. The first staging
-attempt was rejected by the environment's external-action usage limit, before
-anything entered the Git index; do not fabricate a PR number or CI state. Do
-not merge or take any production action.
 
 ## 2026-08-01 — Final merge-readiness documentation strategy
 
