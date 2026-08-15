@@ -138,6 +138,10 @@ async function stopServer(server) {
     check('ERP detail renders requested material descriptions, codes, quantities, and UoM',
       materials.every((material) => erpText.includes(material.item_code)) &&
       erpText.toUpperCase().includes('REQUESTED') && erpText.toUpperCase().includes('UOM'), erpText);
+    check('ERP detail retains canonical workflow status and distinguishes draft save from warehouse routing',
+      await erpPage.locator('#eo-detail .request-stage-status').count() === 1
+      && await erpPage.locator('.erp-action-draft #eo-save').count() === 1
+      && await erpPage.locator('.erp-action-commit #eo-send').count() === 1);
     await erpContext.close();
 
     await api('POST', `/api/erp-operator/${requestId}/send-to-warehouse`, erp);
@@ -145,21 +149,29 @@ async function stopServer(server) {
 
     const warehouseContext = await browser.newContext();
     const warehousePage = await warehouseContext.newPage();
+    const lineRequests = [];
+    warehousePage.on('request', (request) => {
+      if (request.url().includes(`/api/requests/${requestId}`)) lineRequests.push(request.url());
+    });
     await loginUi(warehousePage, 'supervisor@example.com', 'Passw0rd!');
-    await goTo(warehousePage, '#/warehouse', `button[data-lines="${requestId}"]`);
-    const lineButton = warehousePage.locator(`button[data-lines="${requestId}"]`);
-    check('Warehouse Dashboard starts compact with an explicit Lines control',
-      await lineButton.innerText() === '4 lines');
-    await lineButton.click();
-    await warehousePage.waitForSelector(`#wd-lines-${requestId}`);
-    await warehousePage.locator(`#wd-lines-${requestId}`).getByText(materials[0].item_code, { exact: false }).waitFor();
-    const expandedText = await warehousePage.locator(`#wd-lines-${requestId}`).innerText();
+    await goTo(warehousePage, '#/warehouse', `details.material-disclosure[data-request-id="${requestId}"]`);
+    const disclosure = warehousePage.locator(`details.material-disclosure[data-request-id="${requestId}"]`);
+    check('Warehouse Dashboard starts as shared request cards with status, priority, and warehouse controls',
+      await warehousePage.locator(`#wd-card-list .request-card[data-request-id="${requestId}"]`).count() === 1
+      && await warehousePage.locator('#wd-filters [data-wd-filter]').count() === 3
+      && (await disclosure.locator('summary').innerText()).includes('Materials')
+      && (await disclosure.locator('summary').innerText()).includes('4 lines'));
+    check('Warehouse Dashboard makes no request-line call before explicit expansion', lineRequests.length === 0, JSON.stringify(lineRequests));
+    await disclosure.locator('summary').click();
+    await disclosure.getByText(materials[0].item_code, { exact: false }).waitFor();
+    const expandedText = await disclosure.innerText();
     check('Warehouse Dashboard lazily expands existing request lines without leaving the page',
-      materials.every((material) => expandedText.includes(material.item_code)) &&
-      (await warehousePage.url()).endsWith('#/warehouse'), expandedText);
-    await lineButton.click();
-    check('Warehouse Dashboard Lines control collapses the child row',
-      await warehousePage.locator(`#wd-lines-${requestId}`).count() === 0);
+      materials.every((material) => expandedText.includes(material.item_code))
+      && (await warehousePage.url()).endsWith('#/warehouse') && lineRequests.length === 1, expandedText);
+    await disclosure.locator('summary').click();
+    check('Warehouse Dashboard material disclosure collapses without removing request navigation',
+      await disclosure.evaluate((element) => !element.open)
+      && (await warehousePage.locator(`#wd-card-list a[href="#/request-detail/${requestId}"]`).count()) === 1);
     await warehouseContext.close();
 
     const pickers = await api('GET', '/api/warehouse/pickers', supervisor);
@@ -171,14 +183,26 @@ async function stopServer(server) {
     const pickerContext = await browser.newContext();
     const pickerPage = await pickerContext.newPage();
     await loginUi(pickerPage, 'supervisor@example.com', 'Passw0rd!');
-    await goTo(pickerPage, '#/picker-assign', `#pa-table tr[data-id="${requestId}"]`);
-    const pickerRow = pickerPage.locator(`#pa-table tr[data-id="${requestId}"]`);
-    const pickerText = await pickerRow.innerText();
-    check('escalated assignment row shows the existing picker and escalation evidence',
-      pickerText.includes('Escalated to Supervisor') && pickerText.includes(picker.name) && pickerText.includes('escalation 1'), pickerText);
+    await goTo(pickerPage, '#/picker-assign', `#pa-list .request-card[data-request-id="${requestId}"]`);
+    const pickerCard = pickerPage.locator(`#pa-list .request-card[data-request-id="${requestId}"]`);
+    const pickerText = await pickerCard.innerText();
+    check('escalated assignment card shows the existing picker, escalation evidence, and visible stage exception',
+      pickerText.includes('Escalated to Supervisor') && pickerText.includes(picker.name) && pickerText.includes('escalation 1')
+      && await pickerCard.locator('.request-stage-exception.danger').count() === 1, pickerText);
     check('escalated assignment exposes explicit Reassign rather than a silent fresh assignment',
-      await pickerRow.getByRole('button', { name: 'Reassign' }).count() === 1, pickerText);
+      await pickerCard.getByRole('button', { name: 'Reassign' }).count() === 1, pickerText);
     await pickerContext.close();
+
+    const taskContext = await browser.newContext();
+    const taskPage = await taskContext.newPage();
+    await loginUi(taskPage, 'picker@example.com', 'Passw0rd!');
+    await goTo(taskPage, '#/picking', `#pk-list .request-card[data-request-id="${requestId}"]`);
+    const taskCard = taskPage.locator(`#pk-list .request-card[data-request-id="${requestId}"]`);
+    check('Picker inbox uses the same request-card identity and exposes the escalated task exception',
+      await taskCard.getByText('Task attention').count() === 1
+      && await taskCard.locator('.request-stage-exception.danger').count() === 1
+      && await taskCard.getByRole('button', { name: 'Open task' }).count() === 1);
+    await taskContext.close();
   } catch (error) {
     check('browser visibility regression completed', false, error.message);
   } finally {

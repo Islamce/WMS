@@ -153,9 +153,11 @@ erp_source = (ROOT / 'public/js/pages/erpOperator.js').read_text()
 warehouse_source = (ROOT / 'public/js/pages/giPosting.js').read_text()
 picker_source = (ROOT / 'public/js/pages/pickerAssign.js').read_text()
 check('ERP page renders the read-only requested-material summary',
-      'eo-material-lines' in erp_source and 'Requested Materials' in erp_source and 'Show ${remaining.length} more line' in erp_source)
-check('warehouse dashboard has an explicit lazy Lines control and no row-click redirect',
-      'data-lines=' in warehouse_source and 'Api.get(`/api/requests/${id}`)' in warehouse_source and
+      'eo-material-lines' in erp_source and 'Requested Materials' in erp_source and
+      'UI.materialDisclosure({' in erp_source and 'requestStageIndicator(r)' in erp_source)
+check('warehouse dashboard has an explicit lazy material disclosure and preserves request navigation',
+      'UI.materialDisclosure({' in warehouse_source and 'details.addEventListener(\'toggle\'' in warehouse_source and
+      'Api.get(`/api/requests/${id}`)' in warehouse_source and 'link: `#/request-detail/${request.id}`' in warehouse_source and
       "tr[data-id]" not in warehouse_source)
 check('picker page keeps reminder/escalation evidence visible and requires explicit reassignment',
       "'Reminder Sent'" in picker_source and 'active_assigned_picker_name' in picker_source and

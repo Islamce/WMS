@@ -48,7 +48,10 @@ Pages.erpOperator = {
     return `<div class="card" id="eo-material-lines">
       <h3>Requested Materials</h3>
       ${table(visible)}
-      ${remaining.length ? `<details style="margin-top:10px"><summary>Show ${remaining.length} more line${remaining.length === 1 ? '' : 's'}</summary><div style="max-height:260px;overflow:auto;margin-top:10px">${table(remaining)}</div></details>` : ''}
+      ${remaining.length ? UI.materialDisclosure({
+        label: 'Additional materials', lineCount: remaining.length,
+        bodyHtml: `<div style="max-height:260px;overflow:auto">${table(remaining)}</div>`,
+      }) : ''}
     </div>`;
   },
 
@@ -58,6 +61,7 @@ Pages.erpOperator = {
     box.innerHTML = `
       <div class="card">
         <h3>${UI.esc(r.request_number)} — ERP Processing</h3>
+        ${UI.requestStageIndicator(r)}
         ${UI.requesterCard(r)}
         ${this.renderMaterialLines(lines)}
         <div class="form-row">
@@ -76,10 +80,10 @@ Pages.erpOperator = {
           <div class="form-group"><label>Plant *</label><input type="text" id="eo-plant" value="${UI.esc(r.plant || '')}"></div>
           <div class="form-group"><label>Storage Location *</label><input type="text" id="eo-sloc" value="${UI.esc(r.storage_location || '')}"></div>
         </div>
-        <div class="actions" style="justify-content:flex-start">
-          <button class="btn secondary" id="eo-save">Save ERP details</button>
-          <button class="btn success" id="eo-send">Send to Warehouse →</button>
-          <button class="btn warn" id="eo-reverse" title="${t('Send this request back one step, undoing what the current stage did')}">↩ ${t('Reverse one step')}</button>
+        <div class="erp-action-bar">
+          <div class="erp-action erp-action-draft"><button class="btn secondary" id="eo-save">Save ERP details</button><span>Save as a draft without routing the request.</span></div>
+          <div class="erp-action erp-action-commit"><button class="btn success" id="eo-send">Send to Warehouse →</button><span>Routes the request to warehouse execution after required ERP details are complete.</span></div>
+          <div class="erp-action erp-action-reverse"><button class="btn warn" id="eo-reverse" title="${t('Send this request back one step, undoing what the current stage did')}">↩ ${t('Reverse one step')}</button></div>
         </div>
         <p class="muted" style="margin-top:8px">Movement type, reservation/reference, plant, storage location and issue warehouse are all mandatory before routing to the warehouse.</p>
       </div>`;
