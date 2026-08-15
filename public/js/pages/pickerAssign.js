@@ -12,7 +12,7 @@ Pages.pickerAssign = {
           <button class="btn secondary sm" id="pa-sweep">Run reminder sweep</button>
         </div>
       </div>
-      <div class="card"><div class="table-wrap" id="pa-table"><div class="loading">Loading…</div></div></div>`;
+      <div id="pa-list"><div class="loading">Loading picker assignments…</div></div>`;
     try { ({ pickers: this.pickers } = await Api.get('/api/warehouse/pickers')); } catch { this.pickers = []; }
     el.querySelector('#pa-sweep').addEventListener('click', async () => {
       try { const { message } = await Api.post('/api/picking/sweep', {}); UI.toast(message); this.load(); }
@@ -57,24 +57,21 @@ Pages.pickerAssign = {
   },
 
   async load() {
-    const table = this.el.querySelector('#pa-table');
+    const list = this.el.querySelector('#pa-list');
     const { requests } = await Api.get('/api/warehouse/queue');
     const visible = requests.filter((request) => this.isAssignmentRow(request));
-    table.innerHTML = `<table><thead><tr><th>Request / ERP</th><th>Requester</th><th>Warehouse</th><th>Priority</th><th>Assignment state</th><th>Current picker</th><th>Action</th></tr></thead>
-      <tbody>${visible.map((request) => `
-        <tr data-id="${request.id}">
-          <td><strong>${UI.esc(request.request_number)}</strong>
-            <div class="muted sm">ERP ${UI.esc(request.erp_reservation_number || request.erp_reference_number || '—')} · MvT ${UI.esc(request.movement_type || '—')} · Plant ${UI.esc(request.plant || '—')}</div></td>
-          <td>${UI.esc(request.requester_name || '')}<div class="muted sm">${UI.esc(request.department || '—')} · ${UI.esc(request.project || '—')}</div></td>
-          <td>${UI.esc(request.issue_warehouse_code || '')}<div class="muted sm">SLoc ${UI.esc(request.storage_location || '—')}</div></td>
-          <td><span class="badge ${request.priority === 'URGENT' || request.priority === 'HIGH' ? 'pending' : 'role'}">${UI.esc(request.priority || '—')}</span></td>
-          <td><span class="badge ${statusClass(request.request_status)}">${UI.esc(request.request_status)}</span></td>
-          <td>${this.pickerEvidence(request)}</td>
-          <td>${this.assignmentAction(request)}</td>
-        </tr>`).join('') || '<tr><td colspan="7" class="muted">No picker assignments need attention</td></tr>'}
-      </tbody></table>`;
-    table.querySelectorAll('[data-assign]').forEach((button) => button.addEventListener('click', async () => {
-      const select = table.querySelector(`.pa-picker[data-id="${button.dataset.assign}"]`);
+    list.innerHTML = visible.length
+      ? visible.map((request) => UI.requestCard(request, {
+        pickerHtml: `<span class="muted">Current picker</span><br>${this.pickerEvidence(request)}`,
+        actionHtml: this.assignmentAction(request),
+        extraHtml: `<div class="request-card-meta">ERP ${UI.esc(request.erp_reservation_number || request.erp_reference_number || '—')} · Movement ${UI.esc(request.movement_type || '—')} · Plant ${UI.esc(request.plant || '—')} · SLoc ${UI.esc(request.storage_location || '—')}</div>`,
+      })).join('')
+      : UI.meaningfulEmptyState({
+        title: 'No picker assignments need attention',
+        description: 'There are no requests currently awaiting picker assignment or supervisor reassignment. Assigned tasks remain visible here while they await a picker response.',
+      });
+    list.querySelectorAll('[data-assign]').forEach((button) => button.addEventListener('click', async () => {
+      const select = list.querySelector(`.pa-picker[data-id="${button.dataset.assign}"]`);
       if (!select.value) return UI.toast('Select a picker.', 'error');
       try {
         const { message } = await Api.post(`/api/warehouse/${button.dataset.assign}/assign-picker`, { picker_id: Number(select.value) });

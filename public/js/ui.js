@@ -400,10 +400,11 @@ const UI = {
    * Read-only material summary. Callers supply content only after an explicit
    * user disclosure where line data is lazily loaded; this helper never fetches.
    */
-  materialDisclosure({ lineCount = 0, bodyHtml = '', expanded = false, label = 'Materials' } = {}) {
+  materialDisclosure({ lineCount = 0, bodyHtml = '', expanded = false, label = 'Materials', requestId = '' } = {}) {
     const count = Number(lineCount) || 0;
     const lineLabel = `${count} line${count === 1 ? '' : 's'}`;
-    return `<details class="material-disclosure" ${expanded ? 'open' : ''}>
+    const requestAttr = requestId === '' ? '' : `data-request-id="${UI.esc(requestId)}"`;
+    return `<details class="material-disclosure" ${requestAttr} ${expanded ? 'open' : ''}>
       <summary><span>${UI.esc(label)}</span><span class="material-disclosure-count">${UI.esc(lineLabel)}</span></summary>
       <div class="material-disclosure-body">${bodyHtml || '<p class="muted">Material details are available when expanded.</p>'}</div>
     </details>`;

@@ -690,3 +690,18 @@ a.request-card-number:hover, a.request-card-number:focus-visible { color: var(--
 @media (max-width: 700px) {
   .lp-attention-head, .lp-process-head { flex-direction: column; }
 }
+
+/* --- Execution-surface adoption (D02) ------------------------------------- */
+.request-card-meta { margin-top: 10px; color: var(--text-muted); font-size: 12px; line-height: 1.45; }
+.erp-action-bar { display: flex; align-items: stretch; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+.erp-action { display: flex; flex-direction: column; gap: 6px; padding: 12px; border: 1px solid var(--border); border-radius: 10px; }
+.erp-action > span { color: var(--text-muted); font-size: 12px; line-height: 1.35; max-width: 270px; }
+.erp-action-draft { background: var(--surface-2); }
+.erp-action-commit { background: var(--success-bg); border-color: color-mix(in srgb, var(--success) 35%, var(--border)); }
+.erp-action-commit > span { color: color-mix(in srgb, var(--success) 80%, var(--text)); }
+.erp-action-reverse { justify-content: center; margin-left: auto; }
+
+@media (max-width: 700px) {
+  .erp-action-bar { flex-direction: column; }
+  .erp-action-reverse { margin-left: 0; align-items: flex-start; }
+}

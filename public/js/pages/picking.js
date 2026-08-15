@@ -6,26 +6,30 @@ Pages.picking = {
     this.el = el;
     if (taskId) return this.openTask(taskId);
     el.innerHTML = `<div class="card"><h3>My Picking Tasks</h3>
-      <div class="table-wrap" id="pk-table"><div class="loading">Loading…</div></div></div>`;
+      <p class="muted">Tasks assigned to you, including reminders and supervisor escalations that still need a picker response.</p></div>
+      <div id="pk-list"><div class="loading">Loading assigned tasks…</div></div>`;
     await this.loadInbox();
   },
 
   async loadInbox() {
-    const t = this.el.querySelector('#pk-table');
+    const list = this.el.querySelector('#pk-list');
     const { tasks } = await Api.get('/api/picking/tasks');
-    t.innerHTML = `<table><thead><tr><th>Request / ERP</th><th>Requester</th><th>Warehouse</th><th>Priority</th><th>Task Status</th><th>Reminders</th><th></th></tr></thead>
-      <tbody>${tasks.map((tk) => `
-        <tr data-id="${tk.id}">
-          <td><strong>${UI.esc(tk.request_number)}</strong><div class="muted sm">ERP ${UI.esc(tk.erp_reservation_number || tk.erp_reference_number || '—')} · MvT ${UI.esc(tk.movement_type || '—')} · Plant ${UI.esc(tk.plant || '—')}</div></td>
-          <td>${UI.esc(tk.requester_name || '')}<div class="muted sm">${UI.esc(tk.department || '—')} · ${UI.esc(tk.project || '—')}</div></td>
-          <td>${UI.esc(tk.warehouse_code || '')}<div class="muted sm">SLoc ${UI.esc(tk.storage_location || '—')}</div></td>
-          <td><span class="badge ${tk.priority === 'URGENT' || tk.priority === 'HIGH' ? 'pending' : 'role'}">${tk.priority}</span></td>
-          <td><span class="badge ${statusClass(tk.task_status)}">${UI.esc(tk.task_status)}</span></td>
-          <td>${tk.reminder_count}${tk.escalation_level ? ` · esc ${tk.escalation_level}` : ''}</td>
-          <td><button class="btn sm" data-open="${tk.id}">Open</button></td>
-        </tr>`).join('') || '<tr><td colspan="7" class="muted">No assigned tasks</td></tr>'}
-      </tbody></table>`;
-    t.querySelectorAll('[data-open]').forEach((b) => b.addEventListener('click', () => this.openTask(b.dataset.open)));
+    list.innerHTML = tasks.length
+      ? tasks.map((task) => {
+        const evidence = [];
+        if (task.reminder_count) evidence.push(`${task.reminder_count} reminder${task.reminder_count === 1 ? '' : 's'}`);
+        if (task.escalation_level) evidence.push(`escalation ${task.escalation_level}`);
+        return UI.requestCard({ ...task, request_status: task.task_status, issue_warehouse_code: task.warehouse_code }, {
+          actionHtml: `<button class="btn sm" data-open="${task.id}">Open task</button>`,
+          pickerHtml: evidence.length ? `<strong>Task attention</strong><div class="muted sm">${UI.esc(evidence.join(' · '))}</div>` : '',
+          extraHtml: `<div class="request-card-meta">ERP ${UI.esc(task.erp_reservation_number || task.erp_reference_number || '—')} · Movement ${UI.esc(task.movement_type || '—')} · Plant ${UI.esc(task.plant || '—')} · SLoc ${UI.esc(task.storage_location || '—')}</div>`,
+        });
+      }).join('')
+      : UI.meaningfulEmptyState({
+        title: 'No tasks are currently assigned to you',
+        description: 'New picker work appears here after a supervisor assigns it. Reminder and escalation states remain visible here until the task is accepted or reassigned.',
+      });
+    list.querySelectorAll('[data-open]').forEach((button) => button.addEventListener('click', () => this.openTask(button.dataset.open)));
   },
 
   async openTask(taskId) {
