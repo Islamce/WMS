@@ -78,23 +78,68 @@ Pages.giPosting = {
 
 /** Warehouse dashboard = the combined warehouse execution queue. */
 Pages.warehouse = {
+  lineTable(lines) {
+    return `<div style="max-height:260px;overflow:auto"><div class="table-wrap"><table>
+      <thead><tr><th>#</th><th>Item</th><th>Description</th><th class="text-right">Requested</th><th class="text-right">Approved</th><th>UoM</th></tr></thead>
+      <tbody>${lines.map((line) => `<tr>
+        <td>${line.line_number}</td>
+        <td><strong>${UI.esc(line.material_code || '—')}</strong></td>
+        <td class="wrap">${UI.esc(line.material_description || '—')}</td>
+        <td class="text-right">${UI.fmtQty(line.requested_quantity)}</td>
+        <td class="text-right">${line.approved_quantity != null ? UI.fmtQty(line.approved_quantity) : '—'}</td>
+        <td>${UI.esc(line.uom || '—')}</td>
+      </tr>`).join('') || '<tr><td colspan="6" class="muted">No active material lines</td></tr>'}</tbody>
+    </table></div></div>`;
+  },
+
+  async toggleLines(button) {
+    const id = button.dataset.lines;
+    const existing = this.el.querySelector(`#wd-lines-${id}`);
+    if (existing) {
+      existing.remove();
+      button.textContent = `${button.dataset.lineCount} line${Number(button.dataset.lineCount) === 1 ? '' : 's'}`;
+      button.setAttribute('aria-expanded', 'false');
+      return;
+    }
+
+    const parent = button.closest('tr');
+    const detail = document.createElement('tr');
+    detail.id = `wd-lines-${id}`;
+    detail.innerHTML = '<td colspan="9"><div class="loading">Loading material lines…</div></td>';
+    parent.insertAdjacentElement('afterend', detail);
+    button.disabled = true;
+    try {
+      const { lines } = await Api.get(`/api/requests/${id}`);
+      detail.innerHTML = `<td colspan="9"><div class="card" style="margin:8px 0"><h4 style="margin-top:0">Requested Materials</h4>${this.lineTable(lines)}</div></td>`;
+      button.textContent = 'Hide lines';
+      button.setAttribute('aria-expanded', 'true');
+    } catch (err) {
+      detail.innerHTML = `<td colspan="9"><div class="inline-alert error">${UI.esc(err.message || 'Unable to load material lines.')}</div></td>`;
+    } finally {
+      button.disabled = false;
+    }
+  },
+
   async render(el) {
+    this.el = el;
     el.innerHTML = `<div class="card"><h3>Warehouse Dashboard</h3>
       <p class="muted">Requests currently in warehouse execution stages.</p>
       <div class="table-wrap" id="wd-table"><div class="loading">Loading…</div></div></div>`;
     const { requests } = await Api.get('/api/warehouse/queue');
-    el.querySelector('#wd-table').innerHTML = `
+    const table = el.querySelector('#wd-table');
+    table.innerHTML = `
       <table><thead><tr><th>Request #</th><th>Requester</th><th>Department</th><th>Project</th><th>Warehouse</th><th>Priority</th><th>Movement</th><th>Status</th><th>Lines</th></tr></thead>
       <tbody>${requests.map((r) => `
-        <tr style="cursor:pointer" data-id="${r.id}">
-          <td><strong>${UI.esc(r.request_number)}</strong><div class="muted sm">ERP ${UI.esc(r.erp_reservation_number || r.erp_reference_number || '—')}</div></td>
+        <tr data-id="${r.id}">
+          <td><a href="#/request-detail/${r.id}"><strong>${UI.esc(r.request_number)}</strong></a><div class="muted sm">ERP ${UI.esc(r.erp_reservation_number || r.erp_reference_number || '—')}</div></td>
           <td>${UI.esc(r.requester_name || '')}</td><td>${UI.esc(r.department || '—')}</td><td>${UI.esc(r.project || '—')}</td>
           <td>${UI.esc(r.issue_warehouse_code || '')}<div class="muted sm">Plant ${UI.esc(r.plant || '—')} · SLoc ${UI.esc(r.storage_location || '—')}</div></td>
           <td><span class="badge ${r.priority === 'URGENT' || r.priority === 'HIGH' ? 'pending' : 'role'}">${r.priority}</span></td>
           <td>${UI.esc(r.movement_type || '')}</td>
           <td><span class="badge ${statusClass(r.request_status)}">${UI.esc(r.request_status)}</span></td>
-          <td>${r.total_lines}</td></tr>`).join('') || '<tr><td colspan="9" class="muted">No active warehouse requests</td></tr>'}
+          <td><button class="btn secondary sm" type="button" data-lines="${r.id}" data-line-count="${r.total_lines}" aria-expanded="false">${r.total_lines} line${Number(r.total_lines) === 1 ? '' : 's'}</button></td>
+        </tr>`).join('') || '<tr><td colspan="9" class="muted">No active warehouse requests</td></tr>'}
       </tbody></table>`;
-    el.querySelectorAll('tr[data-id]').forEach((tr) => tr.addEventListener('click', () => { location.hash = `#/request-detail/${tr.dataset.id}`; }));
+    table.querySelectorAll('[data-lines]').forEach((button) => button.addEventListener('click', () => this.toggleLines(button)));
   },
 };

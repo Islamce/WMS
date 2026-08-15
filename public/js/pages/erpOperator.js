@@ -30,6 +30,28 @@ Pages.erpOperator = {
     t.querySelectorAll('tr[data-id]').forEach((tr) => tr.addEventListener('click', () => this.openDetail(tr.dataset.id)));
   },
 
+  renderMaterialLines(lines) {
+    const row = (line) => `<tr>
+      <td>${line.line_number}</td>
+      <td><strong>${UI.esc(line.material_code || '—')}</strong></td>
+      <td class="wrap">${UI.esc(line.material_description || '—')}</td>
+      <td class="text-right">${UI.fmtQty(line.requested_quantity)}</td>
+      <td class="text-right">${line.approved_quantity != null ? UI.fmtQty(line.approved_quantity) : '—'}</td>
+      <td>${UI.esc(line.uom || '—')}</td>
+    </tr>`;
+    const table = (items) => `<div class="table-wrap"><table>
+      <thead><tr><th>#</th><th>Item</th><th>Description</th><th class="text-right">Requested</th><th class="text-right">Approved</th><th>UoM</th></tr></thead>
+      <tbody>${items.map(row).join('')}</tbody>
+    </table></div>`;
+    const visible = lines.slice(0, 3);
+    const remaining = lines.slice(3);
+    return `<div class="card" id="eo-material-lines">
+      <h3>Requested Materials</h3>
+      ${table(visible)}
+      ${remaining.length ? `<details style="margin-top:10px"><summary>Show ${remaining.length} more line${remaining.length === 1 ? '' : 's'}</summary><div style="max-height:260px;overflow:auto;margin-top:10px">${table(remaining)}</div></details>` : ''}
+    </div>`;
+  },
+
   async openDetail(id) {
     const { request: r, lines } = await Api.get(`/api/requests/${id}`);
     const box = this.el.querySelector('#eo-detail');
@@ -37,6 +59,7 @@ Pages.erpOperator = {
       <div class="card">
         <h3>${UI.esc(r.request_number)} — ERP Processing</h3>
         ${UI.requesterCard(r)}
+        ${this.renderMaterialLines(lines)}
         <div class="form-row">
           <div class="form-group"><label>ERP Reservation Number</label><input type="text" id="eo-res" value="${UI.esc(r.erp_reservation_number || '')}"></div>
           <div class="form-group"><label>ERP Reference Number</label><input type="text" id="eo-ref" value="${UI.esc(r.erp_reference_number || '')}"></div>

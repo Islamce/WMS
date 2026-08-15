@@ -89,6 +89,7 @@ run_suite p2_test.py
 run_suite p3_test.py
 run_suite uat_test.py
 run_suite r3_test.py
+run_suite request_line_visibility_test.py
 run_suite reverse_workflow_test.py
 run_suite backup_test.py
 run_suite backup_retention_test.py
