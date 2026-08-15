@@ -19,7 +19,7 @@ Pages.picking = {
         const evidence = [];
         if (task.reminder_count) evidence.push(`${task.reminder_count} reminder${task.reminder_count === 1 ? '' : 's'}`);
         if (task.escalation_level) evidence.push(`escalation ${task.escalation_level}`);
-        return UI.requestCard({ ...task, request_status: task.task_status, issue_warehouse_code: task.warehouse_code }, {
+        return UI.requestCard({ ...task, id: task.request_id, request_status: task.task_status, issue_warehouse_code: task.warehouse_code }, {
           actionHtml: `<button class="btn sm" data-open="${task.id}">Open task</button>`,
           pickerHtml: evidence.length ? `<strong>Task attention</strong><div class="muted sm">${UI.esc(evidence.join(' · '))}</div>` : '',
           extraHtml: `<div class="request-card-meta">ERP ${UI.esc(task.erp_reservation_number || task.erp_reference_number || '—')} · Movement ${UI.esc(task.movement_type || '—')} · Plant ${UI.esc(task.plant || '—')} · SLoc ${UI.esc(task.storage_location || '—')}</div>`,

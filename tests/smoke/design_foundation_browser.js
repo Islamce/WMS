@@ -103,6 +103,23 @@ async function loginUi(page, email, password) {
     check('Show all exposes additional already-permitted process groups without changing authorization',
       (await erpPage.locator('.lp-group').count()) > initialGroups && (await toggle.getAttribute('aria-pressed')) === 'true');
 
+    await erpPage.evaluate(() => document.getElementById('menu-toggle').click());
+    await erpPage.waitForSelector('#layout.nav-open');
+    const navState = await erpPage.evaluate(() => ({
+      profile: document.querySelector('.nav-profile')?.textContent.trim(),
+      groups: [...document.querySelectorAll('.nav-group')].map((group) => ({ key: group.dataset.key, open: group.classList.contains('open') })),
+      permissionsLinkCount: document.querySelectorAll('.nav-item[href="#/permissions"]').length,
+    }));
+    check('ERP sidebar applies its workspace profile by ordering and opening the relevant permitted module',
+      navState.profile === 'ERP Operator workspace' && navState.groups[0]?.key === 'v2-demand' && navState.groups.some((group) => group.key === 'v2-demand' && group.open), JSON.stringify(navState));
+    check('Role presentation does not expose a destination that the ERP role lacks permission to access',
+      navState.permissionsLinkCount === 0, JSON.stringify(navState));
+    await erpPage.locator('#nav-search').click();
+    await erpPage.locator('#cmd-input').fill('Notifications');
+    check('Command palette retains discovery of permitted screens outside the role-focused default navigation view',
+      await erpPage.locator('#cmd-results a[href="#/notifications"]').count() === 1);
+    await erpPage.keyboard.press('Escape');
+
     const d01 = await erpPage.evaluate(() => {
       const fixture = document.createElement('div');
       fixture.innerHTML = UI.requestCard({
