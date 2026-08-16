@@ -248,3 +248,16 @@ reset-admin
 ```
 
 Do not delete, replace, truncate, or recreate the SQLite database or WAL files outside an approved and documented recovery procedure.
+
+
+## KYNOX experience redesign execution — 2026-08-17
+
+**Verified (repo):** A controlled successor branch, `feat/wms-experience-redesign-execution`, was created from the complete PR #68 → #69 stack at `f68c728`. This preserves the merged workflow-context and analytics-integrity work on `main` while extending the open request-line, picker-state, request-card, and role-focused navigation work without reconstructing it.
+
+**Verified (repo):** The first redesign wave adds a presentation-only operational object header and exception treatment to the web Material Request detail surface. It uses the existing canonical workflow-stage indicator and does not change routes, permissions, APIs, workflow transitions, schema, inventory behavior, ERP behavior, audit controls, or production configuration.
+
+**Verified (repo):** Local `npm test` passed all suites after rebuilding `better-sqlite3` for the available Node v22.13.0 runtime. `npm run test:smoke` passed 6/6 base smoke, 10/10 request-line visibility, and 11/11 design-foundation checks after installing the local Playwright Chromium runtime. `npm run lint` completed with 0 errors and the repository's existing warnings. The repository declares Node 20.x, so local runtime compatibility is a caveat; CI remains the authoritative merge gate.
+
+**Production safety:** No production access, deployment, migration, import, reset/seed, Passenger restart, live database access, or PR merge occurred.
+
+**Artifacts:** `docs/WMS-REDESIGN-BASELINE-2026-08-17.md`, `docs/WMS-REDESIGN-SCREEN-INVENTORY-2026-08-17.md`, `docs/WMS-REDESIGN-MARKET-BENCHMARK-2026-08-17.md`, and `docs/WMS-REDESIGN-ARCHITECTURE-2026-08-17.md` record the audit, benchmark, target IA, workflow architecture, role matrix, design decisions, and residual risks.

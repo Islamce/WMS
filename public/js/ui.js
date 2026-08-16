@@ -350,6 +350,37 @@ const UI = {
   },
 
   /**
+   * Universal operational object header. Presentation-only: it derives no new
+   * workflow state and leaves action authorization to the existing callers and
+   * backend contracts.
+   */
+  operationalObjectHeader(row, { title = '', subtitle = '', primaryAction = '', exception = '' } = {}) {
+    const status = row.request_status || row.task_status || row.status || 'Unknown';
+    const requestNumber = row.request_number || row.id || 'Request';
+    const priority = row.priority || 'NORMAL';
+    const owner = row.assigned_picker_name || row.current_owner_name || row.owner_name || '';
+    const age = row.created_at ? UI.fmtDate(row.created_at) : '';
+    const exceptionHtml = exception || ['ERP Error', 'Escalated to Supervisor', 'Closed with Shortage', 'Partially Completed', 'Partially Picked'].includes(status)
+      ? `<div class="operational-exception-banner ${status === 'ERP Error' || status === 'Escalated to Supervisor' ? 'danger' : 'warning'}" role="status"><strong>${UI.esc(exception || status)}</strong><span>Review the evidence and complete the permitted next action.</span></div>`
+      : '';
+    return `<section class="operational-object-header" aria-labelledby="operational-object-title">
+      <div class="operational-object-heading">
+        <div><span class="eyebrow">${UI.esc(title || 'Operational object')}</span><h1 id="operational-object-title">${UI.esc(requestNumber)}</h1>${subtitle ? `<p class="muted">${UI.esc(subtitle)}</p>` : ''}</div>
+        <div class="operational-object-actions">${primaryAction}${primaryAction ? '' : ''}</div>
+      </div>
+      <div class="operational-object-meta">
+        <span class="badge ${statusClass(status)}">${UI.esc(status)}</span>
+        <span class="badge ${['URGENT', 'HIGH'].includes(priority) ? 'pending' : ''}">${UI.esc(priority)}</span>
+        ${owner ? `<span><strong>Owner</strong> ${UI.esc(owner)}</span>` : ''}
+        ${age ? `<span><strong>Created</strong> ${UI.esc(age)}</span>` : ''}
+        ${row.issue_warehouse_code ? `<span><strong>Warehouse</strong> ${UI.esc(row.issue_warehouse_code)}</span>` : ''}
+      </div>
+      ${UI.requestStageIndicator(row)}
+      ${exceptionHtml}
+    </section>`;
+  },
+
+  /**
    * Workflow-stage display for request surfaces. This is deliberately a
    * presentation-only summary: the canonical status is always rendered beside
    * the five business stages and remains the source of operational detail.
