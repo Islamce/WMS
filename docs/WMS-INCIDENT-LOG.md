@@ -615,3 +615,7 @@ For every incident record:
 **Required owner check:** Verify through Hostinger hPanel or independent access that the domain service is active, the Node.js application/Passenger service is running, and the configured SSH service/port is reachable. Do not change application code, data, or environment values merely to address this connectivity symptom.
 
 **Recovery criterion:** Once SSH reachability and `/healthz` are independently confirmed, perform one retry of the unchanged guarded release workflow for SHA `c81c8367d48ce1a3122f0473822bc1cdc223a777`; its existing preflight, verified backup, atomic-switch, and health rollback gates remain mandatory.
+
+### Update — 2026-08-17: Reachability recovered; post-migration release guard remains unresolved
+
+A later public health request returned HTTP 200 with `{"status":"ok","service":"wms"}`, confirming the earlier reachability interruption was transient. Release run `32024319821` subsequently connected, passed its preflight and verified-backup gates, and applied reviewed migrations `013_canonical_analytical_movements` and `014_operational_movement_semantics` to the persistent schema. The candidate-release step then exited with code 1 before the atomic symlink switch, Passenger restart, or post-switch health validation. The live application remained publicly healthy afterward. This update narrows the remaining release blocker to a post-migration guard or filesystem condition; no additional migration or release attempt should be made until a read-only release-layout diagnostic identifies the exact condition.
