@@ -1060,3 +1060,12 @@ Every future AI or human session that changes understanding, code, data, configu
 **Files/PRs/commits changed:** PR #72 merged at `754d1e8482bbc1768011844138bc158944214644`; follow-up workflow revision pending.
 **Production state:** Live WMS was not restarted or migrated. Backup-only state changed as intended.
 **Exact next step:** Implement, validate, merge, and retest the runner-originated source-bundle release workflow.
+
+## 2026-08-17 — Source-bundle release preflight stop
+
+**Objective:** Retry the manually dispatched production release after replacing remote Git pull with a checksummed source-bundle candidate-release procedure.
+**Actions:** PR #73 merged the source-bundle workflow revision and run `32019239246` was dispatched for SHA `d9f88adfe5dee9b432574aedba9ef95aafc0fd9f`.
+**Evidence/results:** Reusable CI passed. The deploy job passed release-SHA, credential, and pinned-SSH setup gates, then stopped in the live-release preflight before backup, migration, code staging, symlink switch, Passenger restart, or public health validation. The stop was caused by the workflow incorrectly requiring `data` inside the active `.builds/current/nodejs` release tree. The verified architecture deliberately stores the persistent database/data path outside release trees at `/home/u716763642/domains/wms.kynox.io/nodejs/data`.
+**Decisions:** Keep the fail-closed preflight. Correct the workflow to validate and link the verified persistent data directory explicitly rather than assuming release-local data.
+**Production state:** No database mutation, release switch, restart, or code deployment occurred in this run.
+**Exact next step:** Merge the data-path correction, then retry only after CI passes.

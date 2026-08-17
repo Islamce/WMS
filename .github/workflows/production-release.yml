@@ -35,6 +35,7 @@ jobs:
       REMOTE_BUILD_ROOT: /home/u716763642/domains/wms.kynox.io/.builds
       REMOTE_NODE: /opt/alt/alt-nodejs20/root/usr/bin/node
       REMOTE_BACKUP_DIR: /home/u716763642/secure/wms-backups
+      REMOTE_DATA_DIR: /home/u716763642/domains/wms.kynox.io/nodejs/data
       REMOTE_DB_PATH: /home/u716763642/domains/wms.kynox.io/nodejs/data/wms.db
       WMS_HEALTH_URL: https://wms.kynox.io/healthz
     steps:
@@ -118,18 +119,20 @@ jobs:
       - name: Verify live release and create a verified backup
         run: |
           set -Eeuo pipefail
-          ssh hostinger "bash -s -- '$REMOTE_APP_DIR' '$REMOTE_NODE' '$REMOTE_BACKUP_DIR' '$REMOTE_DB_PATH'" <<'REMOTE'
+          ssh hostinger "bash -s -- '$REMOTE_APP_DIR' '$REMOTE_NODE' '$REMOTE_BACKUP_DIR' '$REMOTE_DATA_DIR' '$REMOTE_DB_PATH'" <<'REMOTE'
           set -Eeuo pipefail
           APP_DIR="$1"
           NODE_BIN="$2"
           BACKUP_DIR="$3"
-          DB_PATH="$4"
+          DATA_DIR="$4"
+          DB_PATH="$5"
 
           cd "$APP_DIR"
           pwd
           test -f .env
           test -d node_modules
-          test -e data
+          test -d "$DATA_DIR"
+          test -f "$DB_PATH"
           test "$($NODE_BIN --version)" = "v20.19.4"
           grep -qx 'NODE_ENV=production' .env
           grep -qx 'SKIP_AUTO_SEED=1' .env
@@ -158,16 +161,17 @@ jobs:
           RELEASE_ID: gha-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           set -Eeuo pipefail
-          ssh hostinger "bash -s -- '$REMOTE_APP_DIR' '$REMOTE_BUILD_ROOT' '$REMOTE_NODE' '$REMOTE_DB_PATH' '$DEPLOY_SHA' '$RELEASE_ID' '$stage_dir' '$WMS_HEALTH_URL'" <<'REMOTE'
+          ssh hostinger "bash -s -- '$REMOTE_APP_DIR' '$REMOTE_BUILD_ROOT' '$REMOTE_NODE' '$REMOTE_DATA_DIR' '$REMOTE_DB_PATH' '$DEPLOY_SHA' '$RELEASE_ID' '$stage_dir' '$WMS_HEALTH_URL'" <<'REMOTE'
           set -Eeuo pipefail
           APP_DIR="$1"
           BUILD_ROOT="$2"
           NODE_BIN="$3"
-          DB_PATH="$4"
-          DEPLOY_SHA="$5"
-          RELEASE_ID="$6"
-          STAGE_DIR="$7"
-          HEALTH_URL="$8"
+          DATA_DIR="$4"
+          DB_PATH="$5"
+          DEPLOY_SHA="$6"
+          RELEASE_ID="$7"
+          STAGE_DIR="$8"
+          HEALTH_URL="$9"
           CANDIDATE_ROOT="$BUILD_ROOT/versions/$RELEASE_ID"
           CANDIDATE_APP="$CANDIDATE_ROOT/nodejs"
           CURRENT_LINK="$BUILD_ROOT/current"
@@ -194,8 +198,10 @@ jobs:
             exit 1
           }
           install -m 600 "$APP_DIR/.env" "$CANDIDATE_APP/.env"
+          test -d "$DATA_DIR"
+          test -f "$DB_PATH"
           ln -s "$(readlink -f "$APP_DIR/node_modules")" "$CANDIDATE_APP/node_modules"
-          ln -s "$(readlink -f "$APP_DIR/data")" "$CANDIDATE_APP/data"
+          ln -s "$(readlink -f "$DATA_DIR")" "$CANDIDATE_APP/data"
           mkdir -p "$CANDIDATE_APP/tmp"
 
           DB_PATH="$DB_PATH" "$NODE_BIN" "$CANDIDATE_APP/server/db/migrate.js"
