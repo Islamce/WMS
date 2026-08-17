@@ -18,7 +18,7 @@
     "lint": "eslint . --ext .js",
     "lint:fix": "eslint . --ext .js --fix",
     "test": "bash tests/run.sh",
-    "test:smoke": "node tests/smoke/playwright_smoke.js",
+    "test:smoke": "node tests/smoke/playwright_smoke.js && node tests/smoke/request_line_visibility_browser.js && node tests/smoke/design_foundation_browser.js",
     "test:load": "node tests/load/smoke-load.js"
   },
   "engines": {

@@ -24,25 +24,20 @@ Pages.requestDetail = {
     catch (err) { el.innerHTML = `<div class="inline-alert error">${UI.esc(err.message)}</div>`; return; }
     const r = data.request;
 
+    const actionHtml = `<a href="#/requests" class="btn secondary sm">← Back</a>
+      ${App.can('audit_trail')
+        ? `<button class="btn secondary sm" id="rd-history" title="${t('Change history')}">ℹ ${t('History')}</button>` : ''}
+      ${['Draft', 'Returned to Requester'].includes(r.request_status) && App.can('create_request')
+        ? `<button class="btn sm" id="rd-submit">Submit</button>` : ''}
+      ${!['Completed', 'Cancelled', 'GI Posted', 'Rejected'].includes(r.request_status)
+        ? `<button class="btn danger sm" id="rd-cancel">Cancel</button>` : ''}
+      ${['Completed', 'Partially Completed', 'Closed with Shortage'].includes(r.request_status) && App.can('gi_posting')
+        ? `<button class="btn warn sm" id="rd-reverse-gi">Reverse GI</button>` : ''}
+      ${REVERSIBLE_STATUSES.includes(r.request_status)
+        ? `<button class="btn warn sm" id="rd-reverse-step" title="${t('Send this request back one step, undoing what the stage did')}">↩ ${t('Reverse one step')}</button>` : ''}`;
+
     el.innerHTML = `
-      <div class="card">
-        <div class="toolbar mb-0">
-          <h3 class="mb-0">${UI.esc(r.request_number)}
-            <span class="badge ${statusClass(r.request_status)}">${UI.esc(r.request_status)}</span></h3>
-          <div class="spacer"></div>
-          <a href="#/requests" class="btn secondary sm">← Back</a>
-          ${App.can('audit_trail')
-            ? `<button class="btn secondary sm" id="rd-history" title="${t('Change history')}">ℹ ${t('History')}</button>` : ''}
-          ${['Draft', 'Returned to Requester'].includes(r.request_status) && App.can('create_request')
-            ? `<button class="btn sm" id="rd-submit">Submit</button>` : ''}
-          ${!['Completed', 'Cancelled', 'GI Posted', 'Rejected'].includes(r.request_status)
-            ? `<button class="btn danger sm" id="rd-cancel">Cancel</button>` : ''}
-          ${['Completed', 'Partially Completed', 'Closed with Shortage'].includes(r.request_status) && App.can('gi_posting')
-            ? `<button class="btn warn sm" id="rd-reverse-gi">Reverse GI</button>` : ''}
-          ${REVERSIBLE_STATUSES.includes(r.request_status)
-            ? `<button class="btn warn sm" id="rd-reverse-step" title="${t('Send this request back one step, undoing what that stage did')}">↩ ${t('Reverse one step')}</button>` : ''}
-        </div>
-      </div>
+      ${UI.operationalObjectHeader(r, { title: 'Material Request', subtitle: r.purpose || 'Request workflow and execution context', primaryAction: actionHtml })}
 
       <div class="card">
         <h3>Header</h3>

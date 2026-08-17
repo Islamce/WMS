@@ -24,17 +24,29 @@ router.get('/queue', requirePermission(['warehouse_dashboard', 'bin_batch_assign
   const stages = [
     HEADER_STATUS.PENDING_BIN_ASSIGNMENT, HEADER_STATUS.LOCATION_ASSIGNED, HEADER_STATUS.BATCH_ASSIGNED,
     HEADER_STATUS.PENDING_PICKER_ASSIGNMENT, HEADER_STATUS.ASSIGNED_TO_PICKER,
-    HEADER_STATUS.PENDING_PICKER_ACCEPTANCE, HEADER_STATUS.ESCALATED_TO_SUPERVISOR,
+    HEADER_STATUS.PENDING_PICKER_ACCEPTANCE, HEADER_STATUS.REMINDER_SENT, HEADER_STATUS.ESCALATED_TO_SUPERVISOR,
     HEADER_STATUS.PICKING_IN_PROGRESS, HEADER_STATUS.PICKING_COMPLETED, HEADER_STATUS.PARTIALLY_PICKED,
   ];
   const rows = db.prepare(`
-    SELECT id, request_number, requester_id, requester_name, department, wbs_element, wbs_element AS project,
-           cost_center, required_date, priority, request_status,
-           erp_reservation_number, erp_reference_number, movement_type, movement_type_description,
-           plant, storage_location, issue_warehouse_code, issue_warehouse_name, total_lines, created_at
-    FROM material_request_headers
-    WHERE request_status IN (${stages.map(() => '?').join(',')})
-    ORDER BY CASE priority WHEN 'URGENT' THEN 0 WHEN 'HIGH' THEN 1 WHEN 'NORMAL' THEN 2 ELSE 3 END, id
+    SELECT h.id, h.request_number, h.requester_id, h.requester_name, h.department, h.wbs_element, h.wbs_element AS project,
+           h.cost_center, h.required_date, h.priority, h.request_status,
+           h.erp_reservation_number, h.erp_reference_number, h.movement_type, h.movement_type_description,
+           h.plant, h.storage_location, h.issue_warehouse_code, h.issue_warehouse_name, h.total_lines, h.created_at,
+           task.id AS active_task_id, task.task_status AS active_task_status,
+           task.assigned_picker_id AS active_assigned_picker_id, task.assigned_picker_name AS active_assigned_picker_name,
+           task.assigned_at AS active_assigned_at, task.reminder_count AS active_reminder_count,
+           task.last_reminder_at AS active_last_reminder_at, task.escalation_level AS active_escalation_level
+    FROM material_request_headers h
+    LEFT JOIN picking_tasks task ON task.id = (
+      SELECT candidate.id
+      FROM picking_tasks candidate
+      WHERE candidate.request_id=h.id
+        AND candidate.task_status NOT IN ('Picking Completed','Cancelled','Reassigned')
+      ORDER BY candidate.id DESC
+      LIMIT 1
+    )
+    WHERE h.request_status IN (${stages.map(() => '?').join(',')})
+    ORDER BY CASE h.priority WHEN 'URGENT' THEN 0 WHEN 'HIGH' THEN 1 WHEN 'NORMAL' THEN 2 ELSE 3 END, h.id
   `).all(...stages);
   res.json({ requests: withExecutionContexts(rows) });
 });

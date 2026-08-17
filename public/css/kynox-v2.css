@@ -82,6 +82,21 @@ tbody tr:hover td { background: rgba(49, 195, 201, .035); }
 .auth-card { background: rgba(11, 26, 43, .86); border: 1px solid rgba(141, 183, 207, .17); backdrop-filter: blur(22px); box-shadow: 0 28px 70px rgba(0, 0, 0, .40); }
 .auth-card .logo { color: var(--kynox-cyan); letter-spacing: .06em; }
 
+/* Wave W3 — Universal operational object */
+.operational-object-header { margin-bottom: 20px; padding: 22px; border: 1px solid var(--border); border-radius: 18px; background: linear-gradient(135deg, rgba(49, 195, 201, .10), rgba(86, 119, 255, .06) 58%, var(--surface)); box-shadow: var(--shadow); }
+.operational-object-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+.operational-object-heading h1 { margin: 4px 0 3px; font-size: clamp(25px, 3.2vw, 36px); }
+.operational-object-heading p { margin: 0; }
+.operational-object-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.operational-object-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 9px 14px; margin-top: 14px; color: var(--text-muted); font-size: 12px; }
+.operational-object-meta strong { color: var(--text); margin-right: 4px; }
+.operational-object-header .request-stage { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
+.operational-exception-banner { display: flex; align-items: flex-start; gap: 10px; margin-top: 16px; padding: 12px 14px; border: 1px solid currentColor; border-radius: 11px; font-size: 13px; }
+.operational-exception-banner strong { display: block; }
+.operational-exception-banner span { color: var(--text-muted); margin-left: auto; text-align: right; }
+.operational-exception-banner.warning { color: var(--warning); background: var(--warning-bg); }
+.operational-exception-banner.danger { color: var(--danger); background: var(--danger-bg); }
+
 /* Phase 2 — Operations Command Center */
 .cc-hero { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 24px; padding: 26px; border: 1px solid var(--border); border-radius: 18px; background: linear-gradient(135deg, rgba(49, 195, 201, .12), rgba(86, 119, 255, .08) 58%, var(--surface)); box-shadow: var(--shadow); }
 .cc-hero h1 { margin: 5px 0 6px; font-size: clamp(27px, 4vw, 42px); }
@@ -125,6 +140,12 @@ tbody tr:hover td { background: rgba(49, 195, 201, .035); }
 
 @media (max-width: 767px) {
   .content { padding: 14px; }
+  .operational-object-header { padding: 17px; }
+  .operational-object-heading { flex-direction: column; }
+  .operational-object-actions { width: 100%; justify-content: flex-start; }
+  .operational-object-actions .btn { flex: 1 1 auto; }
+  .operational-exception-banner { flex-direction: column; }
+  .operational-exception-banner span { margin-left: 0; text-align: left; }
   .topbar { height: 58px; padding-inline: 10px; }
   .breadcrumbs .crumb:not(.current), .breadcrumbs .sep { display: none; }
   .user-meta { display: none; }

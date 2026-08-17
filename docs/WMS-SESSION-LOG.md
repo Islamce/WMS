@@ -1032,3 +1032,19 @@ Prevent repeated loss of context between AI sessions and continue production rec
 ```
 
 Every future AI or human session that changes understanding, code, data, configuration, deployment, or plans must append an entry before completion.
+
+## 2026-08-17 — KYNOX WMS experience redesign baseline and first implementation wave
+
+**Objective:** Execute the attached KYNOX WMS experience redesign program from repository truth, reconcile open PRs, establish the target UX architecture, and implement the first controlled presentation wave without merge, deployment, or production access.
+
+**Starting state:** `main` was verified at `22b4a16`. Open PRs #68 and #69 were verified, with #69 based on the complete #68 stack. PRs #67 and #59 were also open but unrelated to the initial redesign surface.
+
+**Actions:** Cloned `Islamce/WMS`, read the repository-required operating documents, inspected the web shell, route/page inventory, Flutter navigation and screens, canonical workflow states, shared workflow-context service, existing V2 transformation artifacts, and representative Command Center/request/picking surfaces. Created `feat/wms-experience-redesign-execution` from `origin/feat/d02-execution-cards` so the redesign extends the complete #68 → #69 stack. Produced the baseline, screen inventory, market benchmark, and architecture documents under `docs/WMS-REDESIGN-*.md`.
+
+**Implementation:** Added a reusable presentation-only operational object header to `public/js/ui.js`, applied it to `public/js/pages/requestDetail.js`, and added responsive object/exception styles to `public/css/kynox-v2.css`. No workflow transition, API contract, permission, schema, database, ERP, audit, SoD, allocation, picking, or production behavior was changed.
+
+**Validation:** `node --check` for changed JavaScript and `git diff --check` passed. `npm run lint` completed with 0 errors and the repository's existing warnings. After local `npm ci --ignore-scripts` and `npm rebuild better-sqlite3`, `npm test` passed all suites. `npm run test:smoke` passed 6/6 base smoke, 10/10 request-line visibility, and 11/11 design-foundation checks after installing the local Playwright Chromium runtime. The local environment is Node v22.13.0 while the repository declares Node 20.x; this compatibility caveat remains recorded.
+
+**Production state:** Unchanged. No Hostinger access, deployment, migration, Passenger restart, live database access, import, seed/reset, environment-variable change, or PR merge occurred.
+
+**Next step:** Complete the remaining implementation waves for Command Center queue continuity, inventory/exception surfaces, and Flutter task-first presentation only where existing contracts support them; capture visual evidence; run the full applicable regression matrix; push the branch and open a Draft PR.

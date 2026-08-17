@@ -51,7 +51,7 @@ router.get('/', requirePermission('material_requests'), (req, res) => {
   res.json({ requests: withExecutionContexts(requests), total, page, limit });
 });
 
-router.get('/:id', requirePermission('material_requests'), (req, res) => {
+router.get('/:id', requirePermission(['material_requests', 'warehouse_dashboard']), (req, res) => {
   const header = getHeaderOr404(res, req.params.id);
   if (!header) return;
   if (!canView(req, header)) return res.status(403).json({ error: 'Not authorized to view this request.' });
