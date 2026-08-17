@@ -1078,3 +1078,12 @@ Every future AI or human session that changes understanding, code, data, configu
 **Decisions:** Preserve the fail-closed environment validation. Correct the candidate-release workflow to validate and copy the persistent legacy `.env` file explicitly rather than assuming release-local configuration.
 **Production state:** No database mutation, backup write, code deployment, release switch, or restart occurred in this run.
 **Exact next step:** Merge the persistent environment-file correction, then retry only after CI passes.
+
+## 2026-08-17 — Opaque persistent-configuration guard stop
+
+**Objective:** Retry the source-bundle release after adding persistent data and environment-file handling.
+**Actions:** PR #75 merged the persistent environment-file correction and run `32020383440` was dispatched for SHA `f87321182fc52b50e919608efa2510121337c84c`.
+**Evidence/results:** Reusable CI passed. The release passed SHA, source-bundle, credential, and pinned-SSH gates. The live-release preflight stopped before backup, candidate staging, migration, release switch, restart, or health validation. The remote shell intentionally emitted no secret configuration values, and the generic non-zero result did not identify which non-secret existence/runtime/configuration guard failed.
+**Decisions:** Do not weaken or remove the guard. Add explicit non-secret check labels and limited filesystem/runtime diagnostics to the preflight, then dispatch one evidence-gathering run. Only correct a mismatch demonstrated by that run.
+**Production state:** No backup, database mutation, code deployment, release switch, or restart occurred in this run.
+**Exact next step:** Merge the safe preflight diagnostics and use its evidence to resolve the remaining blocked guard.
