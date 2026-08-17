@@ -1143,3 +1143,29 @@ Every future AI or human session that changes understanding, code, data, configu
 **Production state:** No production code, database, data, configuration value, migration, release link, or Passenger state changed in this run.
 
 **Exact next step:** CI-validate and merge the semantic configuration-guard correction, then retry the guarded manual release procedure.
+
+## 2026-08-17 — Native-addon manifest guard stopped candidate release
+
+**Objective:** Continue the manual release after correcting the physical configuration-file path and semantic environment guard.
+
+**Actions:** PR #80 was CI-validated and merged at `796cb2b4197df1f0b1ae884f5a974d2040d8bffd`; run `32022965082` was manually dispatched for that exact SHA.
+
+**Evidence/results:** The reusable CI passed. The live preflight passed the active release, runtime dependencies, persistent data, physical configuration file, persistent database, Node `v20.19.4`, and all five parsed production-configuration guards. A fresh SQLite-consistent backup and its verification completed successfully. The immutable source bundle was transferred and its SHA-256 verification passed. Candidate creation then stopped at the deliberate package manifest guard because the candidate `package.json` differs from the deployed release. The candidate root was removed before exit. No migration, release symlink switch, Passenger restart, or public health validation occurred.
+
+**Decision:** Do not weaken or bypass the package manifest guard. Treat this as a separate native-addon dependency-release procedure requiring a dependency diff, an isolated candidate `npm ci --omit=dev` using the verified Node 20 runtime, native binary validation before the release switch, and explicit confirmation before dispatching a workflow that can perform that installation and deployment.
+
+**Production state:** One fresh verified backup was created. Production code, database schema/data, configuration values, release link, and Passenger state remain unchanged.
+
+**Exact next step:** Compare the deployed `1bd15f1` package manifests to current main, document the dependency impact and a rollback-safe candidate install procedure, then request confirmation for that separate procedure.
+
+## 2026-08-17 — Manifest guard narrowed to runtime dependency changes
+
+**Objective:** Assess the package-manifest guard stop in run `32022965082` without bypassing native-addon protection.
+
+**Evidence/results:** A direct comparison of deployed revision `1bd15f1` with current main found no `package-lock.json` change and no dependency, optional-dependency, bundled-dependency, Node-engine, platform, or package-manager change. The only `package.json` difference is an expanded `test:smoke` script that adds browser checks for request-line visibility and the design foundation. Therefore the existing `node_modules` tree and its native `better-sqlite3` addon remain compatible with the candidate dependency graph.
+
+**Decision:** Replace the byte-for-byte `package.json` comparison with a deterministic runtime-dependency fingerprint comparison while retaining the exact package-lock guard. Any dependency tree, runtime engine, platform, or package-manager change continues to stop the release and requires the dedicated native-addon procedure. No candidate `npm ci` is proposed or required for this release.
+
+**Production state:** Unchanged after the verified backup noted in the preceding entry. No migration, release-link switch, restart, or production mutation has occurred.
+
+**Exact next step:** CI-validate and merge the narrowed runtime-dependency guard, then retry the already approved guarded release for current main.

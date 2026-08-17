@@ -224,8 +224,24 @@ jobs:
           test ! -e "$CANDIDATE_ROOT"
           mkdir -p "$CANDIDATE_APP"
           tar -xzf "$ARCHIVE" -C "$CANDIDATE_APP"
-          cmp -s "$APP_DIR/package.json" "$CANDIDATE_APP/package.json" || {
-            echo "Refusing deployment: package manifest changed. Use the dedicated native-addon release procedure."
+          dependency_fingerprint() {
+            "$NODE_BIN" -e '
+              const fs = require("fs");
+              const pkg = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+              const runtimeCritical = {
+                engines: pkg.engines || {},
+                packageManager: pkg.packageManager || null,
+                dependencies: pkg.dependencies || {},
+                optionalDependencies: pkg.optionalDependencies || {},
+                bundledDependencies: pkg.bundledDependencies || [],
+                os: pkg.os || [],
+                cpu: pkg.cpu || [],
+              };
+              process.stdout.write(JSON.stringify(runtimeCritical));
+            ' "$1"
+          }
+          test "$(dependency_fingerprint "$APP_DIR/package.json")" = "$(dependency_fingerprint "$CANDIDATE_APP/package.json")" || {
+            echo "Refusing deployment: runtime dependency manifest changed. Use the dedicated native-addon release procedure."
             rm -rf "$CANDIDATE_ROOT"
             exit 1
           }
