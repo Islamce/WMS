@@ -1183,3 +1183,17 @@ Every future AI or human session that changes understanding, code, data, configu
 **Production state:** No code, database, configuration, migration, release link, Passenger state, or backup changed in this run; the SSH session never connected.
 
 **Exact next step:** Confirm Hostinger reachability has recovered, then re-run the existing manual release workflow for unchanged main SHA `c81c8367d48ce1a3122f0473822bc1cdc223a777`.
+
+## 2026-08-17 — Candidate migration completed; release switch did not execute
+
+**Objective:** Retry the guarded release after public health recovered from the transient Hostinger reachability interruption.
+
+**Actions:** Main advanced to `c88b7a6da622c9352458ec787a3658acbc1f8dd7` with the incident documentation only. Release run `32024319821` was manually dispatched for that exact SHA.
+
+**Evidence/results:** Reusable CI, live preflight, verified backup, source-bundle transfer, and bundle checksum all passed. The candidate migration process ran and reported migrations `013_canonical_analytical_movements` and `014_operational_movement_semantics` applied, for 14 total. Immediately afterward the candidate-release step exited with code 1 before the workflow's `PREVIOUS_TARGET` capture, atomic symlink switch, Passenger restart, or health-check gate. The public `/healthz` endpoint was independently checked immediately afterward and returned HTTP 200 with `{"status":"ok","service":"wms"}`.
+
+**Decision:** Do not re-run a workflow that reaches migrations until the specific post-migration failed guard is identified. Treat the live schema as 14 migrations recorded, retain the existing release target, and use a separate manual read-only Hostinger layout diagnostic to inspect only the conditions after migration and before release switching.
+
+**Production state:** A verified backup was created, and two reviewed migrations were applied to the persistent production database. The code release symlink, Passenger restart state, and public endpoint were not changed by this run. Public health remained OK after the stop.
+
+**Exact next step:** CI-validate and dispatch a read-only Hostinger release-layout diagnostic; do not re-run migrations or alter the live release until its result is documented.
