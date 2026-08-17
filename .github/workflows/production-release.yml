@@ -1,10 +1,10 @@
-name: Gated production release
+name: Manual production release
 
 on:
   workflow_dispatch:
     inputs:
       release_ref:
-        description: Full commit SHA from main to deploy after approval.
+        description: Full commit SHA from main to deploy manually after CI passes.
         required: true
         type: string
 
@@ -23,13 +23,19 @@ jobs:
       ref: ${{ inputs.release_ref }}
 
   deploy:
-    name: Deploy approved release
+    name: Deploy manually approved release
     needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 25
     environment:
       name: production
-      url: ${{ vars.WMS_HEALTH_URL }}
+      url: https://wms.kynox.io/healthz
+    env:
+      REMOTE_APP_DIR: /home/u716763642/domains/wms.kynox.io/.builds/current/nodejs
+      REMOTE_NODE: /opt/alt/alt-nodejs20/root/usr/bin/node
+      REMOTE_BACKUP_DIR: /home/u716763642/secure/wms-backups
+      REMOTE_DB_PATH: /home/u716763642/domains/wms.kynox.io/nodejs/data/wms.db
+      WMS_HEALTH_URL: https://wms.kynox.io/healthz
     steps:
       - name: Check out current main
         uses: actions/checkout@v4
@@ -55,64 +61,82 @@ jobs:
           fi
           printf 'release_sha=%s\n' "$main_sha" >> "$GITHUB_OUTPUT"
 
-      - name: Validate environment configuration
+      - name: Validate existing deployment credentials
         env:
-          WMS_DEPLOY_HOST: ${{ vars.WMS_DEPLOY_HOST }}
-          WMS_DEPLOY_USER: ${{ vars.WMS_DEPLOY_USER }}
-          WMS_APP_DIR: ${{ vars.WMS_APP_DIR }}
-          WMS_HEALTH_URL: ${{ vars.WMS_HEALTH_URL }}
-          WMS_SSH_PRIVATE_KEY: ${{ secrets.WMS_SSH_PRIVATE_KEY }}
-          WMS_SSH_KNOWN_HOSTS: ${{ secrets.WMS_SSH_KNOWN_HOSTS }}
+          SSH_KEY: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.HOSTINGER_KNOWN_HOSTS }}
+          SSH_HOST: ${{ secrets.HOSTINGER_HOST }}
+          SSH_USER: ${{ secrets.HOSTINGER_USERNAME }}
+          SSH_PORT: ${{ secrets.HOSTINGER_PORT }}
         run: |
           set -Eeuo pipefail
-          for name in WMS_DEPLOY_HOST WMS_DEPLOY_USER WMS_APP_DIR WMS_HEALTH_URL WMS_SSH_PRIVATE_KEY WMS_SSH_KNOWN_HOSTS; do
+          for name in SSH_KEY KNOWN_HOSTS SSH_HOST SSH_USER SSH_PORT; do
             if [[ -z "${!name}" ]]; then
-              echo "Missing required production environment configuration: $name"
+              echo "Missing required existing repository deployment secret: $name"
               exit 1
             fi
           done
-          [[ "$WMS_APP_DIR" == /* ]]
-          [[ "$WMS_HEALTH_URL" == https://* ]]
+          [[ "$SSH_PORT" =~ ^[0-9]{1,5}$ ]]
 
-      - name: Configure verified SSH access
+      - name: Configure pinned Hostinger SSH access
         env:
-          WMS_SSH_PRIVATE_KEY: ${{ secrets.WMS_SSH_PRIVATE_KEY }}
-          WMS_SSH_KNOWN_HOSTS: ${{ secrets.WMS_SSH_KNOWN_HOSTS }}
+          SSH_KEY: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.HOSTINGER_KNOWN_HOSTS }}
+          SSH_HOST: ${{ secrets.HOSTINGER_HOST }}
+          SSH_USER: ${{ secrets.HOSTINGER_USERNAME }}
+          SSH_PORT: ${{ secrets.HOSTINGER_PORT }}
         run: |
           set -Eeuo pipefail
+          umask 077
           install -d -m 700 ~/.ssh
-          printf '%s\n' "$WMS_SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          printf '%s\n' "$WMS_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/known_hosts
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_wms_release
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_wms_release ~/.ssh/known_hosts
+          {
+            echo "Host hostinger"
+            echo "  HostName $SSH_HOST"
+            echo "  User $SSH_USER"
+            echo "  Port $SSH_PORT"
+            echo "  IdentityFile ~/.ssh/id_wms_release"
+            echo "  IdentitiesOnly yes"
+            echo "  StrictHostKeyChecking yes"
+            echo "  UserKnownHostsFile ~/.ssh/known_hosts"
+          } > ~/.ssh/config
+          chmod 600 ~/.ssh/config
 
       - name: Deploy through Hostinger Passenger safety gates
         env:
           DEPLOY_SHA: ${{ steps.release.outputs.release_sha }}
-          WMS_DEPLOY_HOST: ${{ vars.WMS_DEPLOY_HOST }}
-          WMS_DEPLOY_USER: ${{ vars.WMS_DEPLOY_USER }}
-          WMS_APP_DIR: ${{ vars.WMS_APP_DIR }}
-          WMS_HEALTH_URL: ${{ vars.WMS_HEALTH_URL }}
         run: |
           set -Eeuo pipefail
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
-            "${WMS_DEPLOY_USER}@${WMS_DEPLOY_HOST}" \
-            "bash -s -- '${WMS_APP_DIR}' '${DEPLOY_SHA}' '${WMS_HEALTH_URL}'" <<'REMOTE'
+          ssh hostinger "bash -s -- '$REMOTE_APP_DIR' '$REMOTE_NODE' '$REMOTE_BACKUP_DIR' '$REMOTE_DB_PATH' '$DEPLOY_SHA' '$WMS_HEALTH_URL'" <<'REMOTE'
           set -Eeuo pipefail
           APP_DIR="$1"
-          DEPLOY_SHA="$2"
-          HEALTH_URL="$3"
-          NODE_BIN_DIR="/opt/alt/alt-nodejs20/root/usr/bin"
+          NODE_BIN="$2"
+          BACKUP_DIR="$3"
+          DB_PATH="$4"
+          DEPLOY_SHA="$5"
+          HEALTH_URL="$6"
 
           cd "$APP_DIR"
           pwd
           test -d .git
           test -z "$(git status --porcelain --untracked-files=no)"
-          export PATH="$NODE_BIN_DIR:$PATH"
-          test "$(node --version)" = "v20.19.4"
+          test "$($NODE_BIN --version)" = "v20.19.4"
+
+          # Take and verify a consistent production backup before any migration or code update.
+          BACKUP_DIR="$BACKUP_DIR" DB_PATH="$DB_PATH" "$NODE_BIN" scripts/backup.js
+          BACKUP_DIR="$BACKUP_DIR" "$NODE_BIN" scripts/verify-backup.js
 
           git fetch origin main
           test "$(git rev-parse origin/main)" = "$DEPLOY_SHA"
+          # Native addon replacement is a separate audited procedure. This release path accepts only
+          # application changes that retain the current dependency lockfiles on the live Hostinger build.
+          if ! git diff --quiet HEAD "$DEPLOY_SHA" -- package.json package-lock.json; then
+            echo "Refusing deployment: package manifest changed. Use the dedicated native-addon release procedure."
+            exit 1
+          fi
+
           git checkout main
           git pull --ff-only origin main
           test "$(git rev-parse HEAD)" = "$DEPLOY_SHA"
@@ -121,15 +145,9 @@ jobs:
           grep -qx 'SKIP_AUTO_SEED=1' .env
           grep -qx 'ALLOW_AUTO_SEED=0' .env
           grep -qx 'PRODUCTION_INITIALIZATION_ENABLED=false' .env
-          grep -q '^DB_PATH=.*/data/wms\.db$' .env
+          grep -qx "DB_PATH=$DB_PATH" .env
 
-          stamp="$(date -u +%Y%m%dT%H%M%SZ)"
-          export BACKUP_DIR="$APP_DIR/backups/predeploy/$stamp"
-          npm ci --omit=dev
-          npm run backup
-          npm run verify-backup
-          npm run migrate
-
+          DB_PATH="$DB_PATH" "$NODE_BIN" server/db/migrate.js
           mkdir -p tmp
           touch tmp/restart.txt
           sleep 8
@@ -139,8 +157,10 @@ jobs:
           REMOTE
 
       - name: Verify public health endpoint
-        env:
-          WMS_HEALTH_URL: ${{ vars.WMS_HEALTH_URL }}
         run: |
           set -Eeuo pipefail
           curl -fsS --retry 3 --retry-delay 3 "$WMS_HEALTH_URL"
+
+      - name: Scrub release SSH key
+        if: always()
+        run: rm -f ~/.ssh/id_wms_release
