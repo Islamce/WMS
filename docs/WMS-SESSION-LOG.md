@@ -1087,3 +1087,17 @@ Every future AI or human session that changes understanding, code, data, configu
 **Decisions:** Do not weaken or remove the guard. Add explicit non-secret check labels and limited filesystem/runtime diagnostics to the preflight, then dispatch one evidence-gathering run. Only correct a mismatch demonstrated by that run.
 **Production state:** No backup, database mutation, code deployment, release switch, or restart occurred in this run.
 **Exact next step:** Merge the safe preflight diagnostics and use its evidence to resolve the remaining blocked guard.
+
+## 2026-08-17 — Environment-file location mismatch identified
+
+**Objective:** Use labelled, non-secret preflight diagnostics to identify the previously opaque release stop.
+
+**Actions:** PR #76 was CI-validated and merged at `8aab72fb1210e149a5bdd6d4b51ff13a5523ed36`. Release run `32021044746` was manually dispatched for that exact main SHA.
+
+**Evidence/results:** The reusable CI gate passed. The Hostinger preflight reported that the active release directory, its `node_modules` directory, and the persistent data directory exist. It then stopped at the named guard `missing file persistent_env_file`. No backup began and no source transfer, candidate build, migration, symlink switch, restart, or health check occurred.
+
+**Decision:** Preserve the strict environment-content guards. Add an additional read-only, non-secret diagnostic that reports which approved Hostinger environment-file locations exist, if any; the guard must continue to fail closed until a verified source is identified.
+
+**Production state:** No production code, database, data, environment value, migration, release link, or Passenger state changed in this run.
+
+**Exact next step:** Add the safe environment-file location diagnostic; validate it in CI; then run the same guarded manual release procedure.

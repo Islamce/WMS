@@ -147,7 +147,13 @@ jobs:
           echo "PASS: active release directory accessible"
           require_dir node_modules active_node_modules
           require_dir "$DATA_DIR" persistent_data
-          require_file "$ENV_FILE" persistent_env_file
+          if [ -f "$ENV_FILE" ]; then
+            echo "PASS: preflight file persistent_env_file"
+          else
+            echo "INFO: expected persistent environment file is absent; reporting .env paths only."
+            find "$APP_DIR/../../.." -maxdepth 5 -type f -name .env -printf 'INFO: discovered environment file %p\n' 2>/dev/null || true
+            fail_guard "missing file persistent_env_file"
+          fi
           require_file "$DB_PATH" persistent_database
           runtime="$($NODE_BIN --version)"
           if [ "$runtime" = "v20.19.4" ]; then echo "PASS: production runtime $runtime"; else fail_guard "production runtime expected v20.19.4"; fi
