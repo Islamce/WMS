@@ -1069,3 +1069,12 @@ Every future AI or human session that changes understanding, code, data, configu
 **Decisions:** Keep the fail-closed preflight. Correct the workflow to validate and link the verified persistent data directory explicitly rather than assuming release-local data.
 **Production state:** No database mutation, release switch, restart, or code deployment occurred in this run.
 **Exact next step:** Merge the data-path correction, then retry only after CI passes.
+
+## 2026-08-17 — Persistent environment-file preflight stop
+
+**Objective:** Retry the source-bundle release after correcting the persistent data-path model.
+**Actions:** PR #74 merged the data-path correction and run `32019776313` was dispatched for SHA `09a69b3461236015b95c37ebef17f8b20e23e713`.
+**Evidence/results:** Reusable CI passed. The release passed SHA, source-bundle, credential, and pinned-SSH gates, then stopped immediately in the live-release preflight before backup, candidate staging, migration, symlink switch, restart, or health validation. The active versioned release does not contain a local `.env`; the durable Hostinger environment file is expected at the legacy persistent application path, consistent with the production runbook.
+**Decisions:** Preserve the fail-closed environment validation. Correct the candidate-release workflow to validate and copy the persistent legacy `.env` file explicitly rather than assuming release-local configuration.
+**Production state:** No database mutation, backup write, code deployment, release switch, or restart occurred in this run.
+**Exact next step:** Merge the persistent environment-file correction, then retry only after CI passes.
