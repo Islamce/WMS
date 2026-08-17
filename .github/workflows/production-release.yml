@@ -274,13 +274,23 @@ jobs:
           fi
           checkpoint resolving_previous_release
           PREVIOUS_TARGET="$(readlink -f "$CURRENT_LINK")"
+          EXPECTED_TARGET="$(readlink -f "$CANDIDATE_ROOT")"
           test -d "$PREVIOUS_TARGET/nodejs"
+          test -d "$EXPECTED_TARGET/nodejs"
           checkpoint previous_release_verified
           ln -s "$CANDIDATE_ROOT" "$NEXT_LINK"
           checkpoint next_release_link_created
           mv -Tf "$NEXT_LINK" "$CURRENT_LINK"
           checkpoint atomic_release_switch_completed
-          test "$(readlink -f "$CURRENT_LINK")" = "$CANDIDATE_ROOT"
+          CURRENT_TARGET="$(readlink -f "$CURRENT_LINK")"
+          if test "$CURRENT_TARGET" != "$EXPECTED_TARGET"; then
+            echo "::error::Atomic release verification failed; restoring the previous release target."
+            ln -s "$PREVIOUS_TARGET" "$NEXT_LINK"
+            mv -Tf "$NEXT_LINK" "$CURRENT_LINK"
+            test "$(readlink -f "$CURRENT_LINK")" = "$PREVIOUS_TARGET"
+            touch "$CURRENT_LINK/nodejs/tmp/restart.txt"
+            exit 1
+          fi
           checkpoint current_release_target_verified
           touch "$CANDIDATE_APP/tmp/restart.txt"
           checkpoint restart_signal_written
