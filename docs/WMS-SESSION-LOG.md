@@ -1129,3 +1129,17 @@ Every future AI or human session that changes understanding, code, data, configu
 **Production state:** No production code, database, data, configuration value, migration, release link, or Passenger state changed in this run.
 
 **Exact next step:** CI-validate and merge the symlink-resolved configuration-path correction, then retry the same guarded release procedure.
+
+## 2026-08-17 — Environment guard aligned to application parsing semantics
+
+**Objective:** Resolve the format-sensitive `NODE_ENV` preflight failure after the physical configuration-file path was verified.
+
+**Actions:** PR #79 was CI-validated and merged at `b17f8bed450b5dd5f4774f35bb1ea9a39e67f9ab`; run `32022477189` was manually dispatched for that exact SHA.
+
+**Evidence/results:** CI passed. The preflight passed the active release, runtime dependencies, persistent data, physical `.builds/config/.env` configuration file, persistent database, and Node `v20.19.4` guards. It stopped at the exact-text `NODE_ENV=production` check before the backup step. The application itself uses `dotenv.parse` semantics, under which harmless whitespace or quoted formatting can differ from a literal line while still resolving to the same safe value. No backup, staging, migration, release switch, restart, or health check began.
+
+**Decision:** Preserve the required values but evaluate them using the same `dotenv` parsing semantics as the application. The guard returns only a labelled pass/fail result and never prints environment keys' values or contents.
+
+**Production state:** No production code, database, data, configuration value, migration, release link, or Passenger state changed in this run.
+
+**Exact next step:** CI-validate and merge the semantic configuration-guard correction, then retry the guarded manual release procedure.
