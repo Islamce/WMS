@@ -1101,3 +1101,17 @@ Every future AI or human session that changes understanding, code, data, configu
 **Production state:** No production code, database, data, environment value, migration, release link, or Passenger state changed in this run.
 
 **Exact next step:** Add the safe environment-file location diagnostic; validate it in CI; then run the same guarded manual release procedure.
+
+## 2026-08-17 — Verified Hostinger configuration-file location
+
+**Objective:** Locate the production configuration file without reading its contents after the persistent legacy path was shown absent.
+
+**Actions:** PR #77 was CI-validated and merged at `908178cd42547ec35b2df10ae27903f827fc7143`. Release run `32021565660` was manually dispatched for that exact main SHA. Its read-only, path-only preflight diagnostic searched the approved WMS release root only after the configured legacy environment-file path was absent.
+
+**Evidence/results:** The reusable CI gate passed. The preflight again confirmed the active release directory, active `node_modules`, and persistent data directory, then reported exactly one environment file at `/home/u716763642/domains/wms.kynox.io/config/.env`. The run stopped immediately afterward at the existing missing-file guard. No backup, source transfer, candidate creation, migration, symlink switch, restart, or health check started.
+
+**Decision:** Change only `REMOTE_ENV_FILE` to the verified Hostinger configuration path. Retain the strict required-file and production-configuration-line guards, the path-only fallback diagnostic, verified backup gate, native-addon manifest guard, atomic release switch, and health-check rollback.
+
+**Production state:** No production code, database, data, configuration value, migration, release link, or Passenger state changed in this run.
+
+**Exact next step:** CI-validate and merge the verified environment-file path correction, then retry the manual guarded release for the current main SHA.
