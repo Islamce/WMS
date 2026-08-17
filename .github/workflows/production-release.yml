@@ -129,18 +129,33 @@ jobs:
           ENV_FILE="$5"
           DB_PATH="$6"
 
+          fail_guard() {
+            echo "::error::Preflight guard failed: $1"
+            exit 1
+          }
+          require_dir() {
+            if [ -d "$1" ]; then echo "PASS: preflight directory $2"; else fail_guard "missing directory $2"; fi
+          }
+          require_file() {
+            if [ -f "$1" ]; then echo "PASS: preflight file $2"; else fail_guard "missing file $2"; fi
+          }
+          require_env_line() {
+            if grep -Fxq "$1" "$ENV_FILE"; then echo "PASS: production configuration $2"; else fail_guard "production configuration $2"; fi
+          }
+
           cd "$APP_DIR"
-          pwd
-          test -d node_modules
-          test -d "$DATA_DIR"
-          test -f "$ENV_FILE"
-          test -f "$DB_PATH"
-          test "$($NODE_BIN --version)" = "v20.19.4"
-          grep -qx 'NODE_ENV=production' "$ENV_FILE"
-          grep -qx 'SKIP_AUTO_SEED=1' "$ENV_FILE"
-          grep -qx 'ALLOW_AUTO_SEED=0' "$ENV_FILE"
-          grep -qx 'PRODUCTION_INITIALIZATION_ENABLED=false' "$ENV_FILE"
-          grep -qx "DB_PATH=$DB_PATH" "$ENV_FILE"
+          echo "PASS: active release directory accessible"
+          require_dir node_modules active_node_modules
+          require_dir "$DATA_DIR" persistent_data
+          require_file "$ENV_FILE" persistent_env_file
+          require_file "$DB_PATH" persistent_database
+          runtime="$($NODE_BIN --version)"
+          if [ "$runtime" = "v20.19.4" ]; then echo "PASS: production runtime $runtime"; else fail_guard "production runtime expected v20.19.4"; fi
+          require_env_line 'NODE_ENV=production' NODE_ENV
+          require_env_line 'SKIP_AUTO_SEED=1' SKIP_AUTO_SEED
+          require_env_line 'ALLOW_AUTO_SEED=0' ALLOW_AUTO_SEED
+          require_env_line 'PRODUCTION_INITIALIZATION_ENABLED=false' PRODUCTION_INITIALIZATION_ENABLED
+          require_env_line "DB_PATH=$DB_PATH" DB_PATH
 
           BACKUP_DIR="$BACKUP_DIR" DB_PATH="$DB_PATH" "$NODE_BIN" scripts/backup.js
           BACKUP_DIR="$BACKUP_DIR" "$NODE_BIN" scripts/verify-backup.js
