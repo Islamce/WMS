@@ -124,6 +124,11 @@ jobs:
 
           current_target="$(readlink -f "$CURRENT_LINK")"
           require_path -d "$current_target/nodejs" current_release_target
+          if test "$current_target" = "$CANDIDATE_ROOT"; then
+            echo "PASS: active_release_matches_inspected_candidate"
+          else
+            echo "INFO: active_release_does_not_match_inspected_candidate"
+          fi
           require_path -e "$(readlink -f "$CANDIDATE_APP/node_modules")" candidate_node_modules_target
           require_path -e "$(readlink -f "$CANDIDATE_APP/data")" candidate_data_target
 

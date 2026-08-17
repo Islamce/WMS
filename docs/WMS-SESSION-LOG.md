@@ -1205,3 +1205,17 @@ Every future AI or human session that changes understanding, code, data, configu
 **Authorized scope:** Add labelled post-migration checkpoints, validate the safeguard in CI, then perform one controlled retry. The retry must retain parsed configuration guards, a fresh verified backup, migration idempotency validation, atomic symlink switching, Passenger restart signaling, public health verification, and automatic code rollback on a failed health check.
 
 **Constraints retained:** Do not alter production environment values, seed/reset data, bypass the verified-backup gate, weaken runtime dependency protections, or manually change the release symlink outside the workflow.
+
+## 2026-08-17 — Atomic switch occurred; non-canonical target comparison stopped before restart
+
+**Objective:** Execute the owner-authorized checkpointed retry after migrations had already reached the idempotent 14-recorded state.
+
+**Actions:** PR #84 merged at `18a4559a02b6f1e540c0dc72142c6176a06a00ba`; run `32026143071` was manually dispatched for that exact SHA.
+
+**Evidence/results:** CI, preflight, fresh verified backup, bundle transfer, candidate initialization, and idempotent migration completion all passed. The checkpoint log then confirmed prior-target verification, next-link creation, and the atomic symlink move. It stopped at the subsequent target-comparison guard before writing the Passenger restart signal. An immediate read-only public health check returned HTTP 200 with `{"status":"ok","service":"wms"}`.
+
+**Root cause:** The guard compared `readlink -f "$CURRENT_LINK"` with an uncanonicalized candidate-root path. Because the Hostinger release layout includes symlink resolution, equivalent targets may have different textual paths. This is a workflow verification defect, not evidence of an invalid candidate release.
+
+**Decision:** Canonicalize both expected and current release targets before comparison. If the comparison ever fails, automatically restore the recorded previous release target, signal a restart for that restored target, and exit fail-closed before health validation. First use the existing read-only diagnostic to establish whether the active release currently resolves to the candidate; do not perform any further release mutation until that evidence is recorded.
+
+**Production state:** A fresh verified backup was created. The migration run was idempotent. The atomic symlink move occurred, but no restart signal or workflow health validation followed. The public endpoint was healthy immediately afterward.
