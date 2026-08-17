@@ -35,7 +35,7 @@ token, not this SSH key.
 **Impact:**
 
 - **Verified (repo, via GitHub Actions run history):** the scheduled `Production Offsite
-  Backup` workflow has failed on every run for 10 consecutive days, 2026-08-01 through
+Backup` workflow has failed on every run for 10 consecutive days, 2026-08-01 through
   2026-08-10 (runs #16–#25). The most recent successful run was #15 on 2026-07-31.
 - No offsite backup has been produced since 2026-07-31. Per `DEC-008`, local backup retention
   keeps only the newest 7 sets, so each further missed cycle erodes the disaster-recovery
@@ -51,19 +51,18 @@ token, not this SSH key.
 - **Verified (repo)**, from `mcp__github__get_job_logs` on every one of the 10 failed runs,
   three distinct error signatures now recur:
 
-  | Run | Date | Error |
-  |---|---|---|
-  | #16 | 2026-08-01 | `/sbin/nologin: No such file or directory` |
+  | Run | Date       | Error                                                     |
+  | --- | ---------- | --------------------------------------------------------- |
+  | #16 | 2026-08-01 | `/sbin/nologin: No such file or directory`                |
   | #17 | 2026-08-02 | `ssh: connect to host *** port ***: Connection timed out` |
-  | #18 | 2026-08-03 | `/sbin/nologin: No such file or directory` |
-  | #19 | 2026-08-04 | `/sbin/nologin: No such file or directory` |
+  | #18 | 2026-08-03 | `/sbin/nologin: No such file or directory`                |
+  | #19 | 2026-08-04 | `/sbin/nologin: No such file or directory`                |
   | #20 | 2026-08-05 | `ssh: connect to host *** port ***: Connection timed out` |
   | #21 | 2026-08-06 | `ssh: connect to host *** port ***: Connection timed out` |
-  | #22 | 2026-08-07 | `/sbin/nologin: No such file or directory` |
-  | #23 | 2026-08-08 | `/sbin/nologin: No such file or directory` |
-  | #24 | 2026-08-09 | `/sbin/nologin: No such file or directory` |
-  | #25 | 2026-08-10 | `Permission denied (publickey,password)` |
-
+  | #22 | 2026-08-07 | `/sbin/nologin: No such file or directory`                |
+  | #23 | 2026-08-08 | `/sbin/nologin: No such file or directory`                |
+  | #24 | 2026-08-09 | `/sbin/nologin: No such file or directory`                |
+  | #25 | 2026-08-10 | `Permission denied (publickey,password)`                  |
   - `/sbin/nologin: No such file or directory` (6 of 10 runs): SSH connects and authenticates,
     but the remote login shell path configured for the backup account is invalid. The
     dominant signature through 2026-08-09.
@@ -74,6 +73,7 @@ token, not this SSH key.
     connection reaches the host, but the offered key is rejected during authentication itself
     — a step earlier in the process than either prior signature, since the two previous
     signatures both required successful authentication to occur.
+
 - **Verified (repo, via `git log --oneline -- .github/workflows/production-backup.yml`):**
   the workflow file's last change is commit `86363c5` ("Security hardening of the
   offsite-backup workflow and scripts"), well before this failure window. The workflow
@@ -184,8 +184,8 @@ second.
 4. **A third, independent bug, surfaced only once 1–3 were fixed:** the backup step then
    failed with `Backup failed: Cannot open database because the directory does not exist`. The
    GLIBC error was gone (confirming the item-3 fix worked), but `scripts/backup.js` resolves
-   the database via `server/config.js`'s `DB_PATH` env var, falling back to a path *relative to
-   its own directory* when unset. The workflow's remote command never set `DB_PATH` at all —
+   the database via `server/config.js`'s `DB_PATH` env var, falling back to a path _relative to
+   its own directory_ when unset. The workflow's remote command never set `DB_PATH` at all —
    previously this fell back to `REMOTE_APP_DIR/data/wms.db`, which coincidentally existed back
    when `REMOTE_APP_DIR` was the legacy persistent path (the one place the database actually
    lives). Once `REMOTE_APP_DIR` was corrected to the release symlink in item 3, that same
@@ -204,7 +204,7 @@ second.
    uploaded offsite with all three objects size-confirmed. The disaster-recovery-critical part
    of this workflow is proven working end-to-end. The job still failed, but only on the lowest-
    stakes step: local retention pruning. `scp scripts/backup-retention.js
-   hostinger:/home/u716763642/.logs/wms/backup-retention.$$.js` failed with
+hostinger:/home/u716763642/.logs/wms/backup-retention.$$.js` failed with
    `No such file or directory` because that temp directory doesn't exist on the host. Worse,
    this exposed a real bug in the step's own error-handling design: its comment states
    "Retention failure must NOT invalidate the already-verified offsite backup," but the `scp`
@@ -232,6 +232,7 @@ still requires host access held only by the operator, but should not be left unr
 indefinitely.
 
 **Validation:**
+
 - Run #36 (`31532235669`): SSH authentication and host-key verification both succeeded —
   confirmed items 1–2 fixed.
 - Run #37 (`31533205661`), after PR #63 (`REMOTE_APP_DIR` fix) merged: SSH, host-key, and the
@@ -596,3 +597,21 @@ For every incident record:
 - Corrective/preventive actions
 - Owner and next step
 - Related PR, issue, commit, workflow run, or session-log entry
+
+## INC-2026-08-17-01 — Hostinger SSH and public health endpoint unreachable
+
+**Status:** Open — external reachability confirmation required.
+
+**Environment:** GitHub Actions manual production release workflow and the public WMS health endpoint at `https://wms.kynox.io/healthz`.
+
+**Impact:** The approved release of current main could not begin its remote live preflight. No production mutation occurred in this run. Public application availability could not be confirmed from the release environment because the health endpoint did not respond within the read-only check timeout.
+
+**Detection and evidence:** Manual release run `32023580760` for SHA `c81c8367d48ce1a3122f0473822bc1cdc223a777` passed reusable CI, release-ref validation, source-bundle creation, deployment credential validation, and pinned SSH setup. Its first SSH connection then failed with `ssh: connect to host *** port ***: Connection timed out` after approximately two minutes. A subsequent read-only public request to `/healthz` timed out after 20 seconds with HTTP status `000` and no response body.
+
+**Scope and safety assessment:** The SSH timeout occurred before the remote preflight script began. There was no database backup, source upload, candidate extraction, migration, release symlink change, Passenger restart, health-check rollback, production configuration change, or production data mutation. The previously deployed release remained untouched by this run.
+
+**Current hypothesis:** The evidence is consistent with an external Hostinger network, host, or application-availability interruption. It does not demonstrate a problem in the current release candidate or release workflow. This is a hypothesis only; the owner or hosting provider must confirm host and service status.
+
+**Required owner check:** Verify through Hostinger hPanel or independent access that the domain service is active, the Node.js application/Passenger service is running, and the configured SSH service/port is reachable. Do not change application code, data, or environment values merely to address this connectivity symptom.
+
+**Recovery criterion:** Once SSH reachability and `/healthz` are independently confirmed, perform one retry of the unchanged guarded release workflow for SHA `c81c8367d48ce1a3122f0473822bc1cdc223a777`; its existing preflight, verified backup, atomic-switch, and health rollback gates remain mandatory.

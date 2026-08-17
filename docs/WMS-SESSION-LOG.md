@@ -1169,3 +1169,17 @@ Every future AI or human session that changes understanding, code, data, configu
 **Production state:** Unchanged after the verified backup noted in the preceding entry. No migration, release-link switch, restart, or production mutation has occurred.
 
 **Exact next step:** CI-validate and merge the narrowed runtime-dependency guard, then retry the already approved guarded release for current main.
+
+## 2026-08-17 — Hostinger reachability interruption during guarded release
+
+**Objective:** Retry the approved guarded release after merging PR #81's runtime-dependency fingerprint safeguard.
+
+**Actions:** PR #81 was CI-validated and merged at `c81c8367d48ce1a3122f0473822bc1cdc223a777`; run `32023580760` was manually dispatched for that exact SHA.
+
+**Evidence/results:** The reusable CI and all local release-ref, source-bundle, credential, and pinned-SSH setup steps passed. The job then timed out establishing the remote SSH connection before its live preflight began; no remote command or backup executed. A separate read-only public request to `https://wms.kynox.io/healthz` also timed out after 20 seconds with no response. This is a Hostinger reachability or service-availability symptom, not evidence of a deployment defect.
+
+**Decision:** Do not repeat deployment attempts while both SSH and the public health endpoint are unreachable. Record an incident, preserve the current fail-closed release workflow, and ask the owner to verify Hostinger service and application availability through hPanel or their independent access before a single guarded retry.
+
+**Production state:** No code, database, configuration, migration, release link, Passenger state, or backup changed in this run; the SSH session never connected.
+
+**Exact next step:** Confirm Hostinger reachability has recovered, then re-run the existing manual release workflow for unchanged main SHA `c81c8367d48ce1a3122f0473822bc1cdc223a777`.
