@@ -10,11 +10,11 @@ The pipeline validates future WMS changes automatically and permits production r
 
 ## Pipeline behavior
 
-| Event                  | Workflow                    | Outcome                                                                                                                                                                                                                      |
-| ---------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Pull request           | `CI`                        | Installs dependencies and runs syntax checks, lint, production dependency audit, full regression suite, bounded local load test, and browser smoke suite.                                                                    |
-| Push to `main`         | `CI`                        | Re-runs the same validation on the merged main commit. It does **not** deploy.                                                                                                                                               |
-| Manual release request | `Manual production release` | Validates the exact entered `main` SHA, reruns CI, checks existing Hostinger credentials, takes and verifies an online SQLite backup, runs reviewed migrations, restarts Passenger, and checks health remotely and publicly. |
+| Event                  | Workflow                    | Outcome                                                                                                                                                                                                                                                                                                                       |
+| ---------------------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Pull request           | `CI`                        | Installs dependencies and runs syntax checks, lint, production dependency audit, full regression suite, bounded local load test, and browser smoke suite.                                                                                                                                                                     |
+| Push to `main`         | `CI`                        | Re-runs the same validation on the merged main commit. It does **not** deploy.                                                                                                                                                                                                                                                |
+| Manual release request | `Manual production release` | Validates the exact entered `main` SHA, reruns CI, checks existing Hostinger credentials, creates and verifies an online SQLite backup, transfers a checksummed source bundle, builds a candidate release, runs reviewed migrations, atomically switches Passenger to the candidate, and checks health remotely and publicly. |
 
 ## Existing credential convention
 
@@ -37,23 +37,27 @@ The workflow targets the verified Passenger release symlink and persistent datab
 3. In GitHub Actions, open **Manual production release** and select **Run workflow**.
 4. Enter the full 40-character SHA of the current `main` tip.
 5. Treat the dispatch itself as the explicit business approval for this reduced-control model.
-6. The workflow revalidates the SHA, reruns CI, confirms Hostinger access, runs a production backup and restore/integrity check, updates the active release checkout, runs reviewed migrations, requests Passenger restart, and checks health.
+6. The workflow revalidates the SHA, reruns CI, confirms Hostinger access, runs a production backup and restore/integrity check, transfers a checksummed source bundle from GitHub Actions, builds a candidate release beside the live release, runs reviewed migrations, atomically switches Passenger to the candidate, and checks health. A failed candidate health check restores the previous code-release symlink before the workflow exits non-zero.
 7. Verify login, critical dashboards, and the changed feature before declaring the release complete. [2]
 
 ## Deployment safety gates
 
-| Gate                          | Workflow behavior                                                                                                           |
-| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| Manual intent                 | The workflow has only `workflow_dispatch`; a merge does not deploy.                                                         |
-| Fresh release target          | The entered SHA must exactly equal the current `main` SHA at run time.                                                      |
-| CI before release             | The same reusable CI validation suite must pass before the deploy job begins.                                               |
-| Clean production working tree | The remote deployment stops if tracked files have unexplained changes.                                                      |
-| Pinned runtime                | The remote deployment requires Hostinger Node.js `v20.19.4`.                                                                |
-| Production configuration      | The remote environment must retain the production flags; auto-seeding remains disabled.                                     |
-| Database safety               | The workflow creates an online backup and requires integrity and restore verification before migration.                     |
-| Native dependency boundary    | A change to `package.json` or `package-lock.json` blocks release; native-addon handling remains a separate audited process. |
-| Health verification           | The workflow checks the service from the host and from the public HTTPS endpoint after Passenger restart.                   |
-| Mutual exclusion              | Only one release run can execute at a time.                                                                                 |
+| Gate                          | Workflow behavior                                                                                                                                                              |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Manual intent                 | The workflow has only `workflow_dispatch`; a merge does not deploy.                                                                                                            |
+| Fresh release target          | The entered SHA must exactly equal the current `main` SHA at run time.                                                                                                         |
+| CI before release             | The same reusable CI validation suite must pass before the deploy job begins.                                                                                                  |
+| Clean production working tree | The remote deployment stops if tracked files have unexplained changes.                                                                                                         |
+| Pinned runtime                | The remote deployment requires Hostinger Node.js `v20.19.4`.                                                                                                                   |
+| Production configuration      | The remote environment must retain the production flags; auto-seeding remains disabled.                                                                                        |
+| Database safety               | The workflow creates an online backup and requires integrity and restore verification before migration.                                                                        |
+| Source provenance             | GitHub Actions builds a SHA-256-verified archive from the requested current `main` commit; the remote host never needs GitHub credentials.                                     |
+| Candidate release             | The archive is unpacked into a new versioned release directory, which reuses only the verified live `.env`, `node_modules`, and persistent data paths.                         |
+| Atomic switch and recovery    | Passenger changes to the candidate by atomic symlink replacement. If the candidate fails its immediate health check, the prior code-release symlink is restored and restarted. |
+| Native dependency boundary    | A change to `package.json` or `package-lock.json` blocks release; native-addon handling remains a separate audited process.                                                    |
+
+| Health verification | The workflow checks the service from the host and from the public HTTPS endpoint after Passenger restart. |
+| Mutual exclusion | Only one release run can execute at a time. |
 
 ## Control limitation
 
@@ -61,7 +65,7 @@ The GitHub plan currently cannot enforce a reviewer approval or a deployment bra
 
 ## Explicit exclusions
 
-The workflow never runs seed/reset commands, replaces SQLite database/WAL/SHM files, imports inventory data, or deploys a native `better-sqlite3` replacement. It does not automatically roll back a failed post-restart health check; recovery must follow the documented incident procedure. [2]
+The workflow never runs seed/reset commands, replaces SQLite database/WAL/SHM files, imports inventory data, or deploys a native `better-sqlite3` replacement. It automatically restores only the previous **code-release symlink** when the immediate candidate health check fails; it does not roll back database migrations, so any migration issue remains subject to the documented incident procedure. [2]
 
 ## References
 
