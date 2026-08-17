@@ -1219,3 +1219,15 @@ Every future AI or human session that changes understanding, code, data, configu
 **Decision:** Canonicalize both expected and current release targets before comparison. If the comparison ever fails, automatically restore the recorded previous release target, signal a restart for that restored target, and exit fail-closed before health validation. First use the existing read-only diagnostic to establish whether the active release currently resolves to the candidate; do not perform any further release mutation until that evidence is recorded.
 
 **Production state:** A fresh verified backup was created. The migration run was idempotent. The atomic symlink move occurred, but no restart signal or workflow health validation followed. The public endpoint was healthy immediately afterward.
+
+## 2026-08-17 — Read-only active-target diagnostic after atomic-switch stop
+
+**Objective:** Establish whether the `current` release symlink points to the candidate from run `32026143071` after the workflow reported an atomic move but failed its target verification.
+
+**Evidence/results:** The merged read-only diagnostic run `32026696423` completed successfully. It confirmed the live application directory, current symlink, persistent data/configuration/database, and all candidate runtime links exist. It reported `active_release_does_not_match_inspected_candidate`. A public health check immediately before this inspection had returned HTTP 200.
+
+**Conclusion:** The healthy active release is not the candidate from the failed activation attempt. The candidate remains intact for read-only inspection. The workflow's apparent atomic-move success must be reconciled with Hostinger's actual release-link semantics before any activation attempt is made.
+
+**Decision:** Add only read-only identity output for the current symlink target, raw link value, candidate target, and release-directory type. Do not modify links, restart Passenger, or retry the release until this evidence identifies the correct activation mechanism.
+
+**Production state:** Public health is OK. No additional production mutation has been performed after the failed target-verification guard.

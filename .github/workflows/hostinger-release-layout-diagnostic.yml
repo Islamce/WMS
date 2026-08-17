@@ -122,9 +122,17 @@ jobs:
           require_path -d "$CANDIDATE_APP/tmp" candidate_restart_directory
           require_absent "$NEXT_LINK" next_release_symlink_absent
 
+          current_link_value="$(readlink "$CURRENT_LINK")"
           current_target="$(readlink -f "$CURRENT_LINK")"
+          candidate_target="$(readlink -f "$CANDIDATE_ROOT")"
           require_path -d "$current_target/nodejs" current_release_target
-          if test "$current_target" = "$CANDIDATE_ROOT"; then
+          case "$current_link_value" in
+            /*) echo "INFO: active_release_link_format=absolute" ;;
+            *) echo "INFO: active_release_link_format=relative" ;;
+          esac
+          echo "INFO: active_release_identifier=$(basename "$current_target")"
+          echo "INFO: inspected_candidate_identifier=$(basename "$candidate_target")"
+          if test "$current_target" = "$candidate_target"; then
             echo "PASS: active_release_matches_inspected_candidate"
           else
             echo "INFO: active_release_does_not_match_inspected_candidate"
