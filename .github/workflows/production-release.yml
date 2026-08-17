@@ -36,6 +36,7 @@ jobs:
       REMOTE_NODE: /opt/alt/alt-nodejs20/root/usr/bin/node
       REMOTE_BACKUP_DIR: /home/u716763642/secure/wms-backups
       REMOTE_DATA_DIR: /home/u716763642/domains/wms.kynox.io/nodejs/data
+      REMOTE_ENV_FILE: /home/u716763642/domains/wms.kynox.io/nodejs/.env
       REMOTE_DB_PATH: /home/u716763642/domains/wms.kynox.io/nodejs/data/wms.db
       WMS_HEALTH_URL: https://wms.kynox.io/healthz
     steps:
@@ -119,26 +120,27 @@ jobs:
       - name: Verify live release and create a verified backup
         run: |
           set -Eeuo pipefail
-          ssh hostinger "bash -s -- '$REMOTE_APP_DIR' '$REMOTE_NODE' '$REMOTE_BACKUP_DIR' '$REMOTE_DATA_DIR' '$REMOTE_DB_PATH'" <<'REMOTE'
+          ssh hostinger "bash -s -- '$REMOTE_APP_DIR' '$REMOTE_NODE' '$REMOTE_BACKUP_DIR' '$REMOTE_DATA_DIR' '$REMOTE_ENV_FILE' '$REMOTE_DB_PATH'" <<'REMOTE'
           set -Eeuo pipefail
           APP_DIR="$1"
           NODE_BIN="$2"
           BACKUP_DIR="$3"
           DATA_DIR="$4"
-          DB_PATH="$5"
+          ENV_FILE="$5"
+          DB_PATH="$6"
 
           cd "$APP_DIR"
           pwd
-          test -f .env
           test -d node_modules
           test -d "$DATA_DIR"
+          test -f "$ENV_FILE"
           test -f "$DB_PATH"
           test "$($NODE_BIN --version)" = "v20.19.4"
-          grep -qx 'NODE_ENV=production' .env
-          grep -qx 'SKIP_AUTO_SEED=1' .env
-          grep -qx 'ALLOW_AUTO_SEED=0' .env
-          grep -qx 'PRODUCTION_INITIALIZATION_ENABLED=false' .env
-          grep -qx "DB_PATH=$DB_PATH" .env
+          grep -qx 'NODE_ENV=production' "$ENV_FILE"
+          grep -qx 'SKIP_AUTO_SEED=1' "$ENV_FILE"
+          grep -qx 'ALLOW_AUTO_SEED=0' "$ENV_FILE"
+          grep -qx 'PRODUCTION_INITIALIZATION_ENABLED=false' "$ENV_FILE"
+          grep -qx "DB_PATH=$DB_PATH" "$ENV_FILE"
 
           BACKUP_DIR="$BACKUP_DIR" DB_PATH="$DB_PATH" "$NODE_BIN" scripts/backup.js
           BACKUP_DIR="$BACKUP_DIR" "$NODE_BIN" scripts/verify-backup.js
@@ -161,17 +163,18 @@ jobs:
           RELEASE_ID: gha-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           set -Eeuo pipefail
-          ssh hostinger "bash -s -- '$REMOTE_APP_DIR' '$REMOTE_BUILD_ROOT' '$REMOTE_NODE' '$REMOTE_DATA_DIR' '$REMOTE_DB_PATH' '$DEPLOY_SHA' '$RELEASE_ID' '$stage_dir' '$WMS_HEALTH_URL'" <<'REMOTE'
+          ssh hostinger "bash -s -- '$REMOTE_APP_DIR' '$REMOTE_BUILD_ROOT' '$REMOTE_NODE' '$REMOTE_DATA_DIR' '$REMOTE_ENV_FILE' '$REMOTE_DB_PATH' '$DEPLOY_SHA' '$RELEASE_ID' '$stage_dir' '$WMS_HEALTH_URL'" <<'REMOTE'
           set -Eeuo pipefail
           APP_DIR="$1"
           BUILD_ROOT="$2"
           NODE_BIN="$3"
           DATA_DIR="$4"
-          DB_PATH="$5"
-          DEPLOY_SHA="$6"
-          RELEASE_ID="$7"
-          STAGE_DIR="$8"
-          HEALTH_URL="$9"
+          ENV_FILE="$5"
+          DB_PATH="$6"
+          DEPLOY_SHA="$7"
+          RELEASE_ID="$8"
+          STAGE_DIR="$9"
+          HEALTH_URL="${10}"
           CANDIDATE_ROOT="$BUILD_ROOT/versions/$RELEASE_ID"
           CANDIDATE_APP="$CANDIDATE_ROOT/nodejs"
           CURRENT_LINK="$BUILD_ROOT/current"
@@ -197,7 +200,8 @@ jobs:
             rm -rf "$CANDIDATE_ROOT"
             exit 1
           }
-          install -m 600 "$APP_DIR/.env" "$CANDIDATE_APP/.env"
+          test -f "$ENV_FILE"
+          install -m 600 "$ENV_FILE" "$CANDIDATE_APP/.env"
           test -d "$DATA_DIR"
           test -f "$DB_PATH"
           ln -s "$(readlink -f "$APP_DIR/node_modules")" "$CANDIDATE_APP/node_modules"

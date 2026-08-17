@@ -42,19 +42,20 @@ The workflow targets the verified Passenger release symlink and persistent datab
 
 ## Deployment safety gates
 
-| Gate                          | Workflow behavior                                                                                                                                                              |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Manual intent                 | The workflow has only `workflow_dispatch`; a merge does not deploy.                                                                                                            |
-| Fresh release target          | The entered SHA must exactly equal the current `main` SHA at run time.                                                                                                         |
-| CI before release             | The same reusable CI validation suite must pass before the deploy job begins.                                                                                                  |
-| Clean production working tree | The remote deployment stops if tracked files have unexplained changes.                                                                                                         |
-| Pinned runtime                | The remote deployment requires Hostinger Node.js `v20.19.4`.                                                                                                                   |
-| Production configuration      | The remote environment must retain the production flags; auto-seeding remains disabled.                                                                                        |
-| Database safety               | The workflow creates an online backup and requires integrity and restore verification before migration.                                                                        |
-| Source provenance             | GitHub Actions builds a SHA-256-verified archive from the requested current `main` commit; the remote host never needs GitHub credentials.                                     |
-| Candidate release             | The archive is unpacked into a new versioned release directory, which reuses only the verified live `.env`, `node_modules`, and persistent data paths.                         |
-| Atomic switch and recovery    | Passenger changes to the candidate by atomic symlink replacement. If the candidate fails its immediate health check, the prior code-release symlink is restored and restarted. |
-| Native dependency boundary    | A change to `package.json` or `package-lock.json` blocks release; native-addon handling remains a separate audited process.                                                    |
+| Gate                          | Workflow behavior                                                                                                                                                                                                        |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Manual intent                 | The workflow has only `workflow_dispatch`; a merge does not deploy.                                                                                                                                                      |
+| Fresh release target          | The entered SHA must exactly equal the current `main` SHA at run time.                                                                                                                                                   |
+| CI before release             | The same reusable CI validation suite must pass before the deploy job begins.                                                                                                                                            |
+| Clean production working tree | The remote deployment stops if tracked files have unexplained changes.                                                                                                                                                   |
+| Pinned runtime                | The remote deployment requires Hostinger Node.js `v20.19.4`.                                                                                                                                                             |
+| Production configuration      | The remote environment must retain the production flags; auto-seeding remains disabled.                                                                                                                                  |
+| Database safety               | The workflow creates an online backup and requires integrity and restore verification before migration.                                                                                                                  |
+| Source provenance             | GitHub Actions builds a SHA-256-verified archive from the requested current `main` commit; the remote host never needs GitHub credentials.                                                                               |
+| Candidate release             | The archive is unpacked into a new versioned release directory, which receives a protected copy of the verified persistent Hostinger `.env` and reuses only the existing runtime dependencies and persistent data paths. |
+
+| Atomic switch and recovery | Passenger changes to the candidate by atomic symlink replacement. If the candidate fails its immediate health check, the prior code-release symlink is restored and restarted. |
+| Native dependency boundary | A change to `package.json` or `package-lock.json` blocks release; native-addon handling remains a separate audited process. |
 
 | Health verification | The workflow checks the service from the host and from the public HTTPS endpoint after Passenger restart. |
 | Mutual exclusion | Only one release run can execute at a time. |
