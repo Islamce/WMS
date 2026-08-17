@@ -36,7 +36,7 @@ jobs:
       REMOTE_NODE: /opt/alt/alt-nodejs20/root/usr/bin/node
       REMOTE_BACKUP_DIR: /home/u716763642/secure/wms-backups
       REMOTE_DATA_DIR: /home/u716763642/domains/wms.kynox.io/nodejs/data
-      REMOTE_ENV_FILE: /home/u716763642/domains/wms.kynox.io/nodejs/.env
+      REMOTE_ENV_FILE: /home/u716763642/domains/wms.kynox.io/config/.env
       REMOTE_DB_PATH: /home/u716763642/domains/wms.kynox.io/nodejs/data/wms.db
       WMS_HEALTH_URL: https://wms.kynox.io/healthz
     steps:
