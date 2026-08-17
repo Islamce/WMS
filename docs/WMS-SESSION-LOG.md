@@ -647,12 +647,12 @@ Item 4 is worth emphasising: it was reachable exactly when the database looked e
 
 **Changes:**
 
-| File | Change |
-| --- | --- |
-| `scripts/reset-admin.js` | Production requires explicit email, explicit password, and the exact phrase `RESET ADMIN PASSWORD`. Built-in defaults refused. Never seeds — an empty roles table now refuses and points at read-only diagnosis. Writes an audit record. |
-| `server/routes/users.js` | Administrator reset sets `must_change_password = 1` and is audited. |
-| `server/routes/auth.js` | Self-service change is audited; it remains the only path that clears the flag. |
-| `tests/e2e/password_test.py` | Extended from 10 to 25 checks: credential lifecycle, audit presence, secret-leak assertions, and the `reset-admin` refusal matrix. |
+| File                         | Change                                                                                                                                                                                                                                   |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `scripts/reset-admin.js`     | Production requires explicit email, explicit password, and the exact phrase `RESET ADMIN PASSWORD`. Built-in defaults refused. Never seeds — an empty roles table now refuses and points at read-only diagnosis. Writes an audit record. |
+| `server/routes/users.js`     | Administrator reset sets `must_change_password = 1` and is audited.                                                                                                                                                                      |
+| `server/routes/auth.js`      | Self-service change is audited; it remains the only path that clears the flag.                                                                                                                                                           |
+| `tests/e2e/password_test.py` | Extended from 10 to 25 checks: credential lifecycle, audit presence, secret-leak assertions, and the `reset-admin` refusal matrix.                                                                                                       |
 
 **Evidence:**
 
@@ -768,17 +768,17 @@ The mechanism was reproduced, so it is no longer a hypothesis. Booting the real 
 
 Method: the new suite was run against the **previous** `server/index.js`, where it failed exactly two end-to-end cases — "does NOT seed with no opt-in" and "does NOT seed when `NODE_ENV=development`" — and passed 19/19 against the new implementation. The test therefore catches the real defect rather than restating the new code.
 
-**Root cause:** the guard was opt-out and keyed on `NODE_ENV`, so it failed **open**. Safety depended on a variable being *present*. Any runtime that does not export `NODE_ENV` — plausible under managed Node.js/Passenger — reached the seed branch.
+**Root cause:** the guard was opt-out and keyed on `NODE_ENV`, so it failed **open**. Safety depended on a variable being _present_. Any runtime that does not export `NODE_ENV` — plausible under managed Node.js/Passenger — reached the seed branch.
 
 **Changes:**
 
-| File | Change |
-| --- | --- |
-| `server/services/firstRunSeed.js` | New. Pure, testable policy: auto-seed requires explicit `ALLOW_AUTO_SEED=1`; `SKIP_AUTO_SEED=1` overrides it. Absence of configuration means refuse. Carries the operator warning text. |
-| `server/index.js` | Uses the policy instead of the inline `NODE_ENV` guard. Adds a per-boot database identity line (`[db] path=… size=… users=… migrations=…`), an explicit ask in Issue #40. |
-| `tests/e2e/autoseed_guard_test.py` | New. Policy truth table plus end-to-end boots against throwaway databases on isolated ports. |
-| `tests/run.sh` | Suite wired into Phase 1. |
-| `DEPLOY-HOSTINGER.md` | First-run bootstrap documented as opt-in, with the reason. |
+| File                               | Change                                                                                                                                                                                  |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `server/services/firstRunSeed.js`  | New. Pure, testable policy: auto-seed requires explicit `ALLOW_AUTO_SEED=1`; `SKIP_AUTO_SEED=1` overrides it. Absence of configuration means refuse. Carries the operator warning text. |
+| `server/index.js`                  | Uses the policy instead of the inline `NODE_ENV` guard. Adds a per-boot database identity line (`[db] path=… size=… users=… migrations=…`), an explicit ask in Issue #40.               |
+| `tests/e2e/autoseed_guard_test.py` | New. Policy truth table plus end-to-end boots against throwaway databases on isolated ports.                                                                                            |
+| `tests/run.sh`                     | Suite wired into Phase 1.                                                                                                                                                               |
+| `DEPLOY-HOSTINGER.md`              | First-run bootstrap documented as opt-in, with the reason.                                                                                                                              |
 
 **Evidence:**
 
@@ -795,7 +795,7 @@ Method: the new suite was run against the **previous** `server/index.js`, where 
 
 **Remaining work:**
 
-- Read the Passenger **runtime** environment. This is now needed as *evidence for Issue #40* — whether the auto-seed path actually fired in production — rather than as a safety gate, since the deployed fix makes an unset environment fail safe.
+- Read the Passenger **runtime** environment. This is now needed as _evidence for Issue #40_ — whether the auto-seed path actually fired in production — rather than as a safety gate, since the deployed fix makes an unset environment fail safe.
 - Verify production's deployed commit and reconcile it to `main`.
 - Issue #40 also asks for `reset-admin` hardening (refuse default credentials in production, require typed confirmation) and audit-logging of password resets. Not done in this session.
 
@@ -814,16 +814,16 @@ Method: the new suite was run against the **previous** `server/index.js`, where 
 
 **Verified (repo) evidence:**
 
-| Fact | Value | Method |
-| --- | --- | --- |
-| `origin/main` | `b9ec782dddfd3e57dbb3448f9906b340427bb2f4` | `git rev-parse origin/main` |
-| Migrations in code | 12, latest `012_opening_stock_batch_registry` | `server/db/migrations.js` |
-| PR #43 fix present on `main` | yes (`server/routes/import.js`) | source inspection |
-| Temporary debug endpoint | absent | repository search |
-| E2E inventory | 21 suites, 397 assertions | `tests/run.sh`, `tests/e2e/*.py` |
-| CI on `main` | run #155 on `b9ec782`, success | Actions API |
-| Latest offsite backup | run #11, `2026-07-27T06:03:54Z`, success | Actions API |
-| Backup history | 8 consecutive successes (#4–#11); #2 failed 2026-07-20, fixed by #3 | Actions API |
+| Fact                         | Value                                                               | Method                           |
+| ---------------------------- | ------------------------------------------------------------------- | -------------------------------- |
+| `origin/main`                | `b9ec782dddfd3e57dbb3448f9906b340427bb2f4`                          | `git rev-parse origin/main`      |
+| Migrations in code           | 12, latest `012_opening_stock_batch_registry`                       | `server/db/migrations.js`        |
+| PR #43 fix present on `main` | yes (`server/routes/import.js`)                                     | source inspection                |
+| Temporary debug endpoint     | absent                                                              | repository search                |
+| E2E inventory                | 21 suites, 397 assertions                                           | `tests/run.sh`, `tests/e2e/*.py` |
+| CI on `main`                 | run #155 on `b9ec782`, success                                      | Actions API                      |
+| Latest offsite backup        | run #11, `2026-07-27T06:03:54Z`, success                            | Actions API                      |
+| Backup history               | 8 consecutive successes (#4–#11); #2 failed 2026-07-20, fixed by #3 | Actions API                      |
 
 **Could NOT be verified — no production access:**
 
@@ -1048,3 +1048,15 @@ Every future AI or human session that changes understanding, code, data, configu
 **Production state:** Unchanged. No Hostinger access, deployment, migration, Passenger restart, live database access, import, seed/reset, environment-variable change, or PR merge occurred.
 
 **Next step:** Complete the remaining implementation waves for Command Center queue continuity, inventory/exception surfaces, and Flutter task-first presentation only where existing contracts support them; capture visual evidence; run the full applicable regression matrix; push the branch and open a Draft PR.
+
+## 2026-08-17 — Controlled manual-release pipeline first run
+
+**Objective:** Merge and execute the manually dispatched CI/CD release path for the current `main` commit while preserving the WMS production safeguards.
+**Starting state:** PR #71 had merged the first release workflow. GitHub Actions environment reviewer and wait-timer rules were unavailable on the repository plan, and the user explicitly approved the reduced-control, manual-dispatch model.
+**Actions:** Created the minimal `production` environment without unsupported protection rules. Merged PR #72, which aligns the workflow with the active Hostinger release symlink and the existing `HOSTINGER_*` repository credential convention. Dispatched run `32018477290` for SHA `754d1e8482bbc1768011844138bc158944214644`.
+**Evidence/results:** The reusable CI validation passed. The deployment job authenticated using pinned SSH configuration and executed the remote pre-deployment backup. The new backup manifest passed checksum validation, SQLite `integrity_check`, and a read-only restore drill (`users=10`, `audit_rows=130`). The release stopped before any code update, migration, Passenger restart, or public health check because the active Hostinger checkout cannot authenticate to GitHub over HTTPS (`fatal: could not read Username for 'https://github.com'`).
+**Decisions:** Treat the remote Git credential failure as a hard deployment stop. Do not add a production Git credential or bypass the check. Replace the remote-pull assumption with a runner-originated source-bundle and atomic candidate-release procedure, retaining the existing verified SSH path and dependency/native-addon guardrails.
+**Risks/incidents:** Production code and schema were not changed by the failed run. A verified fresh backup exists in the protected remote backup directory. The initial workflow must not be re-run until the source-bundle revision is reviewed and merged.
+**Files/PRs/commits changed:** PR #72 merged at `754d1e8482bbc1768011844138bc158944214644`; follow-up workflow revision pending.
+**Production state:** Live WMS was not restarted or migrated. Backup-only state changed as intended.
+**Exact next step:** Implement, validate, merge, and retest the runner-originated source-bundle release workflow.

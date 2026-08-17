@@ -26,12 +26,13 @@ jobs:
     name: Deploy manually approved release
     needs: validate
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     environment:
       name: production
       url: https://wms.kynox.io/healthz
     env:
       REMOTE_APP_DIR: /home/u716763642/domains/wms.kynox.io/.builds/current/nodejs
+      REMOTE_BUILD_ROOT: /home/u716763642/domains/wms.kynox.io/.builds
       REMOTE_NODE: /opt/alt/alt-nodejs20/root/usr/bin/node
       REMOTE_BACKUP_DIR: /home/u716763642/secure/wms-backups
       REMOTE_DB_PATH: /home/u716763642/domains/wms.kynox.io/nodejs/data/wms.db
@@ -60,6 +61,16 @@ jobs:
             exit 1
           fi
           printf 'release_sha=%s\n' "$main_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Create immutable source bundle
+        env:
+          DEPLOY_SHA: ${{ steps.release.outputs.release_sha }}
+        run: |
+          set -Eeuo pipefail
+          git archive --format=tar "$DEPLOY_SHA" | gzip -n > wms-release.tar.gz
+          sha256sum wms-release.tar.gz > wms-release.tar.gz.sha256
+          test -s wms-release.tar.gz
+          sha256sum -c wms-release.tar.gz.sha256
 
       - name: Validate existing deployment credentials
         env:
@@ -104,55 +115,107 @@ jobs:
           } > ~/.ssh/config
           chmod 600 ~/.ssh/config
 
-      - name: Deploy through Hostinger Passenger safety gates
-        env:
-          DEPLOY_SHA: ${{ steps.release.outputs.release_sha }}
+      - name: Verify live release and create a verified backup
         run: |
           set -Eeuo pipefail
-          ssh hostinger "bash -s -- '$REMOTE_APP_DIR' '$REMOTE_NODE' '$REMOTE_BACKUP_DIR' '$REMOTE_DB_PATH' '$DEPLOY_SHA' '$WMS_HEALTH_URL'" <<'REMOTE'
+          ssh hostinger "bash -s -- '$REMOTE_APP_DIR' '$REMOTE_NODE' '$REMOTE_BACKUP_DIR' '$REMOTE_DB_PATH'" <<'REMOTE'
           set -Eeuo pipefail
           APP_DIR="$1"
           NODE_BIN="$2"
           BACKUP_DIR="$3"
           DB_PATH="$4"
-          DEPLOY_SHA="$5"
-          HEALTH_URL="$6"
 
           cd "$APP_DIR"
           pwd
-          test -d .git
-          test -z "$(git status --porcelain --untracked-files=no)"
+          test -f .env
+          test -d node_modules
+          test -e data
           test "$($NODE_BIN --version)" = "v20.19.4"
-
-          # Take and verify a consistent production backup before any migration or code update.
-          BACKUP_DIR="$BACKUP_DIR" DB_PATH="$DB_PATH" "$NODE_BIN" scripts/backup.js
-          BACKUP_DIR="$BACKUP_DIR" "$NODE_BIN" scripts/verify-backup.js
-
-          git fetch origin main
-          test "$(git rev-parse origin/main)" = "$DEPLOY_SHA"
-          # Native addon replacement is a separate audited procedure. This release path accepts only
-          # application changes that retain the current dependency lockfiles on the live Hostinger build.
-          if ! git diff --quiet HEAD "$DEPLOY_SHA" -- package.json package-lock.json; then
-            echo "Refusing deployment: package manifest changed. Use the dedicated native-addon release procedure."
-            exit 1
-          fi
-
-          git checkout main
-          git pull --ff-only origin main
-          test "$(git rev-parse HEAD)" = "$DEPLOY_SHA"
-
           grep -qx 'NODE_ENV=production' .env
           grep -qx 'SKIP_AUTO_SEED=1' .env
           grep -qx 'ALLOW_AUTO_SEED=0' .env
           grep -qx 'PRODUCTION_INITIALIZATION_ENABLED=false' .env
           grep -qx "DB_PATH=$DB_PATH" .env
 
-          DB_PATH="$DB_PATH" "$NODE_BIN" server/db/migrate.js
-          mkdir -p tmp
-          touch tmp/restart.txt
+          BACKUP_DIR="$BACKUP_DIR" DB_PATH="$DB_PATH" "$NODE_BIN" scripts/backup.js
+          BACKUP_DIR="$BACKUP_DIR" "$NODE_BIN" scripts/verify-backup.js
+          REMOTE
+
+      - name: Upload verified source bundle to Hostinger staging
+        env:
+          DEPLOY_SHA: ${{ steps.release.outputs.release_sha }}
+        run: |
+          set -Eeuo pipefail
+          STAGE_DIR="$REMOTE_BUILD_ROOT/staging/$DEPLOY_SHA-${GITHUB_RUN_ID}"
+          ssh hostinger "mkdir -p '$STAGE_DIR'"
+          scp wms-release.tar.gz wms-release.tar.gz.sha256 "hostinger:$STAGE_DIR/"
+          ssh hostinger "cd '$STAGE_DIR' && sha256sum -c wms-release.tar.gz.sha256"
+          printf 'stage_dir=%s\n' "$STAGE_DIR" >> "$GITHUB_ENV"
+
+      - name: Build, migrate, and atomically switch candidate release
+        env:
+          DEPLOY_SHA: ${{ steps.release.outputs.release_sha }}
+          RELEASE_ID: gha-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -Eeuo pipefail
+          ssh hostinger "bash -s -- '$REMOTE_APP_DIR' '$REMOTE_BUILD_ROOT' '$REMOTE_NODE' '$REMOTE_DB_PATH' '$DEPLOY_SHA' '$RELEASE_ID' '$stage_dir' '$WMS_HEALTH_URL'" <<'REMOTE'
+          set -Eeuo pipefail
+          APP_DIR="$1"
+          BUILD_ROOT="$2"
+          NODE_BIN="$3"
+          DB_PATH="$4"
+          DEPLOY_SHA="$5"
+          RELEASE_ID="$6"
+          STAGE_DIR="$7"
+          HEALTH_URL="$8"
+          CANDIDATE_ROOT="$BUILD_ROOT/versions/$RELEASE_ID"
+          CANDIDATE_APP="$CANDIDATE_ROOT/nodejs"
+          CURRENT_LINK="$BUILD_ROOT/current"
+          NEXT_LINK="$BUILD_ROOT/.current-$RELEASE_ID"
+          ARCHIVE="$STAGE_DIR/wms-release.tar.gz"
+
+          test -d "$APP_DIR"
+          test -d "$BUILD_ROOT/versions"
+          test -L "$CURRENT_LINK"
+          test -s "$ARCHIVE"
+          cd "$STAGE_DIR"
+          sha256sum -c wms-release.tar.gz.sha256
+          test ! -e "$CANDIDATE_ROOT"
+          mkdir -p "$CANDIDATE_APP"
+          tar -xzf "$ARCHIVE" -C "$CANDIDATE_APP"
+          cmp -s "$APP_DIR/package.json" "$CANDIDATE_APP/package.json" || {
+            echo "Refusing deployment: package manifest changed. Use the dedicated native-addon release procedure."
+            rm -rf "$CANDIDATE_ROOT"
+            exit 1
+          }
+          cmp -s "$APP_DIR/package-lock.json" "$CANDIDATE_APP/package-lock.json" || {
+            echo "Refusing deployment: package lock changed. Use the dedicated native-addon release procedure."
+            rm -rf "$CANDIDATE_ROOT"
+            exit 1
+          }
+          install -m 600 "$APP_DIR/.env" "$CANDIDATE_APP/.env"
+          ln -s "$(readlink -f "$APP_DIR/node_modules")" "$CANDIDATE_APP/node_modules"
+          ln -s "$(readlink -f "$APP_DIR/data")" "$CANDIDATE_APP/data"
+          mkdir -p "$CANDIDATE_APP/tmp"
+
+          DB_PATH="$DB_PATH" "$NODE_BIN" "$CANDIDATE_APP/server/db/migrate.js"
+          PREVIOUS_TARGET="$(readlink -f "$CURRENT_LINK")"
+          test -d "$PREVIOUS_TARGET/nodejs"
+          ln -s "$CANDIDATE_ROOT" "$NEXT_LINK"
+          mv -Tf "$NEXT_LINK" "$CURRENT_LINK"
+          test "$(readlink -f "$CURRENT_LINK")" = "$CANDIDATE_ROOT"
+          touch "$CANDIDATE_APP/tmp/restart.txt"
           sleep 8
-          curl -fsS "$HEALTH_URL"
-          test "$(git rev-parse HEAD)" = "$DEPLOY_SHA"
+          if ! curl -fsS "$HEALTH_URL"; then
+            echo "New release failed health check; restoring prior code release."
+            ln -s "$PREVIOUS_TARGET" "$NEXT_LINK"
+            mv -Tf "$NEXT_LINK" "$CURRENT_LINK"
+            touch "$CURRENT_LINK/nodejs/tmp/restart.txt"
+            sleep 8
+            curl -fsS "$HEALTH_URL" || true
+            exit 1
+          fi
+          rm -rf "$STAGE_DIR"
           printf 'DEPLOYED_SHA=%s\n' "$DEPLOY_SHA"
           REMOTE
 
