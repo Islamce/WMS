@@ -1,0 +1,146 @@
+name: Gated production release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_ref:
+        description: Full commit SHA from main to deploy after approval.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wms-production-release
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate requested release
+    uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ inputs.release_ref }}
+
+  deploy:
+    name: Deploy approved release
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment:
+      name: production
+      url: ${{ vars.WMS_HEALTH_URL }}
+    steps:
+      - name: Check out current main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Verify release ref is the current main commit
+        id: release
+        env:
+          RELEASE_REF: ${{ inputs.release_ref }}
+        run: |
+          set -Eeuo pipefail
+          if [[ ! "$RELEASE_REF" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "release_ref must be a full lowercase 40-character commit SHA."
+            exit 1
+          fi
+          main_sha="$(git rev-parse HEAD)"
+          if [[ "$RELEASE_REF" != "$main_sha" ]]; then
+            echo "Refusing deployment: release_ref is not the current main commit."
+            echo "expected main=$main_sha"
+            exit 1
+          fi
+          printf 'release_sha=%s\n' "$main_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Validate environment configuration
+        env:
+          WMS_DEPLOY_HOST: ${{ vars.WMS_DEPLOY_HOST }}
+          WMS_DEPLOY_USER: ${{ vars.WMS_DEPLOY_USER }}
+          WMS_APP_DIR: ${{ vars.WMS_APP_DIR }}
+          WMS_HEALTH_URL: ${{ vars.WMS_HEALTH_URL }}
+          WMS_SSH_PRIVATE_KEY: ${{ secrets.WMS_SSH_PRIVATE_KEY }}
+          WMS_SSH_KNOWN_HOSTS: ${{ secrets.WMS_SSH_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          for name in WMS_DEPLOY_HOST WMS_DEPLOY_USER WMS_APP_DIR WMS_HEALTH_URL WMS_SSH_PRIVATE_KEY WMS_SSH_KNOWN_HOSTS; do
+            if [[ -z "${!name}" ]]; then
+              echo "Missing required production environment configuration: $name"
+              exit 1
+            fi
+          done
+          [[ "$WMS_APP_DIR" == /* ]]
+          [[ "$WMS_HEALTH_URL" == https://* ]]
+
+      - name: Configure verified SSH access
+        env:
+          WMS_SSH_PRIVATE_KEY: ${{ secrets.WMS_SSH_PRIVATE_KEY }}
+          WMS_SSH_KNOWN_HOSTS: ${{ secrets.WMS_SSH_KNOWN_HOSTS }}
+        run: |
+          set -Eeuo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$WMS_SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$WMS_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Deploy through Hostinger Passenger safety gates
+        env:
+          DEPLOY_SHA: ${{ steps.release.outputs.release_sha }}
+          WMS_DEPLOY_HOST: ${{ vars.WMS_DEPLOY_HOST }}
+          WMS_DEPLOY_USER: ${{ vars.WMS_DEPLOY_USER }}
+          WMS_APP_DIR: ${{ vars.WMS_APP_DIR }}
+          WMS_HEALTH_URL: ${{ vars.WMS_HEALTH_URL }}
+        run: |
+          set -Eeuo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "${WMS_DEPLOY_USER}@${WMS_DEPLOY_HOST}" \
+            "bash -s -- '${WMS_APP_DIR}' '${DEPLOY_SHA}' '${WMS_HEALTH_URL}'" <<'REMOTE'
+          set -Eeuo pipefail
+          APP_DIR="$1"
+          DEPLOY_SHA="$2"
+          HEALTH_URL="$3"
+          NODE_BIN_DIR="/opt/alt/alt-nodejs20/root/usr/bin"
+
+          cd "$APP_DIR"
+          pwd
+          test -d .git
+          test -z "$(git status --porcelain --untracked-files=no)"
+          export PATH="$NODE_BIN_DIR:$PATH"
+          test "$(node --version)" = "v20.19.4"
+
+          git fetch origin main
+          test "$(git rev-parse origin/main)" = "$DEPLOY_SHA"
+          git checkout main
+          git pull --ff-only origin main
+          test "$(git rev-parse HEAD)" = "$DEPLOY_SHA"
+
+          grep -qx 'NODE_ENV=production' .env
+          grep -qx 'SKIP_AUTO_SEED=1' .env
+          grep -qx 'ALLOW_AUTO_SEED=0' .env
+          grep -qx 'PRODUCTION_INITIALIZATION_ENABLED=false' .env
+          grep -q '^DB_PATH=.*/data/wms\.db$' .env
+
+          stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+          export BACKUP_DIR="$APP_DIR/backups/predeploy/$stamp"
+          npm ci --omit=dev
+          npm run backup
+          npm run verify-backup
+          npm run migrate
+
+          mkdir -p tmp
+          touch tmp/restart.txt
+          sleep 8
+          curl -fsS "$HEALTH_URL"
+          test "$(git rev-parse HEAD)" = "$DEPLOY_SHA"
+          printf 'DEPLOYED_SHA=%s\n' "$DEPLOY_SHA"
+          REMOTE
+
+      - name: Verify public health endpoint
+        env:
+          WMS_HEALTH_URL: ${{ vars.WMS_HEALTH_URL }}
+        run: |
+          set -Eeuo pipefail
+          curl -fsS --retry 3 --retry-delay 3 "$WMS_HEALTH_URL"
