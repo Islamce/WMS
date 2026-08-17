@@ -1115,3 +1115,17 @@ Every future AI or human session that changes understanding, code, data, configu
 **Production state:** No production code, database, data, configuration value, migration, release link, or Passenger state changed in this run.
 
 **Exact next step:** CI-validate and merge the verified environment-file path correction, then retry the manual guarded release for the current main SHA.
+
+## 2026-08-17 — Hostinger configuration path resolved through release symlink
+
+**Objective:** Correct the verified-but-lexically misinterpreted environment-file path after run `32021992513` still failed its required-file guard.
+
+**Actions:** PR #78 was CI-validated and merged at `22661027956b091f8d6e2c40aef7ba6506616bad`; run `32021992513` was manually dispatched for that exact SHA.
+
+**Evidence/results:** CI passed. The preflight reported the same path-only discovery as the prior run: `$REMOTE_APP_DIR/../../../config/.env`. Because `current` is a release symlink, that expression resolves physically from the versioned release to `/home/u716763642/domains/wms.kynox.io/.builds/config/.env`, not `/home/u716763642/domains/wms.kynox.io/config/.env`. The latter was therefore correctly rejected as absent. The run stopped before backup, staging, migration, release switching, restart, or health validation.
+
+**Decision:** Change only `REMOTE_ENV_FILE` to the physical symlink-resolved path under `.builds/config/.env`. Continue to validate the required file and all required production configuration lines before a backup can begin.
+
+**Production state:** No production code, database, data, configuration value, migration, release link, or Passenger state changed in this run.
+
+**Exact next step:** CI-validate and merge the symlink-resolved configuration-path correction, then retry the same guarded release procedure.
