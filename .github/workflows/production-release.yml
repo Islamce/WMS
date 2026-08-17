@@ -139,8 +139,21 @@ jobs:
           require_file() {
             if [ -f "$1" ]; then echo "PASS: preflight file $2"; else fail_guard "missing file $2"; fi
           }
-          require_env_line() {
-            if grep -Fxq "$1" "$ENV_FILE"; then echo "PASS: production configuration $2"; else fail_guard "production configuration $2"; fi
+          require_env_value() {
+            if ENV_FILE="$ENV_FILE" EXPECTED_LINE="$1" "$NODE_BIN" -e '
+              const fs = require("fs");
+              const dotenv = require("dotenv");
+              const expected = process.env.EXPECTED_LINE;
+              const separator = expected.indexOf("=");
+              const key = expected.slice(0, separator);
+              const value = expected.slice(separator + 1);
+              const parsed = dotenv.parse(fs.readFileSync(process.env.ENV_FILE));
+              process.exit(parsed[key] === value ? 0 : 1);
+            '; then
+              echo "PASS: production configuration $2"
+            else
+              fail_guard "production configuration $2"
+            fi
           }
 
           cd "$APP_DIR"
@@ -157,11 +170,11 @@ jobs:
           require_file "$DB_PATH" persistent_database
           runtime="$($NODE_BIN --version)"
           if [ "$runtime" = "v20.19.4" ]; then echo "PASS: production runtime $runtime"; else fail_guard "production runtime expected v20.19.4"; fi
-          require_env_line 'NODE_ENV=production' NODE_ENV
-          require_env_line 'SKIP_AUTO_SEED=1' SKIP_AUTO_SEED
-          require_env_line 'ALLOW_AUTO_SEED=0' ALLOW_AUTO_SEED
-          require_env_line 'PRODUCTION_INITIALIZATION_ENABLED=false' PRODUCTION_INITIALIZATION_ENABLED
-          require_env_line "DB_PATH=$DB_PATH" DB_PATH
+          require_env_value 'NODE_ENV=production' NODE_ENV
+          require_env_value 'SKIP_AUTO_SEED=1' SKIP_AUTO_SEED
+          require_env_value 'ALLOW_AUTO_SEED=0' ALLOW_AUTO_SEED
+          require_env_value 'PRODUCTION_INITIALIZATION_ENABLED=false' PRODUCTION_INITIALIZATION_ENABLED
+          require_env_value "DB_PATH=$DB_PATH" DB_PATH
 
           BACKUP_DIR="$BACKUP_DIR" DB_PATH="$DB_PATH" "$NODE_BIN" scripts/backup.js
           BACKUP_DIR="$BACKUP_DIR" "$NODE_BIN" scripts/verify-backup.js
