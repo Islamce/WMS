@@ -1197,3 +1197,11 @@ Every future AI or human session that changes understanding, code, data, configu
 **Production state:** A verified backup was created, and two reviewed migrations were applied to the persistent production database. The code release symlink, Passenger restart state, and public endpoint were not changed by this run. Public health remained OK after the stop.
 
 **Exact next step:** CI-validate and dispatch a read-only Hostinger release-layout diagnostic; do not re-run migrations or alter the live release until its result is documented.
+
+## 2026-08-17 — Explicit authorization for checkpointed idempotent release retry
+
+**Authorization:** The owner explicitly confirmed to proceed after reviewing that migrations 013 and 014 were already applied while the code release remained unchanged.
+
+**Authorized scope:** Add labelled post-migration checkpoints, validate the safeguard in CI, then perform one controlled retry. The retry must retain parsed configuration guards, a fresh verified backup, migration idempotency validation, atomic symlink switching, Passenger restart signaling, public health verification, and automatic code rollback on a failed health check.
+
+**Constraints retained:** Do not alter production environment values, seed/reset data, bypass the verified-backup gate, weaken runtime dependency protections, or manually change the release symlink outside the workflow.

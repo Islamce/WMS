@@ -214,16 +214,20 @@ jobs:
           CURRENT_LINK="$BUILD_ROOT/current"
           NEXT_LINK="$BUILD_ROOT/.current-$RELEASE_ID"
           ARCHIVE="$STAGE_DIR/wms-release.tar.gz"
+          checkpoint() { echo "PASS: candidate checkpoint $1"; }
 
+          checkpoint candidate_initialization
           test -d "$APP_DIR"
           test -d "$BUILD_ROOT/versions"
           test -L "$CURRENT_LINK"
           test -s "$ARCHIVE"
           cd "$STAGE_DIR"
           sha256sum -c wms-release.tar.gz.sha256
+          checkpoint source_bundle_verified
           test ! -e "$CANDIDATE_ROOT"
           mkdir -p "$CANDIDATE_APP"
           tar -xzf "$ARCHIVE" -C "$CANDIDATE_APP"
+          checkpoint candidate_source_extracted
           dependency_fingerprint() {
             "$NODE_BIN" -e '
               const fs = require("fs");
@@ -250,6 +254,7 @@ jobs:
             rm -rf "$CANDIDATE_ROOT"
             exit 1
           }
+          checkpoint runtime_dependency_manifest_verified
           test -f "$ENV_FILE"
           install -m 600 "$ENV_FILE" "$CANDIDATE_APP/.env"
           test -d "$DATA_DIR"
@@ -257,15 +262,30 @@ jobs:
           ln -s "$(readlink -f "$APP_DIR/node_modules")" "$CANDIDATE_APP/node_modules"
           ln -s "$(readlink -f "$DATA_DIR")" "$CANDIDATE_APP/data"
           mkdir -p "$CANDIDATE_APP/tmp"
+          checkpoint candidate_runtime_initialized
 
-          DB_PATH="$DB_PATH" "$NODE_BIN" "$CANDIDATE_APP/server/db/migrate.js"
+          checkpoint migration_start
+          if DB_PATH="$DB_PATH" "$NODE_BIN" "$CANDIDATE_APP/server/db/migrate.js"; then
+            checkpoint migration_completed
+          else
+            code=$?
+            echo "::error::Candidate migration process exited $code; release switch has not started."
+            exit "$code"
+          fi
+          checkpoint resolving_previous_release
           PREVIOUS_TARGET="$(readlink -f "$CURRENT_LINK")"
           test -d "$PREVIOUS_TARGET/nodejs"
+          checkpoint previous_release_verified
           ln -s "$CANDIDATE_ROOT" "$NEXT_LINK"
+          checkpoint next_release_link_created
           mv -Tf "$NEXT_LINK" "$CURRENT_LINK"
+          checkpoint atomic_release_switch_completed
           test "$(readlink -f "$CURRENT_LINK")" = "$CANDIDATE_ROOT"
+          checkpoint current_release_target_verified
           touch "$CANDIDATE_APP/tmp/restart.txt"
+          checkpoint restart_signal_written
           sleep 8
+          checkpoint health_check_start
           if ! curl -fsS "$HEALTH_URL"; then
             echo "New release failed health check; restoring prior code release."
             ln -s "$PREVIOUS_TARGET" "$NEXT_LINK"
@@ -275,6 +295,7 @@ jobs:
             curl -fsS "$HEALTH_URL" || true
             exit 1
           fi
+          checkpoint health_check_completed
           rm -rf "$STAGE_DIR"
           printf 'DEPLOYED_SHA=%s\n' "$DEPLOY_SHA"
           REMOTE
