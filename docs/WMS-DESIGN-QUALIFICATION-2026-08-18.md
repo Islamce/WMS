@@ -37,3 +37,11 @@ The candidate diff is restricted to `public/js/pages/requests.js`, `public/js/pa
 The candidate is **qualified for isolated CI review**. It is not yet a production release authorization. Any production deployment must use the existing manual guarded Hostinger workflow, including CI, backup, dependency/native-addon, migration, canonical atomic-switch, restart, rollback, and health gates, followed by post-release functional checks.
 
 **Author:** Manus AI
+
+## Post-release asset verification and correction
+
+The first guarded deployment of the merged candidate completed all release gates and returned a healthy `/healthz`, but cache-busted public asset retrieval initially returned the request-detail asset hash from the older redesign-foundation revision `1753b7f`, not the merged candidate. Read-only Hostinger inspection then confirmed that the active symlink resolved to `gha-32126556457-1` and that the active candidate files matched the merged local candidate hashes. The discrepancy was therefore classified as stale edge/static asset delivery rather than an activation mismatch.
+
+The correction adds a release-scoped HTML marker and cache-busting query parameters to the changed request queue, request detail, and KYNOX V2 stylesheet assets. It does not alter workflow semantics or production data. The correction was rechecked with JavaScript syntax validation, lint (zero errors and the repository’s existing 16 warnings), `npm audit --omit=dev --audit-level=high` (exit 0 with eight known moderate transitive advisories), and `git diff --check`.
+
+The local smoke command was also attempted after the isolated preview account’s forced-password state had been changed during local UAT. Its authenticated checks failed with `401` because the repository smoke credential no longer matched that local-only test database; this is an environment-state limitation, not a production failure. The unchanged candidate’s full CI run `32126056729` had already passed the complete browser smoke gate before deployment. The cache-busting correction must receive a fresh CI browser-smoke pass before any further release retry.
