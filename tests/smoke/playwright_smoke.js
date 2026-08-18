@@ -91,6 +91,17 @@ function check(name, cond, detail) {
     check('login form renders', await page.locator('#login-form').count() > 0);
     check('login email field present', await page.locator('#li-email').count() > 0);
 
+    const releaseId = await page.locator('meta[name="kynox-release"]').getAttribute('content');
+    const versionedAsset = await page.evaluate(async (id) => {
+      const url = `/release-assets/${id}/js/pages/requestDetail.js`;
+      const response = await fetch(url);
+      const text = await response.text();
+      return { url, status: response.status, marker: text.includes('Back to filtered requests') };
+    }, releaseId);
+    check('release marker is present', /^[0-9a-f]{7,40}$/.test(releaseId || ''), releaseId || 'missing');
+    check('versioned request-detail asset is served', versionedAsset.status === 200 && versionedAsset.marker,
+      `${versionedAsset.url} status=${versionedAsset.status} marker=${versionedAsset.marker}`);
+
     // Accessibility gate: no serious/critical WCAG 2.0 A/AA violations on the login page.
     await page.addScriptTag({ path: require.resolve('axe-core') });
     const axeResult = await page.evaluate(() => window.axe.run(document, { runOnly: ['wcag2a', 'wcag2aa'] }));
