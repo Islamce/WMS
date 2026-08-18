@@ -140,6 +140,18 @@ jobs:
           require_path -e "$(readlink -f "$CANDIDATE_APP/node_modules")" candidate_node_modules_target
           require_path -e "$(readlink -f "$CANDIDATE_APP/data")" candidate_data_target
 
+          asset_sha() {
+            if test -f "$1"; then
+              sha256sum "$1" | awk '{print $1}'
+            else
+              echo missing
+            fi
+          }
+          for asset in public/js/pages/requests.js public/js/pages/requestDetail.js public/css/kynox-v2.css; do
+            echo "INFO: active_asset_sha256 $asset $(asset_sha "$current_target/nodejs/$asset")"
+            echo "INFO: candidate_asset_sha256 $asset $(asset_sha "$candidate_target/nodejs/$asset")"
+          done
+
           echo "PASS: read-only release layout inspection complete"
           REMOTE
 
