@@ -96,6 +96,9 @@ tbody tr:hover td { background: rgba(49, 195, 201, .035); }
 .operational-exception-banner span { color: var(--text-muted); margin-left: auto; text-align: right; }
 .operational-exception-banner.warning { color: var(--warning); background: var(--warning-bg); }
 .operational-exception-banner.danger { color: var(--danger); background: var(--danger-bg); }
+.queue-return-context { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: -8px 0 18px; padding: 10px 13px; border: 1px solid rgba(49, 195, 201, .24); border-radius: 11px; background: rgba(49, 195, 201, .07); color: var(--text-muted); font-size: 12px; }
+.queue-return-context strong { color: var(--primary); letter-spacing: .035em; }
+.queue-return-context span { text-align: right; }
 
 /* Phase 2 — Operations Command Center */
 .cc-hero { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 24px; padding: 26px; border: 1px solid var(--border); border-radius: 18px; background: linear-gradient(135deg, rgba(49, 195, 201, .12), rgba(86, 119, 255, .08) 58%, var(--surface)); box-shadow: var(--shadow); }
@@ -146,6 +149,8 @@ tbody tr:hover td { background: rgba(49, 195, 201, .035); }
   .operational-object-actions .btn { flex: 1 1 auto; }
   .operational-exception-banner { flex-direction: column; }
   .operational-exception-banner span { margin-left: 0; text-align: left; }
+  .queue-return-context { align-items: flex-start; flex-direction: column; gap: 3px; margin-top: -10px; }
+  .queue-return-context span { text-align: left; }
   .topbar { height: 58px; padding-inline: 10px; }
   .breadcrumbs .crumb:not(.current), .breadcrumbs .sep { display: none; }
   .user-meta { display: none; }

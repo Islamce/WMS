@@ -23,8 +23,10 @@ Pages.requestDetail = {
     try { data = await Api.get(`/api/requests/${id}`); }
     catch (err) { el.innerHTML = `<div class="inline-alert error">${UI.esc(err.message)}</div>`; return; }
     const r = data.request;
+    const queueContext = Pages.requests?.getQueueContext?.() || { isFiltered: false, summary: 'All requests' };
+    const backLabel = queueContext.isFiltered ? '← Back to filtered requests' : '← Back to requests';
 
-    const actionHtml = `<a href="#/requests" class="btn secondary sm">← Back</a>
+    const actionHtml = `<a href="#/requests" class="btn secondary sm" title="${UI.esc(queueContext.summary)}">${backLabel}</a>
       ${App.can('audit_trail')
         ? `<button class="btn secondary sm" id="rd-history" title="${t('Change history')}">ℹ ${t('History')}</button>` : ''}
       ${['Draft', 'Returned to Requester'].includes(r.request_status) && App.can('create_request')
@@ -38,6 +40,7 @@ Pages.requestDetail = {
 
     el.innerHTML = `
       ${UI.operationalObjectHeader(r, { title: 'Material Request', subtitle: r.purpose || 'Request workflow and execution context', primaryAction: actionHtml })}
+      ${queueContext.isFiltered ? `<div class="queue-return-context" role="status"><strong>Queue context retained</strong><span>${UI.esc(queueContext.summary)}</span></div>` : ''}
 
       <div class="card">
         <h3>Header</h3>
