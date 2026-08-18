@@ -12,8 +12,61 @@ window.statusClass = function (status) {
 
 Pages.requests = {
   state: { page: 1, search: '', status: '' },
+  contextRestored: false,
+  pendingScrollRestore: null,
+
+  queueContextKey() {
+    return `wms_request_queue_context_v1:${App.user?.id || 'anonymous'}`;
+  },
+
+  readQueueContext() {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(this.queueContextKey()));
+      if (!saved || typeof saved !== 'object') return null;
+      return {
+        page: Math.max(1, Number(saved.page) || 1),
+        search: typeof saved.search === 'string' ? saved.search : '',
+        status: typeof saved.status === 'string' ? saved.status : '',
+        scrollY: Math.max(0, Number(saved.scrollY) || 0),
+      };
+    } catch { return null; }
+  },
+
+  persistQueueContext({ includeScroll = false } = {}) {
+    const prior = this.readQueueContext();
+    const context = {
+      page: this.state.page,
+      search: this.state.search,
+      status: this.state.status,
+      scrollY: includeScroll ? window.scrollY : (prior?.scrollY || 0),
+    };
+    sessionStorage.setItem(this.queueContextKey(), JSON.stringify(context));
+  },
+
+  restoreQueueContext() {
+    if (this.contextRestored) return;
+    this.contextRestored = true;
+    const context = this.readQueueContext();
+    if (!context) return;
+    this.state = { page: context.page, search: context.search, status: context.status };
+    this.pendingScrollRestore = context.scrollY;
+  },
+
+  getQueueContext() {
+    const context = this.readQueueContext() || { ...this.state, scrollY: 0 };
+    const parts = [];
+    if (context.search) parts.push(`Search: “${context.search}”`);
+    if (context.status) parts.push(`Status: ${context.status}`);
+    if (context.page > 1) parts.push(`Page ${context.page}`);
+    return {
+      ...context,
+      isFiltered: Boolean(context.search || context.status || context.page > 1),
+      summary: parts.join(' · ') || 'All requests',
+    };
+  },
 
   async render(el) {
+    this.restoreQueueContext();
     this.el = el;
     let statuses = [];
     try { ({ headerStatuses: statuses } = await Api.get('/api/meta')); } catch {}
@@ -30,11 +83,12 @@ Pages.requests = {
         <div class="pagination" id="rq-pagination"></div>
       </div>`;
 
-    el.querySelector('#rq-search').addEventListener('input', UI.debounce((e) => {
-      this.state.search = e.target.value; this.state.page = 1; this.load();
-    }, 300));
+    const reloadForSearch = UI.debounce(() => { this.state.page = 1; this.persistQueueContext(); this.load(); }, 300);
+    el.querySelector('#rq-search').addEventListener('input', (e) => {
+      this.state.search = e.target.value; this.persistQueueContext(); reloadForSearch();
+    });
     el.querySelector('#rq-status').addEventListener('change', (e) => {
-      this.state.status = e.target.value; this.state.page = 1; this.load();
+      this.state.status = e.target.value; this.state.page = 1; this.persistQueueContext(); this.load();
     });
     await this.load();
   },
@@ -61,8 +115,18 @@ Pages.requests = {
           </tbody>
         </table>`;
       tableEl.querySelectorAll('tr[data-id]').forEach((tr) =>
-        tr.addEventListener('click', () => { location.hash = `#/request-detail/${tr.dataset.id}`; }));
-      UI.pagination(this.el.querySelector('#rq-pagination'), data, (p) => { this.state.page = p; this.load(); });
+        tr.addEventListener('click', () => {
+          this.persistQueueContext({ includeScroll: true });
+          location.hash = `#/request-detail/${tr.dataset.id}`;
+        }));
+      UI.pagination(this.el.querySelector('#rq-pagination'), data, (p) => {
+        this.state.page = p; this.persistQueueContext(); this.load();
+      });
+      if (this.pendingScrollRestore != null) {
+        const restoreY = this.pendingScrollRestore;
+        this.pendingScrollRestore = null;
+        requestAnimationFrame(() => window.scrollTo(0, restoreY));
+      }
     } catch (err) {
       tableEl.innerHTML = `<div class="inline-alert error">${UI.esc(err.message)}</div>`;
     }

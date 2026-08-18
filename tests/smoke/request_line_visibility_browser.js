@@ -144,6 +144,24 @@ async function stopServer(server) {
       && await erpPage.locator('.erp-action-commit #eo-send').count() === 1);
     await erpContext.close();
 
+    const requestQueueContext = await browser.newContext();
+    const requestQueuePage = await requestQueueContext.newPage();
+    await loginUi(requestQueuePage, 'requester@example.com', 'Passw0rd!');
+    await goTo(requestQueuePage, '#/requests', '#rq-search');
+    await requestQueuePage.locator('#rq-search').fill(requestNumber);
+    await requestQueuePage.waitForSelector(`#rq-table tr[data-id="${requestId}"]`);
+    await requestQueuePage.locator(`#rq-table tr[data-id="${requestId}"]`).click();
+    await requestQueuePage.waitForSelector('.operational-object-header');
+    check('Request inspector preserves explicit filtered queue context and offers a filtered return path',
+      await requestQueuePage.locator('.queue-return-context').innerText().then((text) => text.includes('Queue context retained') && text.includes(requestNumber))
+      && await requestQueuePage.getByRole('link', { name: 'Back to filtered requests' }).count() === 1);
+    await requestQueuePage.getByRole('link', { name: 'Back to filtered requests' }).click();
+    await requestQueuePage.waitForSelector(`#rq-table tr[data-id="${requestId}"]`);
+    check('Request queue restores its search context after inspector return',
+      await requestQueuePage.locator('#rq-search').inputValue() === requestNumber
+      && (await requestQueuePage.url()).endsWith('#/requests'));
+    await requestQueueContext.close();
+
     await api('POST', `/api/erp-operator/${requestId}/send-to-warehouse`, erp);
     await api('POST', `/api/warehouse/${requestId}/allocate`, supervisor);
 
