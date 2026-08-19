@@ -214,7 +214,7 @@ if (process.env.SCHEDULER_ENABLED !== '0') {
 
 // Optional automated daily database backup (enable by setting BACKUP_DIR).
 if (process.env.BACKUP_DIR) {
-  const { backup } = require('../scripts/backup');
+  const { backup } = require('./services/backup');
   const runBackup = () => backup().then((d) => console.log(`Backup written: ${d}`))
     .catch((e) => console.error('Backup failed:', e.message));
   runBackup();
