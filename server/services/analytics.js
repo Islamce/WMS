@@ -4,6 +4,7 @@
  * balances, transfers and adjustments are deliberately excluded from demand.
  */
 const db = require('./../db/connection');
+const { activeAttestationForMaterial } = require('./analyticalAttestations');
 
 const WINDOW_DAYS = 90;
 const LEAD_TIME_DAYS = 14;
@@ -163,7 +164,7 @@ function analyzeWithCoverage() {
   const byMaterial = {};
   windowMovements.forEach((movement) => { (byMaterial[movement.material_id] = byMaterial[movement.material_id] || []).push(movement); });
 
-  const materials = db.prepare(`SELECT m.id, m.item_code, m.description, m.unit, m.price, m.currency, m.material_group,
+  const materials = db.prepare(`SELECT m.id, m.item_code, m.description, m.unit, m.price, m.currency, m.material_group, m.plant,
     COALESCE((SELECT SUM(remaining_quantity-reserved_quantity) FROM batches WHERE material_id=m.id),0) AS current_stock,
     (SELECT MIN(receiving_date) FROM batches WHERE material_id=m.id AND remaining_quantity>0) AS oldest_stock_date
     FROM materials m ORDER BY m.item_code`).all();
@@ -198,6 +199,10 @@ function analyzeWithCoverage() {
     else if (issueEvents <= SLOW_EVENTS) classification = 'SLOW';
     else classification = 'NORMAL';
     const confidence = coverage.status === 'COMPLETE' ? 'HIGH' : issueEvents > 0 ? 'MEDIUM' : coverage.status === 'PARTIAL' ? 'LOW' : 'NONE';
+    // COR-002 deliberately does not change UNKNOWN/DEAD classification. It can only
+    // disclose a separately approved material-and-plant evidence record for review.
+    const attestedReview = classification === 'UNKNOWN' && issueEvents === 0 && Number(material.current_stock) > 0
+      ? activeAttestationForMaterial(material) : null;
     const daysOfCover = averageDaily > 0 ? Math.round(Number(material.current_stock) / averageDaily) : null;
     const coefficient = mean > 0 ? sigma / mean : null;
     const annualDemand = averageDaily * 365;
@@ -222,6 +227,16 @@ function analyzeWithCoverage() {
       overstock: daysOfCover !== null && daysOfCover > OVERSTOCK_DAYS,
       understock: averageDaily > 0 && Number(material.current_stock) <= reorderPoint,
       days_of_cover: daysOfCover, classification, classification_confidence: confidence,
+      attested_review_required: Boolean(attestedReview),
+      attestation: attestedReview ? {
+        id: attestedReview.id, plant_code: attestedReview.plant_code,
+        period_start: attestedReview.period_start, period_end: attestedReview.period_end,
+        source_system: attestedReview.source_system,
+        source_extract_reference: attestedReview.source_extract_reference,
+        evidence_state: attestedReview.evidence_state,
+        label: 'ATTESTED_PAYLOAD_UNVERIFIED',
+        review_message: 'Attested — no recorded demand, review required.',
+      } : null,
       xyz_class: coefficient === null ? 'Z' : coefficient <= 0.5 ? 'X' : coefficient <= 1 ? 'Y' : 'Z',
       fsn_class: classification === 'UNKNOWN' ? 'U' : issueEvents >= FAST_EVENTS ? 'F' : issueEvents > 0 ? 'S' : 'N',
     };
