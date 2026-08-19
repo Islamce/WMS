@@ -75,7 +75,18 @@ jobs:
           npm run test:load
 
       - name: Install Playwright browser
-        run: npx playwright install --with-deps chromium
+        timeout-minutes: 4
+        run: |
+          set -Eeuo pipefail
+          for attempt in 1 2 3; do
+            if timeout 210 npx playwright install --with-deps chromium; then
+              exit 0
+            fi
+            echo "Playwright browser install attempt ${attempt} failed or timed out; retrying..."
+            sleep 5
+          done
+          echo "Playwright browser install failed after 3 attempts."
+          exit 1
 
       - name: Browser smoke test (Playwright)
         run: npm run test:smoke
