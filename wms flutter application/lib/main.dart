@@ -30,7 +30,7 @@ class WmsApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const seed = Color(0xFF2a78d6);
+    const seed = Color(0xFF31c3c9); // KYNOX brand teal (matches web public/css/kynox-v2.css --primary)
     return SessionScope(
       session: session,
       // Rebuild MaterialApp when the session's theme/language change, so the

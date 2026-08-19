@@ -55,9 +55,9 @@ class _LoginScreenState extends State<LoginScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Icon(Icons.warehouse, size: 64, color: Color(0xFF2a78d6)),
+                Image.asset('assets/brand/kynox_mark.png', width: 64, height: 64),
                 const SizedBox(height: 12),
-                Text('WMS Mobile',
+                Text('KYNOX WMS',
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.headlineSmall
                         ?.copyWith(fontWeight: FontWeight.bold)),
