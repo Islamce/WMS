@@ -69,8 +69,74 @@ class _Root extends StatelessWidget {
   Widget build(BuildContext context) {
     final session = SessionScope.of(context);
     if (session.loading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const _SplashScreen();
     }
     return session.isAuthenticated ? const HomeScreen() : const LoginScreen();
+  }
+}
+
+/// Animated KYNOX launch screen shown while the session is being restored
+/// from disk (token check, saved server URL, etc). Logo fades and scales in,
+/// then a thin progress indicator appears once the entrance animation
+/// settles, so a slow session load still gives the user feedback.
+class _SplashScreen extends StatefulWidget {
+  const _SplashScreen();
+  @override
+  State<_SplashScreen> createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<_SplashScreen> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..forward();
+  late final Animation<double> _scale = CurvedAnimation(parent: _controller, curve: Curves.easeOutBack);
+  late final Animation<double> _fade = CurvedAnimation(
+    parent: _controller,
+    curve: const Interval(0.0, 0.6, curve: Curves.easeOut),
+  );
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF07111f),
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ScaleTransition(
+              scale: _scale,
+              child: FadeTransition(
+                opacity: _fade,
+                child: Image.asset('assets/brand/kynox_mark.png', width: 96, height: 96),
+              ),
+            ),
+            const SizedBox(height: 20),
+            FadeTransition(
+              opacity: _fade,
+              child: const Text('KYNOX WMS',
+                  style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+            ),
+            const SizedBox(height: 28),
+            AnimatedBuilder(
+              animation: _controller,
+              builder: (context, child) => Opacity(
+                opacity: _controller.isCompleted ? 1 : 0,
+                child: const SizedBox(
+                  width: 28, height: 28,
+                  child: CircularProgressIndicator(strokeWidth: 2.4, color: Color(0xFF31c3c9)),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

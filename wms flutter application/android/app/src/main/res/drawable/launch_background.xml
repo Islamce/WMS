@@ -1,12 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Modify this file to customize your launch splash screen -->
+<!-- KYNOX brand launch screen: dark navy background matching the Flutter
+     splash (Color(0xFF07111f)), with the logo centered so there is no
+     flash of mismatched color/content when the Flutter engine takes over
+     and the animated splash begins. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@android:color/white" />
-
-    <!-- You can insert your own image assets here -->
-    <!-- <item>
+    <item android:drawable="#07111f" />
+    <item>
         <bitmap
             android:gravity="center"
             android:src="@mipmap/launch_image" />
-    </item> -->
+    </item>
 </layer-list>
