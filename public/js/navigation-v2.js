@@ -209,7 +209,13 @@
     const brand = document.querySelector('.sidebar .brand-name');
     if (brand && brand.textContent !== 'KYNOX WMS') brand.textContent = 'KYNOX WMS';
     const mark = document.querySelector('.sidebar .brand-mark');
-    if (mark && mark.textContent !== 'K') mark.textContent = 'K';
+    if (mark && !mark.querySelector('img')) {
+      mark.textContent = '';
+      const img = document.createElement('img');
+      img.src = '/img/kynox-mark.png';
+      img.alt = 'KYNOX';
+      mark.appendChild(img);
+    }
     if (!document.documentElement.classList.contains('kynox-v2')) {
       document.documentElement.classList.add('kynox-v2');
     }

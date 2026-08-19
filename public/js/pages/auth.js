@@ -8,7 +8,8 @@ Pages.auth = {
       app.innerHTML = `
         <div class="auth-wrap">
           <div class="auth-card">
-            <div class="logo">📦 WMS</div>
+            <img class="logo-mark" src="/img/kynox-mark.png" alt="KYNOX" />
+            <div class="logo">KYNOX WMS</div>
             <p class="subtitle">Create your account</p>
             <div id="auth-alert"></div>
             <form id="signup-form" novalidate>
@@ -35,7 +36,8 @@ Pages.auth = {
       app.innerHTML = `
         <div class="auth-wrap">
           <div class="auth-card">
-            <div class="logo">📦 WMS</div>
+            <img class="logo-mark" src="/img/kynox-mark.png" alt="KYNOX" />
+            <div class="logo">KYNOX WMS</div>
             <p class="subtitle">Warehouse Management System</p>
             <div id="auth-alert"></div>
             <form id="login-form" novalidate>
