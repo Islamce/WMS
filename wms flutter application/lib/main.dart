@@ -38,7 +38,7 @@ class WmsApp extends StatelessWidget {
       child: ListenableBuilder(
         listenable: session,
         builder: (context, _) => MaterialApp(
-          title: 'WMS Mobile',
+          title: 'KYNOX WMS',
           debugShowCheckedModeBanner: false,
           // Lets a push-notification tap navigate (e.g. open a request).
           navigatorKey: Push.navigatorKey,

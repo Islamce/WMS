@@ -115,7 +115,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const Padding(
             padding: EdgeInsets.all(16),
-            child: Text('WMS Mobile v1.0.0 · connects to the same REST API and database as the web app.',
+            child: Text('KYNOX WMS v1.0.0 · connects to the same REST API and database as the web app.',
                 textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: Colors.grey)),
           ),
         ],

@@ -165,7 +165,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (dests.isEmpty) {
       return Scaffold(
-        appBar: AppBar(title: const Text('WMS Mobile')),
+        appBar: AppBar(title: const Text('KYNOX WMS')),
         drawer: _buildDrawer(session, dests),
         body: const _NoAccess(),
       );
@@ -314,7 +314,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.warehouse, color: Colors.white, size: 36),
+                  Image.asset('assets/brand/kynox_mark.png', width: 36, height: 36),
                   const Spacer(),
                   Text(session.userName,
                       style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
