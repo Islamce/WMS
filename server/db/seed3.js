@@ -55,12 +55,20 @@ function daysAgo(n) {
 function seed3() {
   // --- permissions -----------------------------------------------------------
   db.prepare("INSERT OR IGNORE INTO permissions (key, label) VALUES ('ai_analytics', 'AI Stock Analytics')").run();
+  // WMS-R15: analytics read access (ai_analytics) let holders finalize movement-history
+  // imports, which permanently commits data used for DEAD-stock and analytics decisions.
+  // movement_import_finalize is a distinct, narrower permission for that specific action;
+  // preview/chunk-insert remain covered by the existing ai_analytics/goods_receipt/stock_out roles.
+  db.prepare("INSERT OR IGNORE INTO permissions (key, label) VALUES ('movement_import_finalize', 'Finalize Movement History Import')").run();
   const grant = db.prepare(`
     INSERT OR IGNORE INTO role_permissions (role_id, permission_id)
     VALUES ((SELECT id FROM roles WHERE name=?), (SELECT id FROM permissions WHERE key=?))`);
   // AI analytics for management/analysis roles (admin inherits everything).
   ['admin', 'manager', 'warehouse_supervisor', 'warehouse_operator', 'auditor', 'integration_admin']
     .forEach((r) => grant.run(r, 'ai_analytics'));
+  // Finalize is restricted to roles that own data-quality accountability for the
+  // committed history, not every role that can merely read analytics.
+  ['admin', 'warehouse_supervisor', 'integration_admin'].forEach((r) => grant.run(r, 'movement_import_finalize'));
   // The store ERP operator performs the GR-number step on the receiving screen.
   grant.run('erp_operator', 'goods_receipt');
   // Requester defaults: workflow screens instead of the retired stock in/out.

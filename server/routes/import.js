@@ -36,9 +36,21 @@ const num = (v) => {
 };
 const normalizeKey = (k) => s(k).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
 const normalizeRow = (row) => Object.fromEntries(Object.entries(row || {}).map(([k, v]) => [normalizeKey(k), v]));
+function serverComputedChecksum(rows) {
+  // WMS-R14: derive a checksum from the canonical received payload server-side
+  // instead of trusting the client-supplied value as a provenance label alone.
+  return crypto.createHash('sha256').update(JSON.stringify(rows)).digest('hex');
+}
 
 function canImportMovements(user) {
   return user.role === 'admin' || ['goods_receipt', 'stock_out', 'ai_analytics'].some((p) => user.permissions.includes(p));
+}
+// WMS-R15: preview and chunk-insert stay under the broader import/analytics
+// roles above, but finalize commits the batch as authoritative movement
+// history feeding DEAD-stock and analytics decisions — gate it separately so
+// analytics-read access alone cannot finalize an import.
+function canFinalizeMovementImport(user) {
+  return user.role === 'admin' || user.permissions.includes('movement_import_finalize');
 }
 
 function parseDate(value) {
@@ -295,6 +307,15 @@ function batchReconciliation(batchId) {
     FROM stock_movement_history WHERE import_batch_id=?`).get(batchId);
   summary.categories = db.prepare(`SELECT DISTINCT movement_category FROM stock_movement_history
     WHERE import_batch_id=? ORDER BY movement_category`).all(batchId).map((row) => row.movement_category);
+  // WMS-R14: client-provided checksums are a provenance label, not proof. Surface
+  // whether one was supplied and whether a server-side value was ever recorded so
+  // reviewers can see this distinction instead of assuming the label was verified.
+  const batch = db.prepare('SELECT source_file_checksum, server_computed_checksum FROM stock_movement_import_batches WHERE id=?').get(batchId);
+  summary.checksum = {
+    client_provided: batch ? batch.source_file_checksum : null,
+    server_computed_first_chunk: batch ? batch.server_computed_checksum : null,
+    note: 'server_computed_first_chunk covers only the first chunk received; it is server-derived evidence for that chunk, not a whole-file verification of client_provided.',
+  };
   return summary;
 }
 
@@ -324,6 +345,9 @@ router.post('/movements/preview', (req, res) => {
 router.post('/movements/chunk', (req, res) => {
   if (!canImportMovements(req.user)) return res.status(403).json({ error: 'You do not have permission to import movement history.' });
   const body = req.body || {};
+  if (body.finalize && !canFinalizeMovementImport(req.user)) {
+    return res.status(403).json({ error: 'You do not have permission to finalize a movement history import. Ask an administrator or warehouse supervisor to finalize this batch.' });
+  }
   let request;
   try { request = validateMovementRequest(body); }
   catch (error) { return res.status(400).json({ error: error.message }); }
@@ -338,11 +362,12 @@ router.post('/movements/chunk', (req, res) => {
   let batchId = Number(body.batch_id) || null;
   const run = db.transaction(() => {
     if (!batchId) {
+      const serverChecksum = serverComputedChecksum(rows);
       const created = db.prepare(`INSERT INTO stock_movement_import_batches
-        (movement_type, movement_category, source_system, source_filename, source_file_checksum, field_mapping_json,
+        (movement_type, movement_category, source_system, source_filename, source_file_checksum, server_computed_checksum, field_mapping_json,
          period_start, period_end, created_by, created_by_name)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(legacyMovementType(category, options.defaultReversalOf || 'ISSUE'), category,
-          options.sourceSystem, filename, s(body.source_file_checksum) || null, JSON.stringify(options.fieldMapping),
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(legacyMovementType(category, options.defaultReversalOf || 'ISSUE'), category,
+          options.sourceSystem, filename, s(body.source_file_checksum) || null, serverChecksum, JSON.stringify(options.fieldMapping),
           options.periodStart, options.periodEnd, req.user.id, req.user.name || req.user.email || null);
       batchId = Number(created.lastInsertRowid);
     } else {

@@ -302,6 +302,13 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    id: '015_import_checksum_and_permission_scope',
+    description: 'Server-computed import checksum for provenance verification (WMS-R14) and dedicated analytical-import permission scoping (WMS-R15).',
+    up(database) {
+      addColumnIfMissing(database, 'stock_movement_import_batches', 'server_computed_checksum', 'TEXT');
+    },
+  },
 ];
 
 function ensureTable() {
