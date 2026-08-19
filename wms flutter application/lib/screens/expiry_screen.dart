@@ -17,7 +17,7 @@ class ExpiryScreen extends StatelessWidget {
       case 'NEAR_EXPIRY':
         return const Color(0xFFeda100);
       default:
-        return const Color(0xFF2a78d6);
+        return const Color(0xFF31c3c9);
     }
   }
 

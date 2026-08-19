@@ -33,11 +33,11 @@ class DashboardScreen extends StatelessWidget {
 
         final canOpenBins = session.can('dashboard');
         final tiles = <_Kpi>[
-          _Kpi('Materials', k['total_materials'], Icons.inventory_2_outlined, const Color(0xFF2a78d6),
+          _Kpi('Materials', k['total_materials'], Icons.inventory_2_outlined, const Color(0xFF31c3c9),
               session.can('materials') ? goMaterials : null),
           _Kpi('Total Stock', k['total_stock'], Icons.warehouse_outlined, const Color(0xFF1baf7a),
               session.can('batch_tracking') ? goBatches : null),
-          _Kpi('Bin Locations', k['total_locations'], Icons.grid_view_outlined, const Color(0xFF2a78d6),
+          _Kpi('Bin Locations', k['total_locations'], Icons.grid_view_outlined, const Color(0xFF31c3c9),
               canOpenBins ? () => goBins('all') : null),
           _Kpi('Occupied Bins', k['occupied_locations'], Icons.inventory_outlined, const Color(0xFF1baf7a),
               canOpenBins ? () => goBins('occupied') : null),

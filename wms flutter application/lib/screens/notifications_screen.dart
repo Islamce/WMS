@@ -58,7 +58,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         return ListTile(
                           leading: Icon(
                             isRead ? Icons.notifications_none : Icons.notifications_active,
-                            color: isRead ? Colors.grey : const Color(0xFF2a78d6),
+                            color: isRead ? Colors.grey : const Color(0xFF31c3c9),
                           ),
                           title: Text('${n['title'] ?? n['notification_type'] ?? ''}',
                               style: TextStyle(fontWeight: isRead ? FontWeight.normal : FontWeight.w600)),

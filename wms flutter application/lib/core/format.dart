@@ -30,5 +30,5 @@ Color statusColor(String status) {
   if (s.contains('pending') || s.contains('hold') || s.contains('reminder') || s.contains('await')) {
     return const Color(0xFFeda100);
   }
-  return const Color(0xFF2a78d6);
+  return const Color(0xFF31c3c9);
 }

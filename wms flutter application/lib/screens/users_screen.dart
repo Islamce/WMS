@@ -37,7 +37,7 @@ class _UsersScreenState extends State<UsersScreen> {
       case 'pending': return const Color(0xFFeda100);
       case 'rejected':
       case 'disabled': return const Color(0xFFe34948);
-      default: return const Color(0xFF2a78d6);
+      default: return const Color(0xFF31c3c9);
     }
   }
 

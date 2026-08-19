@@ -247,7 +247,7 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
             SectionCard(
               title: 'Material lines (${_lines.length})',
               trailing: IconButton(
-                icon: const Icon(Icons.add_circle, color: Color(0xFF2a78d6)),
+                icon: const Icon(Icons.add_circle, color: Color(0xFF31c3c9)),
                 onPressed: _addLine,
               ),
               child: _lines.isEmpty
