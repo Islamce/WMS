@@ -1261,3 +1261,40 @@ Every future AI or human session that changes understanding, code, data, configu
 **Production state:** Unchanged. No SSH, Hostinger, or live-site access was performed or attempted in this session.
 
 **Exact next step:** (1) Confirm with the owner whether the Hostinger SSH key from 2026-08-11 has been rotated; if not, treat as priority zero. (2) Perform a fresh read-only check of `https://wms.kynox.io/healthz` and the HCDN cache state before resuming any purge/verification work, since the last logged production state is healthy. (3) Resume the KYNOX redesign waves (Command Center, Inventory, Exceptions/Analytics, Flutter M1–M4) per the existing plan once (1) and (2) are resolved.
+
+## 2026-08-27 — Validated an externally-supplied status report; began repair map (docs-only)
+
+**Objective:** The owner supplied an external Arabic-language "current status" report (repository ahead of production by 20 commits, NO-GO recommendation, open-PR/issue table, action plan). Validate every checkable claim against the repo and GitHub directly, then act on the repair items that are safe without production or database access.
+
+**Method:** `git log`/`git merge-base` against `origin/main`; GitHub MCP tools for PR/issue state and commit detail; direct read of `server/db/migrations.js` for migration IDs.
+
+**Findings:**
+- Confirmed accurate: `main` head `26a5c306e9d44f6e5b4fb40e4a04b7da25c52b58` (2026-08-19) is 20 commits ahead of the documented production SHA `87271334e22a3cbdf3579757b1489e74d5d499d7` (2026-08-17), with no divergence (`8727133` is a direct ancestor). PR #67 is GitHub-reported `dirty` (non-mergeable). Issues #37 and #40 remain open per the report's caveats.
+- **Confirmed, upgraded from suspected to certain:** PR #67 (`fix/cor002-scope-attestation`) adds a migration named `015_analytical_scope_attestations`. `main` already has a *different* migration at that same number, `015_import_checksum_and_permission_scope` (introduced by commit `669f791`, one of the 20 unreleased commits). This numbering collision is the direct, root cause of PR #67's `dirty` state.
+- **Correction to the external report:** it described PR #59 as "old and not mergeable." GitHub reports PR #59's `mergeable_state` as `clean` — it is technically mergeable; the actual blocker is an unresolved content/process decision (task-scoped `CLAUDE.md` context loading vs. the current blanket reading-list requirement), not a git conflict.
+- Also surfaced (not in the external report): PR #69 is still based on the older `fix/request-line-visibility-picker-state` branch rather than current `main`, and several of the 20 unreleased commits on `main` (`f78aed7`, `54584ae`, `c696665`, `1db9630`) already cover ground (request-queue-context, KYNOX branding) that overlaps PR #69's scope. This needs reconciliation before any decision on #69.
+- CI status for `26a5c30` and a live production check were **not** obtained in this session (tooling limitation for the former; out of scope/no access for the latter without explicit read-only authorization) — both are carried forward as open items, not assumed either way.
+
+**Actions taken (docs-only, no code/schema/production change):** Updated `WMS-CURRENT-STATUS.md` — corrected the stale "subsequent commits are documentation-only" claim, added a "`main` vs. production gap — 2026-08-27" section with the confirmed migration-015 collision, and added five new prioritized items (13–17) to "Known remaining work" covering CI confirmation, a read-only production check, the PR #67 renumber/rebase, PR #69 reconciliation, and the PR #59 decision.
+
+**Explicitly not done in this session:** No migration was renumbered in PR #67 yet — that requires committing to and pushing PR #67's own branch (`fix/cor002-scope-attestation`), which is outside this session's designated branch (`claude/kynox-wms-status-deployment-70gdw7`) and needs separate authorization first. No CI was triggered, no production was accessed, no PR was merged/closed, no migration/seed ran, and no APK was built — all remain outside this session's authorization.
+
+**Production state:** Unchanged. No production or database action was performed or attempted.
+
+**Exact next step:** Owner to authorize (a) pushing a renumber/rebase fix directly to PR #67's branch, or fixing it via a fresh PR instead; (b) a read-only production check; (c) confirming CI status for `26a5c30` via the GitHub UI.
+
+## 2026-08-27 — Reconciled and closed out all three open PRs; recorded DEC-015
+
+**Objective:** Owner authorized fixing PR #67's migration renumbering, then asked to reconcile all open PRs, then explicitly reiterated (per the working agreement first recorded 2026-08-19, now also in `CLAUDE.md` as DEC-015) that this session should decide PR outcomes directly rather than ask.
+
+**Actions and outcomes:**
+
+- **PR #67** (`fix/cor002-scope-attestation`): renumbered its migration `015_analytical_scope_attestations` → `016_analytical_scope_attestations` (main had independently taken `015` for `015_import_checksum_and_permission_scope`), merged current `main` in via a merge commit (`41ec507`, not a rebase — this session didn't open the PR), and fixed an inherited bug: `main`'s own `26a5c306e9d44f6e5b4fb40e4a04b7da25c52b58` (KYNOX mobile splash) used `android:drawable="#07111f"`, an invalid drawable reference that failed AAPT resource linking and broke the `build-apk` CI job on every branch that included it, including `main` itself. Fixed by adding `values/colors.xml` (`kynox_splash_bg`) and referencing it via `@color/...`; ported the same fix to this session's own branch (`claude/kynox-wms-status-deployment-70gdw7`) and flagged that `main` needs it independently. CI went green (`81997b5`); the implementation was verified against `docs/WMS-CORRECTIVE-RECONCILIATION-2026-08-11.md`'s WMS-COR-002 locked-decision table and matched it exactly, with COR-003/004/005 correctly left out of scope. **Merged to `main`** at `1e53d17`.
+- **PR #69** (`feat/d02-execution-cards`): investigating for a rebase found its entire branch was already a git ancestor of `main` (`git merge-base --is-ancestor` confirmed) — every commit had shipped to `main` through another path, and `main` had since gone further. Nothing to reconcile; **closed as superseded** with the verification evidence posted on the PR.
+- **PR #59** (`chore/lean-context-drift-control`): read the full diff. It replaces `CLAUDE.md`'s blanket 11-document mandatory-reading list with task-scoped context loading, moves documentation updates from session-driven to event-driven, and adds authority-by-fact-type guidance — while preserving every production-safety invariant verbatim. Judged a net improvement. Fixed one staleness issue before merging (it still described the offsite backup workflow as having "consecutive failures", which closed 2026-08-11 after this branch was created) and folded the working agreement into `CLAUDE.md` itself as a new "Working agreement" section, since it had previously lived only in this session log. **Merged to `main`** pending final CI confirmation on `fbb2e9d` (see next entry if this was reverted for a CI failure).
+
+**Decision recorded:** `DEC-015` in `WMS-DECISION-LOG.md` — this session's mandate to decide directly, escalating only irreversible/costly/production-data/security calls, is now durable in `CLAUDE.md` rather than session-log-only.
+
+**Production state:** Unchanged. All actions were PR merges/closes and doc edits on GitHub; no deployment, migration execution against a live database, seed, or production access occurred. PR #67's migration will only run against production through the existing guarded release pipeline, on a future authorized deploy.
+
+**Exact next step:** `main` still needs the splash-screen AAPT fix applied directly (flagged, not yet authorized in this session) if it hasn't been picked up via a subsequent merge. Continue toward the previously identified P0 items: confirm CI on `main` HEAD, and a read-only production check before any release qualification.

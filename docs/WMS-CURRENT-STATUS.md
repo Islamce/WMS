@@ -1,6 +1,6 @@
 # WMS Current Status
 
-Last updated: 2026-08-17
+Last updated: 2026-08-27
 
 ## Executive status
 
@@ -11,7 +11,7 @@ Last updated: 2026-08-17
 - Production database: SQLite at `data/wms.db` using WAL mode
 - Production runtime: Node `v20.19.4`, npm `10.8.2`
 - Current deployed commit (**Verified (GitHub Actions release run `32027249672`, 2026-08-17)**): `87271334e22a3cbdf3579757b1489e74d5d499d7`. The guarded release completed through canonical target verification, Passenger restart signaling, and final public-health validation.
-- `main` branch deployment revision (**Verified (repo), 2026-08-17**): `87271334e22a3cbdf3579757b1489e74d5d499d7` at release dispatch. Subsequent documentation-only commits do not alter the deployed application bundle.
+- `main` branch head (**Verified (repo), 2026-08-27**): `26a5c306e9d44f6e5b4fb40e4a04b7da25c52b58`. Production is **20 commits behind `main`**, with no divergence (`8727133` is a direct ancestor). **Correction:** the prior note that "subsequent commits are documentation-only" is stale — the 20 commits include application changes (workflow-context/import-provenance fixes, a new migration `015_import_checksum_and_permission_scope`, frontend KYNOX branding, and Flutter mobile branding/splash). None of this has been qualified or deployed. See "`main` vs. production gap — 2026-08-27" below.
 - Health endpoint: healthy, returning `{"status":"ok","service":"wms"}` (**Verified** in the successful deployment job and rechecked from this session on 2026-08-17).
 - Database migrations: 14 recorded in production (**Verified** by the idempotent final migration gate, which reported `Migrations: up to date (14 recorded)`). Migrations 013 and 014 were applied in the earlier controlled candidate stage and were not re-applied during the successful final release.
 - Offsite backup: **Verified (repo), 2026-08-11:** `production-backup.yml` run #39 (`31535041998`) completed fully successfully — all 15 steps, including local retention pruning — following five fixes made the same day (SSH key, host-key, `REMOTE_APP_DIR`, `DB_PATH`, and a retention-step error-handling bug). `INC-2026-08-06-01` is closed. The workflow is back on its normal daily schedule (02:30 UTC).
@@ -229,6 +229,11 @@ Ordered by priority. Item 1 gates the rest.
 10. Ensure every future deployment and incident updates the project memory files required by `CLAUDE.md`.
 11. ~~Restore the offsite backup workflow.~~ **DONE (2026-08-11).** `INC-2026-08-06-01` closed — five root causes fixed (SSH key, host-key, `REMOTE_APP_DIR`, `DB_PATH`, retention-step error handling) and validated by a fully successful run (#39). SSH/hPanel work was operator-executed throughout; no AI session in this project has ever had production SSH access.
 12. **Open hygiene follow-up (separate from item 11, does not block anything):** the operator's new backup SSH private key was inadvertently pasted into a chat session during the 2026-08-11 troubleshooting. Should be rotated — generate a fresh key, install only the public half via hPanel/`authorized_keys`, update the `HOSTINGER_SSH_PRIVATE_KEY` GitHub secret directly (not through chat), then remove the exposed key from the host.
+13. **(New, 2026-08-27) Confirm CI status for `main` head `26a5c30`** via the GitHub Actions UI directly — not independently confirmed from this session's tooling.
+14. **(New, 2026-08-27) Read-only production check** (active SHA, `/healthz`, migration count) before any release qualification work — not performed in this session.
+15. **(New, 2026-08-27) Renumber PR #67's migration** from `015_analytical_scope_attestations` to `016_...` and rebase it onto current `main`. This requires pushing to PR #67's own branch (`fix/cor002-scope-attestation`), which is outside this session's designated branch (`claude/kynox-wms-status-deployment-70gdw7`) — needs explicit authorization before acting.
+16. **(New, 2026-08-27) Reconcile PR #69** against `main`: rebase it directly onto `main` (not the older `fix/request-line-visibility-picker-state` base) and review overlap with the request-queue-context/branding commits already merged to `main` (`f78aed7`, `54584ae`, `c696665`, `1db9630`).
+17. **(New, 2026-08-27) Decide on PR #59**: contrary to an earlier external report, GitHub reports it as `mergeable_state: clean` (technically mergeable). The blocker is a content decision — adopt task-scoped `CLAUDE.md` context loading or keep the current blanket reading-list requirement — not a merge conflict.
 
 ## Production configuration invariants
 
@@ -260,3 +265,20 @@ Do not delete, replace, truncate, or recreate the SQLite database or WAL files o
 **Production safety:** No production access, deployment, migration, import, reset/seed, Passenger restart, live database access, or PR merge occurred.
 
 **Artifacts:** `docs/WMS-REDESIGN-BASELINE-2026-08-17.md`, `docs/WMS-REDESIGN-SCREEN-INVENTORY-2026-08-17.md`, `docs/WMS-REDESIGN-MARKET-BENCHMARK-2026-08-17.md`, and `docs/WMS-REDESIGN-ARCHITECTURE-2026-08-17.md` record the audit, benchmark, target IA, workflow architecture, role matrix, design decisions, and residual risks.
+
+## `main` vs. production gap — 2026-08-27
+
+**Verified (repo):** `main` head `26a5c30` is 20 commits ahead of the last deployed production SHA `8727133` (2026-08-17), with no divergence — `8727133` is a direct git ancestor of `main`. None of these 20 commits has been deployed or release-qualified. Contents, by area:
+
+- **Backend/data-integrity** (`669f791`, `6bd4fd5`): import provenance and lifecycle-event fixes, and a fix for the `wms-api -> wms-ops-scripts -> wms-api` dependency cycle that was blocking KAAF regeneration. `669f791` adds migration `015_import_checksum_and_permission_scope` — **this is now the 15th recorded migration on `main`**, superseding migration 14 as the highest number.
+- **CI**: `aa1d250` makes Playwright browser install resilient (timeout + retry).
+- **Web frontend** (`c696665`, `1db9630`, plus asset-cache-busting/release-scoped-asset commits `0a71868`/`1a2512d`/`9d79a00`/`7318387`/`5ee1f5f`, and request-queue-context commits `f78aed7`/`54584ae`): KYNOX brand refresh (real logo, hero banners on Dashboard/Command Center), and inspector queue-context preservation. This overlaps in intent with the still-open, still-Draft PR #69 (built on the older `fix/request-line-visibility-picker-state` branch, not `main`) — the overlap has not been reconciled.
+- **Flutter mobile** (`53403e2`, `a53c0e1`, `2fa4896`, `c817cac`, `26a5c30`): KYNOX teal theme, wordmark/app-title/drawer branding, real launcher icon, and a new native+Flutter animated splash screen. No new dependencies. **Not qualified** (`flutter analyze`/tests not run in this pass) and **no new APK has been built**, so none of this reaches existing mobile users regardless of any web/backend deployment.
+- **Docs**: `b356d34` session-log entry for GitHub connector setup.
+
+**Migration-numbering conflict — confirmed, not just suspected:** Draft PR #67 (`fix/cor002-scope-attestation`) independently adds its own migration named `015_analytical_scope_attestations`. Since `main` already carries a different `015_import_checksum_and_permission_scope`, PR #67's migration number collides with history already on `main`. This is the direct, confirmed cause of PR #67's GitHub-reported `dirty` (non-mergeable) state — not merely staleness. PR #67 must be renumbered to `016_...` and rebased onto current `main` before any merge decision.
+
+**Not yet done in this pass (no production or database action taken):**
+- CI status for `26a5c30` has not been independently confirmed from this session.
+- Production has not been checked live (`/healthz`, active SHA, migration count) from this session.
+- PR #67 has not been renumbered/rebased yet — that requires pushing to its own branch (`fix/cor002-scope-attestation`), which is outside this session's designated branch and needs separate authorization before acting.
