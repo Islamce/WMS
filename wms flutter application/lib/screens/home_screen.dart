@@ -217,7 +217,12 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         drawer: _buildDrawer(session, dests),
-        body: _index == 0 ? _buildLaunchpad(session, dests) : current.builder(),
+        body: Column(
+          children: [
+            const OfflineBanner(),
+            Expanded(child: _index == 0 ? _buildLaunchpad(session, dests) : current.builder()),
+          ],
+        ),
       ),
     );
   }

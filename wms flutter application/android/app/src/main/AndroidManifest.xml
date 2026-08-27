@@ -1,6 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- The app talks to the WMS REST API over the network. -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Connectivity detection, so offline-recorded actions can be queued and
+         synced automatically once the network is back. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <!-- Camera for barcode / QR scanning in picking and receiving. -->
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-feature android:name="android.hardware.camera" android:required="false"/>

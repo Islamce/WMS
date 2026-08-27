@@ -27,6 +27,11 @@ dependencies:
   # in all app states (foreground/background/terminated) on the wms_notifications
   # channel. Requires core-library desugaring (enabled in android/app/build.gradle.kts).
   flutter_local_notifications: ^22.1.0
+  # Online/offline detection, so offline-recorded writes can be queued and
+  # synced automatically once connectivity returns.
+  connectivity_plus: ^6.1.0
+  # Reads the real installed version/build number for the Settings footer.
+  package_info_plus: ^8.1.2
 
 dev_dependencies:
   flutter_test:

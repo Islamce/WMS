@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../core/i18n.dart';
 import '../main.dart';
@@ -50,6 +51,48 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   selected: {session.themeMode},
                   onSelectionChanged: (s) => session.setThemeMode(s.first),
                 ),
+                const SizedBox(height: 14),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(t('Push notifications')),
+                  subtitle: Text(t('Alerts for requests, approvals, picking and deliveries.'),
+                      style: const TextStyle(fontSize: 12)),
+                  value: session.pushEnabled,
+                  onChanged: (v) => session.setPushEnabled(v),
+                ),
+              ],
+            ),
+          ),
+          SectionCard(
+            title: t('Sync'),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  Icon(session.online ? Icons.cloud_done_outlined : Icons.cloud_off,
+                      color: session.online ? const Color(0xFF1baf7a) : const Color(0xFFeda100), size: 20),
+                  const SizedBox(width: 8),
+                  Text(session.online ? t('Online') : t('Offline')),
+                ]),
+                const SizedBox(height: 6),
+                Text('${t('Pending records to sync')}: ${session.queue.pending.length}'),
+                if (session.queue.errors.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text('${t('Could not sync')} (${session.queue.errors.length}):',
+                      style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFFe34948))),
+                  ...session.queue.errors.map((e) => Text('• $e',
+                      style: const TextStyle(fontSize: 12, color: Color(0xFFe34948)))),
+                  TextButton(
+                    onPressed: () async { await session.queue.clearErrors(); },
+                    child: Text(t('Dismiss')),
+                  ),
+                ],
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.sync),
+                  label: Text(t('Sync now')),
+                  onPressed: session.queue.pending.isEmpty ? null : () => session.flushQueue(),
+                ),
               ],
             ),
           ),
@@ -98,10 +141,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ],
               ),
             ),
-          const Padding(
-            padding: EdgeInsets.all(16),
-            child: Text('KYNOX WMS v1.0.0 · connects to the same REST API and database as the web app.',
-                textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: Colors.grey)),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: FutureBuilder<PackageInfo>(
+              future: PackageInfo.fromPlatform(),
+              builder: (context, snap) {
+                final version = snap.hasData
+                    ? 'v${snap.data!.version} (${snap.data!.buildNumber})'
+                    : '';
+                return Text(
+                  'KYNOX WMS $version · connects to the same REST API and database as the web app.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 11, color: Colors.grey),
+                );
+              },
+            ),
           ),
         ],
       ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/api_client.dart';
+import '../core/session.dart';
 import '../main.dart';
 import '../widgets/common.dart';
 
@@ -16,6 +17,34 @@ class CycleCountScreen extends StatefulWidget {
 class _CycleCountScreenState extends State<CycleCountScreen> {
   int _key = 0;
   bool _busy = false;
+  int _pendingCount = 0;
+  Session? _session;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final session = SessionScope.of(context);
+    if (!identical(session, _session)) {
+      _session?.removeListener(_onSessionChanged);
+      _session = session;
+      session.addListener(_onSessionChanged);
+    }
+    _pendingCount = session.queue.pending.length;
+  }
+
+  @override
+  void dispose() {
+    _session?.removeListener(_onSessionChanged);
+    super.dispose();
+  }
+
+  /// A queued cycle-count entry that gets flushed server-side no longer
+  /// shows up here as "pending sync" until the list is re-fetched, so bump
+  /// the load key whenever the queue shrinks.
+  void _onSessionChanged() {
+    final n = _session?.queue.pending.length ?? 0;
+    if (n != _pendingCount && mounted) setState(() { _pendingCount = n; _key++; });
+  }
 
   Color _statusColor(String s) {
     switch (s) {
@@ -88,10 +117,32 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
       ),
     );
     if (qty == null) return;
-    await _run(
-        (api) => api.post('/api/cycle-count/$id/count',
-            {'counted_quantity': qty, 'reason': reasonCtrl.text.trim()}),
-        'Count recorded.');
+    final path = '/api/cycle-count/$id/count';
+    final body = <String, dynamic>{'counted_quantity': qty, 'reason': reasonCtrl.text.trim()};
+    final session = SessionScope.of(context);
+    if (!session.online) {
+      await session.enqueueOffline(
+          method: 'POST', path: path, body: body, description: 'Cycle count #$id');
+      if (mounted) showSnack(context, 'Offline — count saved, will sync when connected.');
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      await session.api.post(path, body);
+      if (mounted) { showSnack(context, 'Count recorded.'); setState(() => _key++); }
+    } on ApiException catch (e) {
+      if (e.statusCode == 0) {
+        // Was online a moment ago but the request itself couldn't land —
+        // same offline handling as the pre-flight check above.
+        await session.enqueueOffline(
+            method: 'POST', path: path, body: body, description: 'Cycle count #$id');
+        if (mounted) showSnack(context, 'Offline — count saved, will sync when connected.');
+      } else if (mounted) {
+        showSnack(context, e.message, error: true);
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _post(int id) =>
@@ -210,6 +261,7 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
                     final status = '${c['status']}';
                     final variance = c['variance'];
                     final id = c['id'] as int;
+                    final pending = session.queue.findByPath('/api/cycle-count/$id/count');
                     return Card(
                       margin: const EdgeInsets.fromLTRB(12, 6, 12, 6),
                       child: Padding(
@@ -225,23 +277,25 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                 decoration: BoxDecoration(
-                                  color: _statusColor(status).withValues(alpha: 0.14),
+                                  color: (pending != null ? Colors.grey : _statusColor(status)).withValues(alpha: 0.14),
                                   borderRadius: BorderRadius.circular(20),
                                 ),
-                                child: Text(status,
+                                child: Text(pending != null ? 'PENDING SYNC' : status,
                                     style: TextStyle(
-                                        color: _statusColor(status),
+                                        color: pending != null ? Colors.grey.shade700 : _statusColor(status),
                                         fontSize: 12, fontWeight: FontWeight.w600)),
                               ),
                             ]),
                             const SizedBox(height: 4),
                             Text(
-                              'System ${c['system_quantity']}'
-                              '${c['counted_quantity'] != null ? ' · Counted ${c['counted_quantity']}' : ''}'
-                              '${variance != null ? ' · Var ${variance > 0 ? '+' : ''}$variance' : ''}',
-                              style: const TextStyle(fontSize: 13, color: Colors.grey),
+                              pending != null
+                                  ? 'System ${c['system_quantity']} · Counted ${pending.body['counted_quantity']} (offline, not yet synced)'
+                                  : 'System ${c['system_quantity']}'
+                                    '${c['counted_quantity'] != null ? ' · Counted ${c['counted_quantity']}' : ''}'
+                                    '${variance != null ? ' · Var ${variance > 0 ? '+' : ''}$variance' : ''}',
+                              style: TextStyle(fontSize: 13, color: pending != null ? Colors.grey.shade700 : Colors.grey),
                             ),
-                            if (status == 'OPEN' || status == 'COUNTED') ...[
+                            if (pending == null && (status == 'OPEN' || status == 'COUNTED')) ...[
                               const SizedBox(height: 8),
                               Row(children: [
                                 if (status == 'OPEN')

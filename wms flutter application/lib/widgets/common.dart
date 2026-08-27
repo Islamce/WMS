@@ -2,6 +2,42 @@ import 'package:flutter/material.dart';
 
 import '../core/format.dart';
 import '../core/i18n.dart';
+import '../main.dart';
+
+/// Slim app-wide strip shown whenever the device has no connectivity, so it's
+/// always clear that actions are being recorded offline rather than lost.
+/// Rebuilds whenever [Session] notifies (SessionScope dependency), so it
+/// appears/disappears the moment connectivity actually changes.
+class OfflineBanner extends StatelessWidget {
+  const OfflineBanner({super.key});
+  @override
+  Widget build(BuildContext context) {
+    final session = SessionScope.of(context);
+    final pending = session.queue.pending.length;
+    if (session.online && pending == 0) return const SizedBox.shrink();
+    return Container(
+      width: double.infinity,
+      color: session.online ? const Color(0xFF31c3c9) : const Color(0xFFeda100),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: Row(
+        children: [
+          Icon(session.online ? Icons.sync : Icons.cloud_off, size: 16, color: Colors.white),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              session.online
+                  ? 'Back online — syncing $pending pending record${pending == 1 ? '' : 's'}…'
+                  : pending > 0
+                      ? "Offline — $pending record${pending == 1 ? '' : 's'} saved, waiting to sync."
+                      : 'Offline — waiting to reconnect. Recorded actions will sync automatically.',
+              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 /// Small coloured pill for a workflow status.
 class StatusChip extends StatelessWidget {

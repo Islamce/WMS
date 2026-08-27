@@ -1,9 +1,13 @@
+import 'dart:async';
+
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show ThemeMode;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api_client.dart';
 import 'i18n.dart';
+import 'offline_queue.dart';
 import 'push.dart';
 
 /// Holds the server URL, auth token and the signed-in user (with permissions),
@@ -14,6 +18,7 @@ class Session extends ChangeNotifier {
   static const _kUser = 'wms_user_name';
   static const _kLang = 'wms_lang';
   static const _kTheme = 'wms_theme';
+  static const _kPushEnabled = 'wms_push_enabled';
 
   /// The one production server this app talks to — embedded, not user-editable.
   static const defaultBaseUrl = 'https://wms.kynox.io';
@@ -26,6 +31,15 @@ class Session extends ChangeNotifier {
   /// UI language ('en' | 'ar' | 'fr') and theme preference, persisted.
   String lang = 'en';
   ThemeMode themeMode = ThemeMode.system;
+  bool pushEnabled = true;
+
+  /// Whether the device currently has network connectivity. Requests recorded
+  /// while this is false (a subset explicitly wired for it, e.g. cycle count
+  /// entry) go into [queue] instead of failing outright, and are replayed
+  /// automatically the moment this flips back to true.
+  bool online = true;
+  final OfflineQueue queue = OfflineQueue();
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
 
   bool get isAuthenticated => token != null && token!.isNotEmpty && user != null;
   String get userName => (user?['name'] ?? '').toString();
@@ -68,14 +82,17 @@ class Session extends ChangeNotifier {
     I18n.current = lang;
     final themeName = prefs.getString(_kTheme) ?? 'system';
     themeMode = ThemeMode.values.firstWhere((m) => m.name == themeName, orElse: () => ThemeMode.system);
+    pushEnabled = prefs.getBool(_kPushEnabled) ?? true;
     token = prefs.getString(_kToken);
     final name = prefs.getString(_kUser);
+    await queue.load();
+    _initConnectivity();
     // Re-validate the token against /auth/me so permissions are always fresh.
     if (token != null && token!.isNotEmpty) {
       try {
         final res = await ApiClient(baseUrl: baseUrl, token: token).get('/api/auth/me');
         user = Map<String, dynamic>.from(res['user'] as Map);
-        Push.init(api); // fire-and-forget — never blocks app startup
+        if (pushEnabled) Push.init(api); // fire-and-forget — never blocks app startup
       } catch (_) {
         // token invalid/expired or server unreachable — fall back to name only
         if (name != null) user = {'name': name, 'permissions': []};
@@ -84,6 +101,65 @@ class Session extends ChangeNotifier {
     }
     loading = false;
     notifyListeners();
+  }
+
+  /// Watches device connectivity and auto-replays the offline queue the
+  /// moment the app is back online. `connectivity_plus` only reports whether
+  /// a network interface is up, not real internet reachability, so a change
+  /// to "online" also triggers a queue flush attempt rather than being
+  /// trusted blindly — flush() itself detects a still-unreachable server.
+  void _initConnectivity() {
+    _connectivitySub?.cancel();
+    _connectivitySub = Connectivity().onConnectivityChanged.listen((results) {
+      final nowOnline = !results.contains(ConnectivityResult.none);
+      if (nowOnline == online) return;
+      online = nowOnline;
+      notifyListeners();
+      if (online) flushQueue();
+    });
+    Connectivity().checkConnectivity().then((results) {
+      online = !results.contains(ConnectivityResult.none);
+      notifyListeners();
+    });
+  }
+
+  /// Replays anything recorded while offline. Safe to call anytime (e.g. a
+  /// manual "Sync now" in Settings, or after `_initConnectivity` sees a
+  /// reconnect) — it's a no-op when the queue is empty.
+  Future<void> flushQueue() async {
+    if (await queue.flush(api)) notifyListeners();
+  }
+
+  /// Records a write made while offline (or one that just failed because the
+  /// server is unreachable) so it can be replayed once connectivity returns,
+  /// and notifies listeners so any "pending sync" UI updates immediately.
+  Future<void> enqueueOffline({
+    required String method,
+    required String path,
+    required Map<String, dynamic> body,
+    required String description,
+  }) async {
+    await queue.enqueue(method: method, path: path, body: body, description: description);
+    online = false;
+    notifyListeners();
+  }
+
+  Future<void> setPushEnabled(bool value) async {
+    pushEnabled = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kPushEnabled, value);
+    if (value) {
+      if (isAuthenticated) Push.init(api);
+    } else {
+      await Push.unregister(api);
+    }
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _connectivitySub?.cancel();
+    super.dispose();
   }
 
   Future<void> setLang(String value) async {
@@ -111,7 +187,7 @@ class Session extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kToken, token!);
     await prefs.setString(_kUser, userName);
-    Push.init(api); // fire-and-forget — never blocks login
+    if (pushEnabled) Push.init(api); // fire-and-forget — never blocks login
     notifyListeners();
   }
 
