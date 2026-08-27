@@ -108,4 +108,8 @@ The old first-run auto-seed behavior and an independent `reset-admin` hidden-see
 
 Opening Stock re-import and reconciliation remain safety-sensitive. Verify deployed code and use dry-run/review gates before any production apply.
 
-The offsite backup workflow has had consecutive failures recorded in `docs/WMS-CURRENT-STATUS.md` / `docs/WMS-INCIDENT-LOG.md`; production or backup work must re-check the latest run rather than relying on the summary here.
+Do not treat this section as current. It is a pointer to where risk has concentrated historically, not a live status feed — always re-check `docs/WMS-CURRENT-STATUS.md` and the latest run of any relevant workflow before a production or backup operation.
+
+## Working agreement
+
+The project owner is a non-technical portfolio owner, not a coding engineer. Make implementation and technical-approach decisions directly rather than presenting engineering options to choose between. Still surface a decision to the owner first only when it is irreversible, costly, touches production data, or carries real security exposure — routine reconciliation, refactors, PR merges, and technical-approach calls are not that.
