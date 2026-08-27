@@ -22,6 +22,7 @@ Pages.users = {
             <option value="rejected">Rejected</option>
             <option value="disabled">Disabled</option>
           </select>
+          <span class="muted" id="u-count" aria-live="polite"></span>
           <div class="spacer"></div>
         </div>
         <div class="table-wrap" id="u-table"><div class="loading">Loading…</div></div>
@@ -46,14 +47,18 @@ Pages.users = {
     try {
       const url = this.state.status ? `/api/users?status=${this.state.status}` : '/api/users';
       const { users } = await Api.get(url);
-      tableEl.innerHTML = `
+      const countEl = this.el.querySelector('#u-count');
+      if (countEl) countEl.textContent = `${users.length} user${users.length === 1 ? '' : 's'}`;
+      tableEl.innerHTML = users.length ? `
         <table>
           <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Registered</th><th style="min-width:320px">Actions</th></tr></thead>
           <tbody>
-            ${users.map((u) => this.rowHtml(u)).join('') ||
-              '<tr><td colspan="6" class="muted">No users found</td></tr>'}
+            ${users.map((u) => this.rowHtml(u)).join('')}
           </tbody>
-        </table>`;
+        </table>` : UI.meaningfulEmptyState({
+        title: this.state.status ? `No ${this.state.status} users` : 'No users found',
+        description: this.state.status ? 'Try a different status filter.' : 'Signed-up users will appear here once they request access.',
+      });
 
       tableEl.querySelectorAll('[data-action]').forEach((b) => {
         b.addEventListener('click', () => this.action(b.dataset.action, Number(b.dataset.id), b.dataset.name));
@@ -86,10 +91,10 @@ Pages.users = {
     if (!isSelf) {
       if (u.status === 'pending') {
         actions += `<button class="btn success sm" data-action="active" data-id="${u.id}">Approve</button>
-                    <button class="btn danger sm" data-action="rejected" data-id="${u.id}">Reject</button> `;
+                    <button class="btn danger sm" data-action="rejected" data-id="${u.id}" data-name="${UI.esc(u.name)}">Reject</button> `;
       }
       if (u.status === 'active') {
-        actions += `<button class="btn danger sm" data-action="disabled" data-id="${u.id}">Disable</button> `;
+        actions += `<button class="btn danger sm" data-action="disabled" data-id="${u.id}" data-name="${UI.esc(u.name)}">Disable</button> `;
       }
       if (u.status === 'disabled' || u.status === 'rejected') {
         actions += `<button class="btn success sm" data-action="active" data-id="${u.id}">Activate</button> `;
@@ -114,12 +119,21 @@ Pages.users = {
   async action(action, userId, userName) {
     if (action === 'permissions') return this.openPermissions(userId, userName);
     if (action === 'reset-pw') return this.openResetPassword(userId, userName);
-    try {
-      const { message } = await Api.patch(`/api/users/${userId}/status`, { status: action });
-      UI.toast(message);
-      this.load();
-    } catch (err) {
-      UI.toast(err.message, 'error');
+    const applyStatus = async () => {
+      try {
+        const { message } = await Api.patch(`/api/users/${userId}/status`, { status: action });
+        UI.toast(message);
+        this.load();
+      } catch (err) {
+        UI.toast(err.message, 'error');
+      }
+    };
+    // Disabling or rejecting removes another person's access — confirm first.
+    // Approving/activating is not destructive and stays a single click.
+    if (action === 'disabled' || action === 'rejected') {
+      UI.confirm(`${action === 'disabled' ? 'Disable' : 'Reject'} ${userName}? They will lose access immediately.`, applyStatus);
+    } else {
+      await applyStatus();
     }
   },
 
