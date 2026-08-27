@@ -65,19 +65,50 @@ class AnalyticsScreen extends StatelessWidget {
                 child: Column(
                   children: insights.map((i) {
                     final sev = '${i['severity'] ?? i['level'] ?? ''}'.toLowerCase();
-                    final c = sev.contains('high') || sev.contains('crit')
-                        ? const Color(0xFFe34948)
-                        : sev.contains('warn') || sev.contains('med')
-                            ? const Color(0xFFeda100)
-                            : const Color(0xFF31c3c9);
-                    return ListTile(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      leading: Icon(Icons.lightbulb_outline, color: c),
-                      title: Text('${i['title'] ?? i['message'] ?? ''}'),
-                      subtitle: (i['detail'] ?? i['message']) != null && i['title'] != null
-                          ? Text('${i['detail'] ?? i['message']}')
-                          : null,
+                    final IconData icon;
+                    final Color c;
+                    if (sev.contains('high') || sev.contains('crit')) {
+                      icon = Icons.error_outline;
+                      c = const Color(0xFFe34948);
+                    } else if (sev.contains('warn') || sev.contains('med')) {
+                      icon = Icons.warning_amber_outlined;
+                      c = const Color(0xFFeda100);
+                    } else if (sev.contains('good')) {
+                      icon = Icons.check_circle_outline;
+                      c = const Color(0xFF1baf7a);
+                    } else {
+                      icon = Icons.info_outline;
+                      c = const Color(0xFF31c3c9);
+                    }
+                    final title = '${i['title'] ?? i['message'] ?? ''}';
+                    final detail = i['detail'] ?? (i['title'] != null ? i['message'] : null);
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: c.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border(left: BorderSide(color: c, width: 3)),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(icon, color: c, size: 20),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                                if (detail != null) ...[
+                                  const SizedBox(height: 3),
+                                  Text('$detail', style: const TextStyle(fontSize: 12, color: Colors.black87)),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     );
                   }).toList(),
                 ),

@@ -511,6 +511,23 @@ const MIGRATIONS = [
       database.exec(`CREATE INDEX IF NOT EXISTS idx_warehouses_project ON warehouses(project_name);`);
     },
   },
+  {
+    id: '020_idempotency_keys',
+    description: 'Client-supplied idempotency keys for create endpoints replayed from an offline queue (e.g. mobile Goods Receipt) — a retried request with the same key returns the original response instead of creating a duplicate.',
+    up(database) {
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS idempotency_keys (
+          idempotency_key TEXT NOT NULL,
+          route TEXT NOT NULL,
+          status_code INTEGER NOT NULL,
+          response_body TEXT NOT NULL,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          PRIMARY KEY (idempotency_key, route)
+        );
+        CREATE INDEX IF NOT EXISTS idx_idempotency_created ON idempotency_keys(created_at);
+      `);
+    },
+  },
 ];
 
 function ensureTable() {

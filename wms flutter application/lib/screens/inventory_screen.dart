@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/api_client.dart';
 import '../core/format.dart';
 import '../core/i18n.dart';
+import '../core/session.dart';
 import '../main.dart';
 import '../widgets/common.dart';
 
@@ -151,6 +152,34 @@ class _SessionDetail extends StatefulWidget {
 class _SessionDetailState extends State<_SessionDetail> {
   int _key = 0;
   bool _busy = false;
+  int _pendingCount = 0;
+  Session? _session;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final session = SessionScope.of(context);
+    if (!identical(session, _session)) {
+      _session?.removeListener(_onSessionChanged);
+      _session = session;
+      session.addListener(_onSessionChanged);
+    }
+    _pendingCount = session.queue.pending.length;
+  }
+
+  @override
+  void dispose() {
+    _session?.removeListener(_onSessionChanged);
+    super.dispose();
+  }
+
+  /// A queued count that gets flushed server-side no longer shows up here as
+  /// "pending sync" until the session is re-fetched, so bump the load key
+  /// whenever the queue shrinks.
+  void _onSessionChanged() {
+    final n = _session?.queue.pending.length ?? 0;
+    if (n != _pendingCount && mounted) setState(() { _pendingCount = n; _key++; });
+  }
 
   Future<void> _run(Future<void> Function() action) async {
     setState(() => _busy = true);
@@ -190,16 +219,34 @@ class _SessionDetailState extends State<_SessionDetail> {
       ),
     );
     if (qty == null) return;
+    final path = '/api/inventory/lines/${line['id']}/count';
+    final body = <String, dynamic>{'counted_quantity': qty};
+    final session = SessionScope.of(context);
+    final description = 'Inventory count — ${line['batch_number']}';
+    if (!session.online) {
+      await session.enqueueOffline(method: 'POST', path: path, body: body, description: description);
+      if (mounted) showSnack(context, t('Offline — count saved, will sync when connected.'));
+      return;
+    }
     await _run(() async {
-      final api = SessionScope.of(context).api;
-      await api.post('/api/inventory/lines/${line['id']}/count', {'counted_quantity': qty});
-      if (mounted) showSnack(context, t('Count recorded.'));
+      try {
+        await session.api.post(path, body);
+        if (mounted) showSnack(context, t('Count recorded.'));
+      } on ApiException catch (e) {
+        if (e.statusCode == 0) {
+          await session.enqueueOffline(method: 'POST', path: path, body: body, description: description);
+          if (mounted) showSnack(context, t('Offline — count saved, will sync when connected.'));
+        } else {
+          rethrow;
+        }
+      }
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final api = SessionScope.of(context).api;
+    final session = SessionScope.of(context);
+    final api = session.api;
     return Scaffold(
       appBar: AppBar(title: Text(t('Physical Inventory'))),
       body: Stack(children: [
@@ -260,31 +307,37 @@ class _SessionDetailState extends State<_SessionDetail> {
                   final lineStatus = '${l['status']}';
                   final sysQty = l['system_quantity'];
                   final counted = l['recount_quantity'] ?? l['counted_quantity'];
+                  final pending = session.queue.findByPath('/api/inventory/lines/${l['id']}/count');
                   return ListTile(
                     dense: true,
                     title: Text('${l['batch_number']} · ${l['material_code']}'),
                     subtitle: Text('${t('Bin')} ${l['bin_location'] ?? '—'}'
                         ' · ${t('System')}: ${sysQty == null ? '🔒' : fmtQty(sysQty)}'
-                        '${counted != null ? ' · ${t('Counted')}: ${fmtQty(counted)}' : ''}'
-                        '${l['variance'] != null ? ' · Δ ${fmtQty(l['variance'])}' : ''}'),
-                    trailing: counting && (lineStatus == 'PENDING' || lineStatus == 'RECOUNT')
-                        ? TextButton(onPressed: () => _count(l), child: Text(t('Count')))
-                        : counting && lineStatus == 'COUNTED'
-                            ? Wrap(children: [
-                                TextButton(
-                                  onPressed: _busy ? null : () => _run(() async {
-                                    await api.post('/api/inventory/lines/${l['id']}/approve');
-                                  }),
-                                  child: Text(t('Approve')),
-                                ),
-                                TextButton(
-                                  onPressed: _busy ? null : () => _run(() async {
-                                    await api.post('/api/inventory/lines/${l['id']}/recount');
-                                  }),
-                                  child: Text(t('Recount')),
-                                ),
-                              ])
-                            : StatusChip(lineStatus),
+                        '${pending != null
+                            ? ' · ${t('Counted')}: ${fmtQty(pending.body['counted_quantity'])} (${t('offline, not yet synced')})'
+                            : counted != null ? ' · ${t('Counted')}: ${fmtQty(counted)}' : ''}'
+                        '${pending == null && l['variance'] != null ? ' · Δ ${fmtQty(l['variance'])}' : ''}'),
+                    trailing: pending != null
+                        ? Chip(label: Text(t('PENDING SYNC'), style: const TextStyle(fontSize: 11)),
+                            visualDensity: VisualDensity.compact, backgroundColor: Colors.grey.shade200)
+                        : counting && (lineStatus == 'PENDING' || lineStatus == 'RECOUNT')
+                            ? TextButton(onPressed: () => _count(l), child: Text(t('Count')))
+                            : counting && lineStatus == 'COUNTED'
+                                ? Wrap(children: [
+                                    TextButton(
+                                      onPressed: _busy ? null : () => _run(() async {
+                                        await api.post('/api/inventory/lines/${l['id']}/approve');
+                                      }),
+                                      child: Text(t('Approve')),
+                                    ),
+                                    TextButton(
+                                      onPressed: _busy ? null : () => _run(() async {
+                                        await api.post('/api/inventory/lines/${l['id']}/recount');
+                                      }),
+                                      child: Text(t('Recount')),
+                                    ),
+                                  ])
+                                : StatusChip(lineStatus),
                   );
                 }),
                 const SizedBox(height: 24),

@@ -48,6 +48,30 @@ router.get('/bins', (req, res) => {
     ORDER BY bl.warehouse_code, COALESCE(NULLIF(bl.full_bin_location, ''), bl.bin_code)
   `).all();
 
+  // Attach the actual materials/quantities occupying each bin (not just counts) —
+  // the mobile Bin Locations screen needs this to answer "what's in this bin".
+  const contents = db.prepare(`
+    SELECT b.warehouse_code, b.bin_location, b.material_id, b.material_code, b.material_description,
+           COALESCE(m.unit, '') AS unit, SUM(b.remaining_quantity) AS quantity
+    FROM batches b LEFT JOIN materials m ON m.id = b.material_id
+    WHERE b.remaining_quantity > 0 AND b.bin_location IS NOT NULL AND b.bin_location != ''
+    GROUP BY b.warehouse_code, b.bin_location, b.material_id
+  `).all();
+  const byBin = {};
+  contents.forEach((c) => {
+    const key = `${c.warehouse_code}||${c.bin_location}`;
+    (byBin[key] = byBin[key] || []).push({
+      material_id: c.material_id, material_code: c.material_code,
+      material_description: c.material_description, unit: c.unit, quantity: c.quantity,
+    });
+  });
+  bins.forEach((bl) => {
+    bl.materials = [
+      ...(byBin[`${bl.warehouse_code}||${bl.bin_code}`] || []),
+      ...(byBin[`${bl.warehouse_code}||${bl.full_bin_location}`] || []),
+    ];
+  });
+
   return res.json({ status, count: bins.length, bins });
 });
 

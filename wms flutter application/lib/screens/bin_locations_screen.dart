@@ -46,6 +46,8 @@ class BinLocationsScreen extends StatelessWidget {
               itemBuilder: (context, index) {
                 final b = bins[index];
                 final occupied = b['occupancy_status'] == 'occupied';
+                final materials = List<Map<String, dynamic>>.from(
+                    (b['materials'] ?? []).map((e) => Map<String, dynamic>.from(e)));
                 final flags = <String>[
                   if (b['hazard_flag'] == 1) 'Hazard',
                   if (b['temperature_controlled_flag'] == 1) 'Temperature controlled',
@@ -74,6 +76,26 @@ class BinLocationsScreen extends StatelessWidget {
                       _kv('Batches', b['batch_count']),
                       _kv('Materials', b['material_count']),
                       if (flags.isNotEmpty) _kv('Restrictions', flags.join(', ')),
+                      if (materials.isNotEmpty) ...[
+                        const Padding(
+                          padding: EdgeInsets.only(top: 8, bottom: 4),
+                          child: Text('Contents', style: TextStyle(fontWeight: FontWeight.w600)),
+                        ),
+                        ...materials.map((m) => Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 2),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                        '${m['material_code'] ?? ''} — ${m['material_description'] ?? ''}',
+                                        overflow: TextOverflow.ellipsis),
+                                  ),
+                                  Text('${fmtQty(m['quantity'])} ${m['unit'] ?? ''}',
+                                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                                ],
+                              ),
+                            )),
+                      ],
                     ],
                   ),
                 );

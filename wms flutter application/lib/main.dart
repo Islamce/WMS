@@ -4,6 +4,7 @@ import 'core/push.dart';
 import 'core/session.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
+import 'screens/change_password_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -71,7 +72,9 @@ class _Root extends StatelessWidget {
     if (session.loading) {
       return const _SplashScreen();
     }
-    return session.isAuthenticated ? const HomeScreen() : const LoginScreen();
+    if (!session.isAuthenticated) return const LoginScreen();
+    if (session.mustChangePassword) return const ChangePasswordScreen(forced: true);
+    return const HomeScreen();
   }
 }
 

@@ -167,11 +167,16 @@ app.use((req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
 
-// Central error handler: never leak stack traces to clients.
+// Central error handler: never leak stack traces to clients. Routes/services
+// deliberately throw with a `.status` (400/403/409/...) and a user-safe
+// `.message` for validation and workflow errors (see server/services/requests.js,
+// picking.js, etc.) — those are surfaced as-is; anything without a `.status`
+// is a genuinely unexpected exception and stays a generic 500.
 app.use((err, req, res, next) => {
   console.error(err);
   if (res.headersSent) return next(err);
-  res.status(500).json({ error: 'Internal server error.' });
+  const status = Number.isInteger(err?.status) && err.status >= 400 && err.status < 500 ? err.status : 500;
+  res.status(status).json({ error: status < 500 ? err.message : 'Internal server error.' });
 });
 
 // Background scheduler: reminder/escalation sweep for unaccepted picking tasks

@@ -54,23 +54,24 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       separatorBuilder: (_, __) => const Divider(height: 1),
                       itemBuilder: (context, i) {
                         final n = rows[i];
-                        final isRead = (n['is_read'] ?? 0) == 1 || n['read_at'] != null;
+                        final isRead = n['status'] != 'SENT' || n['read_at'] != null;
+                        final message = (n['notification_message'] ?? '').toString();
                         return ListTile(
                           leading: Icon(
                             isRead ? Icons.notifications_none : Icons.notifications_active,
                             color: isRead ? Colors.grey : const Color(0xFF31c3c9),
                           ),
-                          title: Text('${n['title'] ?? n['notification_type'] ?? ''}',
+                          title: Text('${n['notification_title'] ?? n['notification_type'] ?? ''}',
                               style: TextStyle(fontWeight: isRead ? FontWeight.normal : FontWeight.w600)),
                           subtitle: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              if ((n['message'] ?? '').toString().isNotEmpty) Text('${n['message']}'),
-                              Text(fmtDate(n['created_at']),
+                              if (message.isNotEmpty) Text(message),
+                              Text(fmtDate(n['sent_at'] ?? n['created_at']),
                                   style: const TextStyle(fontSize: 11, color: Colors.grey)),
                             ],
                           ),
-                          isThreeLine: (n['message'] ?? '').toString().isNotEmpty,
+                          isThreeLine: message.isNotEmpty,
                           onTap: isRead
                               ? null
                               : () async {
