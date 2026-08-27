@@ -12,6 +12,20 @@ function subcQualityBadge(status) {
   return 'role';
 }
 
+/** Warehouse <option>s grouped by project — site stores only make sense grouped by the project they belong to. */
+function warehouseOptions(warehouses) {
+  const groups = new Map();
+  warehouses.forEach((w) => {
+    const key = w.project_name || '';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(w);
+  });
+  const optionsFor = (list) => list.map((w) => `<option value="${UI.esc(w.warehouse_code)}">${UI.esc(w.warehouse_code)} — ${UI.esc(w.warehouse_name)}</option>`).join('');
+  return [...groups.entries()].map(([project, list]) => project
+    ? `<optgroup label="${UI.esc(project)}">${optionsFor(list)}</optgroup>`
+    : optionsFor(list)).join('');
+}
+
 // --- Admin: subcontractors + categories -------------------------------------
 Pages.subcontractors = {
   async render(el) {
@@ -108,7 +122,7 @@ const SubcontractorDeliveries = {
         <div class="toolbar">
           <h3 class="mb-0">Subcontractor Deliveries</h3>
           <select id="dq-warehouse" style="max-width:200px"><option value="">All warehouses</option>
-            ${this.warehouses.map((w) => `<option value="${UI.esc(w.warehouse_code)}">${UI.esc(w.warehouse_code)} — ${UI.esc(w.warehouse_name)}</option>`).join('')}</select>
+            ${warehouseOptions(this.warehouses)}</select>
           <select id="dq-status" style="max-width:200px"><option value="">All statuses</option>
             ${['Pending Inspection', 'Received', 'Closed'].map((s) => `<option>${s}</option>`).join('')}</select>
           <div class="spacer"></div>
@@ -159,7 +173,7 @@ const SubcontractorDeliveries = {
     UI.modal({
       title: 'Log subcontractor delivery', wide: true, submitLabel: 'Log Delivery',
       bodyHtml: `<div class="form-row">
-          <div class="form-group"><label>Warehouse *</label><select id="dl-wh">${this.warehouses.map((w) => `<option value="${UI.esc(w.warehouse_code)}">${UI.esc(w.warehouse_code)} — ${UI.esc(w.warehouse_name)}</option>`).join('')}</select></div>
+          <div class="form-group"><label>Warehouse *</label><select id="dl-wh">${warehouseOptions(this.warehouses)}</select></div>
           <div class="form-group"><label>Subcontractor *</label><select id="dl-sub">${this.subcontractors.map((s) => `<option value="${s.id}">${UI.esc(s.name)}</option>`).join('')}</select></div>
         </div>
         <div class="form-row">
@@ -248,7 +262,7 @@ Pages.subcontractorStock = {
     el.innerHTML = `<div class="card">
       <div class="toolbar"><h3 class="mb-0">Subcontractor Material — On Hand</h3>
         <select id="ss-warehouse" style="max-width:220px"><option value="">All warehouses</option>
-          ${meta.warehouses.map((w) => `<option value="${UI.esc(w.warehouse_code)}">${UI.esc(w.warehouse_code)} — ${UI.esc(w.warehouse_name)}</option>`).join('')}</select>
+          ${warehouseOptions(meta.warehouses)}</select>
         <div class="spacer"></div>
         <span id="ss-export"></span>
       </div>
@@ -331,7 +345,7 @@ Pages.subcontractorReconciliation = {
     el.innerHTML = `<div class="card">
       <div class="toolbar"><h3 class="mb-0">Subcontractor Material — Reconciliation</h3>
         <select id="rc-warehouse" style="max-width:220px"><option value="">All warehouses</option>
-          ${meta.warehouses.map((w) => `<option value="${UI.esc(w.warehouse_code)}">${UI.esc(w.warehouse_code)} — ${UI.esc(w.warehouse_name)}</option>`).join('')}</select>
+          ${warehouseOptions(meta.warehouses)}</select>
         <div class="spacer"></div>
         <span id="rc-export"></span>
       </div>

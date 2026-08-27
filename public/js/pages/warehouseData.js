@@ -166,22 +166,49 @@ Pages.quality = {
 };
 
 // --- Master data: warehouses, bins, movement types --------------------------
+// Warehouses group by project_name — site/project stores in particular are
+// meaningless without knowing which project they belong to.
 Pages.warehousesMaster = {
   async render(el) {
     this.el = el;
-    el.innerHTML = `<div class="card"><div class="toolbar"><h3 class="mb-0">Warehouse Master</h3><div class="spacer"></div>
+    el.innerHTML = `<div class="card"><div class="toolbar"><h3 class="mb-0">Warehouse Master</h3>
+      <select id="wm-project" style="max-width:220px"><option value="">All projects</option></select>
+      <div class="spacer"></div>
       <button class="btn" id="wm-add">+ Add Warehouse</button></div>
       <div class="table-wrap" id="wm-table"><div class="loading">Loading…</div></div></div>`;
     el.querySelector('#wm-add').addEventListener('click', () => this.form());
-    await this.load();
+    el.querySelector('#wm-project').addEventListener('change', (e) => this.load(e.target.value));
+    const { projects } = await Api.get('/api/master/warehouses/projects');
+    this.projects = projects;
+    const projSel = el.querySelector('#wm-project');
+    projects.forEach((p) => projSel.appendChild(new Option(p, p)));
+    await this.load('');
   },
-  async load() {
-    const { warehouses } = await Api.get('/api/master/warehouses');
-    this.el.querySelector('#wm-table').innerHTML = `
-      <table><thead><tr><th>Code</th><th>Name</th><th>Plant</th><th>Storage Loc</th><th>Type</th><th>Supervisor</th></tr></thead>
-      <tbody>${warehouses.map((w) => `<tr><td><span class="chip accent">${UI.esc(w.warehouse_code)}</span></td><td>${UI.esc(w.warehouse_name)}</td>
-        <td>${UI.esc(w.plant || '')}</td><td>${UI.esc(w.storage_location || '')}</td><td>${UI.esc(w.warehouse_type || '')}</td>
-        <td>${UI.esc(w.supervisor_name || '—')}</td></tr>`).join('')}</tbody></table>`;
+  async load(projectName) {
+    const q = projectName ? `?project_name=${encodeURIComponent(projectName)}` : '';
+    const { warehouses } = await Api.get(`/api/master/warehouses${q}`);
+    // Group by project so site stores read as a project roster, not a flat list.
+    const groups = new Map();
+    warehouses.forEach((w) => {
+      const key = w.project_name || '— No project —';
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(w);
+    });
+    const rows = (list) => list.map((w) => `<tr><td><span class="chip accent">${UI.esc(w.warehouse_code)}</span></td><td>${UI.esc(w.warehouse_name)}</td>
+        <td>${UI.esc(w.plant || '')}</td><td>${UI.esc(w.storage_location || '')}</td>
+        <td><span class="badge ${w.warehouse_type === 'SITE' ? 'pending' : 'role'}">${UI.esc(w.warehouse_type || '')}</span></td>
+        <td>${UI.esc(w.supervisor_name || '—')}</td>
+        <td><button class="btn secondary sm" data-edit="${UI.esc(w.warehouse_code)}">Edit</button></td></tr>`).join('');
+    this.el.querySelector('#wm-table').innerHTML = warehouses.length ? `
+      <table><thead><tr><th>Code</th><th>Name</th><th>Plant</th><th>Storage Loc</th><th>Type</th><th>Supervisor</th><th></th></tr></thead>
+      ${[...groups.entries()].map(([project, list]) => `
+        <tbody><tr><td colspan="7" style="background:var(--surface-2);font-weight:700;font-size:12.5px">${UI.esc(project)}</td></tr>
+        ${rows(list)}</tbody>`).join('')}
+      </table>` : UI.meaningfulEmptyState({ title: 'No warehouses match this filter', description: 'Try a different project, or clear the filter.' });
+    this.el.querySelectorAll('[data-edit]').forEach((btn) => btn.addEventListener('click', () => {
+      const wh = warehouses.find((w) => w.warehouse_code === btn.dataset.edit);
+      this.editForm(wh);
+    }));
   },
   form() {
     UI.modal({ title: 'Add warehouse', submitLabel: 'Create',
@@ -189,13 +216,33 @@ Pages.warehousesMaster = {
         <div class="form-group"><label>Name *</label><input id="w-name"></div></div>
         <div class="form-row"><div class="form-group"><label>Plant</label><input id="w-plant"></div>
         <div class="form-group"><label>Storage Location</label><input id="w-sloc"></div></div>
-        <div class="form-group"><label>Type</label><input id="w-type" value="STANDARD"></div>`,
+        <div class="form-row"><div class="form-group"><label>Type</label><input id="w-type" value="STANDARD" placeholder="STANDARD, COLD, SITE…"></div>
+        <div class="form-group"><label>Project</label><input id="w-project" placeholder="e.g. Downtown Tower — SC-2201" list="wm-project-list"></div></div>
+        <datalist id="wm-project-list">${(this.projects || []).map((p) => `<option value="${UI.esc(p)}">`).join('')}</datalist>`,
       onSubmit: async (ov, close) => {
         try { await Api.post('/api/master/warehouses', { warehouse_code: ov.querySelector('#w-code').value,
           warehouse_name: ov.querySelector('#w-name').value, plant: ov.querySelector('#w-plant').value,
-          storage_location: ov.querySelector('#w-sloc').value, warehouse_type: ov.querySelector('#w-type').value });
+          storage_location: ov.querySelector('#w-sloc').value, warehouse_type: ov.querySelector('#w-type').value,
+          project_name: ov.querySelector('#w-project').value || null });
           UI.toast('Warehouse created.'); close(); this.load(); }
         catch (err) { UI.toast(err.message, 'error'); }
+      } });
+  },
+  editForm(wh) {
+    UI.modal({ title: `Edit ${wh.warehouse_code}`, submitLabel: 'Save',
+      bodyHtml: `<div class="form-row"><div class="form-group"><label>Type</label><input id="w-type" value="${UI.esc(wh.warehouse_type || '')}"></div>
+        <div class="form-group"><label>Project</label><input id="w-project" value="${UI.esc(wh.project_name || '')}" list="wm-project-list-edit"></div></div>
+        <datalist id="wm-project-list-edit">${(this.projects || []).map((p) => `<option value="${UI.esc(p)}">`).join('')}</datalist>`,
+      onSubmit: async (ov, close) => {
+        try {
+          await Api.patch(`/api/master/warehouses/${wh.warehouse_code}`, {
+            warehouse_type: ov.querySelector('#w-type').value, project_name: ov.querySelector('#w-project').value || null,
+          });
+          UI.toast('Warehouse updated.'); close();
+          const { projects } = await Api.get('/api/master/warehouses/projects');
+          this.projects = projects;
+          this.load(this.el.querySelector('#wm-project').value);
+        } catch (err) { UI.toast(err.message, 'error'); }
       } });
   },
 };
