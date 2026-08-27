@@ -4,6 +4,29 @@ const { chromium } = require('playwright');
 const { spawn, spawnSync } = require('child_process');
 const http = require('http');
 const path = require('path');
+const fs = require('fs');
+
+/**
+ * Mirrors playwright_smoke.js: in this environment Chromium is pre-installed
+ * under PLAYWRIGHT_BROWSERS_PATH but may be a different build number than the
+ * `playwright` package expects, so point launch() straight at it.
+ */
+function findChromiumExecutable() {
+  const base = process.env.PLAYWRIGHT_BROWSERS_PATH;
+  if (!base || !fs.existsSync(base)) return undefined;
+  const entries = fs.readdirSync(base);
+  const shell = entries.find((d) => /^chromium_headless_shell-\d+$/.test(d));
+  if (shell) {
+    const exe = path.join(base, shell, 'chrome-linux', 'headless_shell');
+    if (fs.existsSync(exe)) return exe;
+  }
+  const full = entries.find((d) => /^chromium-\d+$/.test(d));
+  if (full) {
+    const exe = path.join(base, full, 'chrome-linux', 'chrome');
+    if (fs.existsSync(exe)) return exe;
+  }
+  return undefined;
+}
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const BASE = process.env.BASE_URL || 'http://localhost:3000';
@@ -80,7 +103,8 @@ async function loginUi(page, email, password) {
     });
     await api('POST', `/api/requests/${created.id}/submit`, requester);
 
-    browser = await chromium.launch();
+    const executablePath = findChromiumExecutable();
+    browser = await chromium.launch(executablePath ? { executablePath } : {});
     const managerContext = await browser.newContext();
     const managerPage = await managerContext.newPage();
     await loginUi(managerPage, 'manager@example.com', 'Passw0rd!');
