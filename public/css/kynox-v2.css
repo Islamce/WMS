@@ -140,9 +140,31 @@ tbody tr:hover td { background: rgba(49, 195, 201, .035); }
 .cc-exception.info .cc-exception-value { color: var(--kynox-cyan); }
 .cc-exception.clear { opacity: .76; }
 .cc-exception.clear .cc-exception-value { color: var(--success); }
+.cc-exception-tag { display: inline-block; margin-bottom: 4px; padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; background: var(--surface-2); color: var(--text-muted); width: fit-content; }
+.cc-exception.critical .cc-exception-tag { background: var(--danger-bg); color: var(--danger); }
+.cc-exception.warning .cc-exception-tag { background: var(--warning-bg); color: var(--warning); }
+.cc-exception.clear .cc-exception-tag { background: var(--success-bg); color: var(--success); }
 .cc-kpis .kpi { min-height: 128px; }
 .cc-kpis .kpi .label { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
 .cc-kpis .kpi .value { margin-top: 9px; }
+.cc-kpis .kpi .kpi-spark { position: absolute; right: 14px; bottom: 14px; width: 72px; height: 26px; opacity: .85; color: var(--text-muted); }
+.cc-kpis .kpi.green .kpi-spark { color: var(--success); }
+.cc-kpis .kpi.red .kpi-spark { color: var(--danger); }
+.cc-kpis .kpi { position: relative; overflow: hidden; }
+
+/* Pipeline / fulfillment flow visualization — status counts drawn from live data. */
+.cc-pipeline { display: flex; align-items: center; gap: 0; padding: 20px 18px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); box-shadow: var(--shadow); overflow-x: auto; }
+.cc-pipeline-node { display: flex; flex-direction: column; align-items: center; gap: 8px; flex: 0 0 auto; min-width: 96px; text-align: center; cursor: pointer; }
+.cc-pipeline-node .cc-pipeline-icon { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; background: var(--surface-2); border: 1px solid var(--border); color: var(--text-muted); transition: transform .16s ease, border-color .16s ease, background .16s ease; }
+.cc-pipeline-node .cc-pipeline-count { font-size: 19px; font-weight: 800; }
+.cc-pipeline-node .cc-pipeline-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
+.cc-pipeline-node:hover .cc-pipeline-icon, .cc-pipeline-node:focus-visible .cc-pipeline-icon { transform: translateY(-2px); border-color: rgba(49, 195, 201, .4); }
+.cc-pipeline-node.active .cc-pipeline-icon { background: linear-gradient(135deg, var(--kynox-cyan), var(--kynox-blue)); border-color: transparent; color: #06111d; box-shadow: 0 0 0 4px rgba(49, 195, 201, .16); }
+.cc-pipeline-node.active .cc-pipeline-count { color: var(--kynox-cyan); }
+.cc-pipeline-node.attention .cc-pipeline-icon { background: var(--danger-bg); border-color: rgba(255, 123, 134, .3); color: var(--danger); }
+.cc-pipeline-node.attention .cc-pipeline-count { color: var(--danger); }
+.cc-pipeline-link { flex: 1 1 32px; min-width: 24px; height: 2px; background: repeating-linear-gradient(90deg, var(--border) 0 6px, transparent 6px 11px); }
+@media (max-width: 980px) { .cc-pipeline { justify-content: flex-start; } }
 
 @media (min-width: 1024px) {
   .sidebar { transform: none; box-shadow: none; }

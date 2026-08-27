@@ -6,6 +6,36 @@ function VIZCOLORS() {
   return { in: v.c1, out: v.red, bar1: v.c1, bar2: v.c2, grid: v.grid, ink: v.ink, muted: v.muted };
 }
 
+// Fulfillment pipeline stages, built from real per-status counts (execution.by_status) —
+// groups the full workflow vocabulary (server/workflow/states.js) into the lifecycle
+// legs an operator scans for at a glance.
+const PIPELINE_STAGES = [
+  { key: 'intake', label: 'Intake', icon: 'M4 4h16v5H4zM4 11h16v9H4z', statuses: ['Draft', 'Submitted'] },
+  { key: 'approval', label: 'Approval', icon: 'M9 12l2 2 4-4M21 12a9 9 0 11-18 0 9 9 0 0118 0z', statuses: ['Pending Manager Approval', 'Under Review', 'Returned to Requester', 'Approved', 'Approved - Pending ERP Processing', 'Pending ERP Reservation', 'ERP Reservation Created', 'Movement Type Assigned', 'Warehouse Assigned', 'Pending Warehouse Action', 'Pending Bin Location Assignment', 'Location Assigned', 'Batch Assigned'] },
+  { key: 'picking', label: 'Picking', icon: 'M3 12h4l2-7 4 14 2-7h6', statuses: ['Pending Picker Assignment', 'Assigned to Picker', 'Pending Picker Acceptance', 'Reminder Sent', 'Escalated to Supervisor', 'Accepted by Picker', 'Picking in Progress', 'Picking Completed', 'Partially Picked'] },
+  { key: 'gi', label: 'GI posting', icon: 'M3 7h18v13H3zM8 7V5a2 2 0 012-2h4a2 2 0 012 2v2', statuses: ['Pending ERP GI', 'GI Posted'] },
+  { key: 'completed', label: 'Completed', icon: 'M20 6 9 17l-5-5', statuses: ['Completed', 'Partially Completed', 'Closed with Shortage'] },
+  { key: 'attention', label: 'Attention', icon: 'M12 9v4M12 17h.01M10.3 3.9 2 18a1 1 0 00.9 1.5h18a1 1 0 00.9-1.5L13.7 3.9a1 1 0 00-1.7 0z', statuses: ['ERP Error', 'Rejected', 'Cancelled', 'On Hold', 'Reversed'] },
+];
+
+function buildPipeline(byStatus) {
+  const counts = {};
+  (byStatus || []).forEach((row) => { counts[row.status] = row.count; });
+  return PIPELINE_STAGES.map((stage) => ({
+    ...stage,
+    count: stage.statuses.reduce((sum, s) => sum + (counts[s] || 0), 0),
+  }));
+}
+
+function sparklinePath(values) {
+  const v = (values || []).map((n) => Number(n) || 0);
+  if (v.length < 2) return '';
+  const w = 72, h = 26, max = Math.max(...v, 1), min = Math.min(...v, 0);
+  const range = max - min || 1;
+  const step = w / (v.length - 1);
+  return v.map((val, i) => `${i === 0 ? 'M' : 'L'}${(i * step).toFixed(1)},${(h - ((val - min) / range) * h).toFixed(1)}`).join(' ');
+}
+
 Pages.dashboard = {
   charts: [],
 
@@ -29,12 +59,18 @@ Pages.dashboard = {
     const k = data.kpis || {};
     const ek = execution?.kpis || null;
     const nav = (perm, route) => (App.can(perm) ? ` data-nav="${route}" role="button" tabindex="0"` : '');
-    const metric = (cls, label, value, sub, perm, route) => `
+    const metric = (cls, label, value, sub, perm, route, spark) => `
       <div class="kpi ${cls}"${nav(perm, route)}>
         <div class="label">${UI.esc(label)}</div>
         <div class="value">${value}</div>
         ${sub ? `<div class="sub">${UI.esc(sub)}</div>` : ''}
+        ${spark ? `<svg class="kpi-spark" viewBox="0 0 72 26" preserveAspectRatio="none" aria-hidden="true"><path d="${spark}" fill="none" stroke="currentColor" stroke-width="2"/></svg>` : ''}
       </div>`;
+
+    const days = (data.charts || {}).in_out_over_time || [];
+    const sparkIn = sparklinePath(days.map((d) => d.in_qty));
+    const sparkOut = sparklinePath(days.map((d) => d.out_qty));
+    const pipeline = ek ? buildPipeline(execution.by_status) : [];
 
     const exceptionCards = ek ? [
       { level: ek.erp_error > 0 ? 'critical' : 'clear', value: ek.erp_error, label: 'ERP posting errors', detail: 'Requests requiring posting correction', route: 'requests', state: { status: 'ERP Error' } },
@@ -63,11 +99,23 @@ Pages.dashboard = {
       </section>
 
       ${ek ? `<section class="cc-section">
+        <div class="cc-section-head"><div><h2>Fulfillment pipeline</h2><p>Every open request, grouped by where it sits in the workflow.</p></div></div>
+        <div class="cc-pipeline">
+          ${pipeline.map((stage, i) => `${i > 0 ? '<div class="cc-pipeline-link"></div>' : ''}
+            <div class="cc-pipeline-node${stage.count > 0 && stage.key === 'picking' ? ' active' : ''}${stage.key === 'attention' && stage.count > 0 ? ' attention' : ''}" data-pipeline-stage="${stage.key}" role="button" tabindex="0">
+              <div class="cc-pipeline-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="${stage.icon}"/></svg></div>
+              <div class="cc-pipeline-count">${UI.fmtQty(stage.count)}</div>
+              <div class="cc-pipeline-label">${UI.esc(stage.label)}</div>
+            </div>`).join('')}
+        </div>
+      </section>
+
+      <section class="cc-section">
         <div class="cc-section-head"><div><h2>Action required</h2><p>Exception queues ranked by operational impact.</p></div></div>
         <div class="cc-exceptions">
           ${exceptionCards.map((x) => `<article class="cc-exception ${x.level}" data-exception-route="${x.route}" data-exception-state='${UI.esc(JSON.stringify(x.state || {}))}' role="button" tabindex="0">
             <div class="cc-exception-value">${UI.fmtQty(x.value || 0)}</div>
-            <div><strong>${UI.esc(x.label)}</strong><span>${UI.esc(x.detail)}</span></div>
+            <div><span class="cc-exception-tag ${x.level}">${x.level === 'critical' ? 'Critical' : x.level === 'warning' ? 'Needs review' : x.level === 'clear' ? 'Clear' : 'Tracking'}</span><strong>${UI.esc(x.label)}</strong><span>${UI.esc(x.detail)}</span></div>
             <span class="cc-arrow">→</span>
           </article>`).join('')}
         </div>
@@ -78,8 +126,8 @@ Pages.dashboard = {
         <div class="grid kpis cc-kpis">
           ${metric('accent', 'Total materials', UI.fmtQty(k.total_materials || 0), 'Active material records', 'materials', 'materials')}
           ${metric('accent', 'Total stock', UI.fmtQty(k.total_stock || 0), 'Quantity across all bins', 'batch_tracking', 'batches')}
-          ${metric('green', 'Stock in today', UI.fmtQty(k.stock_in_today || 0), `${UI.fmtQty(k.stock_in_month || 0)} this month`, 'batch_tracking', 'batches')}
-          ${metric('red', 'Stock out today', UI.fmtQty(k.stock_out_today || 0), `${UI.fmtQty(k.stock_out_month || 0)} this month`, 'gi_posting', 'gi-posting')}
+          ${metric('green', 'Stock in today', UI.fmtQty(k.stock_in_today || 0), `${UI.fmtQty(k.stock_in_month || 0)} this month`, 'batch_tracking', 'batches', sparkIn)}
+          ${metric('red', 'Stock out today', UI.fmtQty(k.stock_out_today || 0), `${UI.fmtQty(k.stock_out_month || 0)} this month`, 'gi_posting', 'gi-posting', sparkOut)}
           ${metric('green', 'Occupied bins', UI.fmtQty(k.occupied_locations || 0), `${UI.fmtQty(k.total_locations || 0)} total bins`, 'all_locations', 'all-locations')}
           ${metric('amber', 'Empty bins', UI.fmtQty(k.empty_locations || 0), 'Available storage locations', 'empty_locations', 'empty-locations')}
           ${ek ? metric('green', 'ERP success rate', `${ek.erp_success_rate || 0}%`, `${ek.erp_posting_success || 0} successful postings`, 'kpi_dashboard', 'kpi') : ''}
@@ -125,6 +173,13 @@ Pages.dashboard = {
       if (route === 'requests') Pages.requests.state = { page: 1, search: '', status: state.status || '' };
       if (route === 'audit') Pages.audit.state = { page: 1, source_screen: '', entity_type: '', action: state.action || '', changed_by_name: '', request_number: '', date_from: '', date_to: '' };
       location.hash = `#/${route}`;
+    });
+
+    UI.makeRowsActionable(el.querySelectorAll('[data-pipeline-stage]'), (node) => {
+      const stage = PIPELINE_STAGES.find((s) => s.key === node.dataset.pipelineStage);
+      if (!stage || !App.can('material_requests')) return;
+      Pages.requests.state = { page: 1, search: '', status: stage.statuses.length === 1 ? stage.statuses[0] : '' };
+      location.hash = '#/requests';
     });
 
     el.querySelector('#cc-refresh')?.addEventListener('click', () => this.render(el));
