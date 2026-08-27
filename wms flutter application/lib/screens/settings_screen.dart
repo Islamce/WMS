@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import '../core/app_lock.dart';
 import '../core/i18n.dart';
 import '../main.dart';
 import '../widgets/common.dart';
@@ -95,6 +96,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ],
             ),
+          ),
+          FutureBuilder<bool>(
+            future: AppLock.isSupported(),
+            builder: (context, snap) {
+              if (snap.data != true) return const SizedBox.shrink();
+              return SectionCard(
+                title: t('Security'),
+                child: SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(t('Require device lock')),
+                  subtitle: Text(
+                      t('Use this device\'s biometric or PIN/pattern lock to reopen the app.'),
+                      style: const TextStyle(fontSize: 12)),
+                  value: session.appLockEnabled,
+                  onChanged: (v) => session.setAppLockEnabled(v),
+                ),
+              );
+            },
           ),
           SectionCard(
             title: t('Account'),

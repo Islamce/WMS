@@ -19,6 +19,7 @@ class Session extends ChangeNotifier {
   static const _kLang = 'wms_lang';
   static const _kTheme = 'wms_theme';
   static const _kPushEnabled = 'wms_push_enabled';
+  static const _kAppLock = 'wms_app_lock_enabled';
 
   /// The one production server this app talks to — embedded, not user-editable.
   static const defaultBaseUrl = 'https://wms.kynox.io';
@@ -32,6 +33,13 @@ class Session extends ChangeNotifier {
   String lang = 'en';
   ThemeMode themeMode = ThemeMode.system;
   bool pushEnabled = true;
+
+  /// Device lock (biometric/PIN/pattern) gate, entirely local — see
+  /// core/app_lock.dart. [locked] is runtime-only (never persisted): it's
+  /// set true at cold start whenever the feature is on, and again whenever
+  /// the app is backgrounded, by the lifecycle observer in main.dart.
+  bool appLockEnabled = false;
+  bool locked = false;
 
   /// Whether the device currently has network connectivity. Requests recorded
   /// while this is false (a subset explicitly wired for it, e.g. cycle count
@@ -83,6 +91,7 @@ class Session extends ChangeNotifier {
     final themeName = prefs.getString(_kTheme) ?? 'system';
     themeMode = ThemeMode.values.firstWhere((m) => m.name == themeName, orElse: () => ThemeMode.system);
     pushEnabled = prefs.getBool(_kPushEnabled) ?? true;
+    appLockEnabled = prefs.getBool(_kAppLock) ?? false;
     token = prefs.getString(_kToken);
     final name = prefs.getString(_kUser);
     await queue.load();
@@ -99,7 +108,30 @@ class Session extends ChangeNotifier {
         token = null;
       }
     }
+    locked = appLockEnabled && isAuthenticated;
     loading = false;
+    notifyListeners();
+  }
+
+  Future<void> setAppLockEnabled(bool value) async {
+    appLockEnabled = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kAppLock, value);
+    notifyListeners();
+  }
+
+  /// Called by main.dart's lifecycle observer when the app is backgrounded.
+  void lockIfEnabled() {
+    if (appLockEnabled && isAuthenticated && !locked) {
+      locked = true;
+      notifyListeners();
+    }
+  }
+
+  /// Called after a successful device-lock authentication.
+  void unlock() {
+    if (!locked) return;
+    locked = false;
     notifyListeners();
   }
 
@@ -195,6 +227,7 @@ class Session extends ChangeNotifier {
     await Push.unregister(api); // uses the still-valid token/api
     token = null;
     user = null;
+    locked = false;
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_kToken);
     await prefs.remove(_kUser);
