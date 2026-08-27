@@ -80,17 +80,27 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
             TextField(
               controller: _current,
               obscureText: _obscure,
-              decoration: const InputDecoration(
-                  labelText: 'Current password', border: OutlineInputBorder()),
+              decoration: InputDecoration(
+                labelText: 'Current password',
+                border: const OutlineInputBorder(),
+                suffixIcon: IconButton(
+                  icon: Icon(_obscure ? Icons.visibility : Icons.visibility_off),
+                  onPressed: () => setState(() => _obscure = !_obscure),
+                ),
+              ),
             ),
             const SizedBox(height: 14),
             TextField(
               controller: _next,
               obscureText: _obscure,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'New password',
                 helperText: 'At least 8 characters, with a letter and a number.',
-                border: OutlineInputBorder(),
+                border: const OutlineInputBorder(),
+                suffixIcon: IconButton(
+                  icon: Icon(_obscure ? Icons.visibility : Icons.visibility_off),
+                  onPressed: () => setState(() => _obscure = !_obscure),
+                ),
               ),
             ),
             const SizedBox(height: 14),
