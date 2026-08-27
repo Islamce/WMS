@@ -1298,3 +1298,32 @@ Every future AI or human session that changes understanding, code, data, configu
 **Production state:** Unchanged. All actions were PR merges/closes and doc edits on GitHub; no deployment, migration execution against a live database, seed, or production access occurred. PR #67's migration will only run against production through the existing guarded release pipeline, on a future authorized deploy.
 
 **Exact next step:** `main` still needs the splash-screen AAPT fix applied directly (flagged, not yet authorized in this session) if it hasn't been picked up via a subsequent merge. Continue toward the previously identified P0 items: confirm CI on `main` HEAD, and a read-only production check before any release qualification.
+
+**Update, same session:** the splash-screen AAPT fix landed on `main` as a side effect of PR #93's squash merge — no separate fix was needed.
+
+## 2026-08-27 — Full UI/UX redesign: design tokens + dashboard + all ~30 subpages (PR #94)
+
+**Objective:** Owner requested a full visual redesign of the KYNOX WMS UI toward an "industrial precision" enterprise command-centre aesthetic (deep graphite/slate palette, one confident accent, chips for reference/location codes, meaningful empty states, keyboard accessibility), applied consistently across the dashboard and every subpage, while preserving every route/API/permission/data model.
+
+**Audit before implementation:** the codebase already carried substantial prior redesign work under other names (D01–D05 waves, "Phase 2 Command Center", KYNOX v2 branding) — `styles.css` and `kynox-v2.css` already had a real design-token system, dark theme, and command-center primitives (`.cc-*`, `.request-card`, `.meaningful-empty`). This was a refinement pass, not a rebuild.
+
+**What changed:**
+- Design system: reduced glassmorphism (topbar/card backdrop-blur cut or removed); added `.chip` (monospace reference/location-code chip), `.scan-divider`, a `.page-head` anatomy trio, a visible `:focus-visible` outline for keyboard-navigated rows, and `UI.makeRowsActionable()` (shared helper making a clickable row/tile keyboard-operable).
+- Applied across all ~30 page files: reference codes as `.chip`, silent "No X found" text replaced with `UI.meaningfulEmptyState` (with a real next-action link where one exists), a visible primary action + date context added to the dashboard hero, live result counts next to filters (requests/materials/users).
+- Reviewed and left unchanged: stock-in/out, create-request, auth, import center, movement-history import — already matching the system's conventions, no tables/reference codes to touch.
+
+**Four real bugs found and fixed** (not just visual polish):
+1. Keyboard-inaccessible clickable rows in 9 files — some already had a `keydown` listener but no `tabindex`, so a keyboard user could never focus into them at all.
+2. Permissions page had no unsaved-change feedback — "Save role permissions" was always clickable even with nothing changed.
+3. Attachment delete on request detail had zero confirmation, unlike every other destructive action on that same page.
+4. Disabling/rejecting a user's access had zero confirmation.
+
+**Verification:** full backend suite (`npm test`, 475+ checks), lint (0 errors, same pre-existing warnings), and browser smoke (31/31) run and green after every one of the 9 commits — not just once at the end. A final manual pass screenshotted all 34 authenticated routes with 0 console errors. Real browser end-to-end checks (not just markup review) confirmed the higher-risk changes actually work: Tab reaches a populated table row and the focus ring renders, Enter navigates correctly, the permissions dirty-state toggle fires, and the user-disable confirm dialog appears.
+
+**Decision-making note:** per the working agreement (`DEC-015`), this session decided PR readiness and merge timing directly rather than asking — including marking the PR ready and merging it once every commit's CI was confirmed green, since the change was fully verified, additive, and carried no route/API/permission/production risk.
+
+**Production state:** Unchanged. This was a pure frontend (HTML/CSS/JS served from `public/`) and shared UI-helper change; no schema, migration, API contract, or production/database action occurred. The change reaches production only through the existing guarded release pipeline on a future authorized deploy.
+
+**Merged:** PR #94, squash commit `44d14fa` on `main`.
+
+**Exact next step:** none required by this work. The previously identified P0 items (confirm CI on `main` HEAD independent of this PR, a read-only production check before any release qualification) remain open from the prior session entry.
