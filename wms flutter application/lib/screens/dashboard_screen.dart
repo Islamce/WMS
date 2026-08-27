@@ -7,8 +7,8 @@ import '../main.dart';
 import '../widgets/common.dart';
 import 'batches_screen.dart';
 import 'bin_locations_screen.dart';
-import 'gi_screen.dart';
 import 'materials_screen.dart';
+import 'stock_movements_screen.dart';
 import 'users_screen.dart';
 
 void _drill(BuildContext context, String title, Widget screen) {
@@ -98,12 +98,17 @@ class DashboardScreen extends StatelessWidget {
 
         void goMaterials() => _drill(context, 'Materials', const MaterialsScreen());
         void goBatches() => _drill(context, 'Batch Tracking', const BatchesScreen());
-        void goGi() => _drill(context, 'Goods Issue Posting', const GiScreen());
         void goUsers() => _drill(context, 'Users', const UsersScreen());
         void goBins(String status) => Navigator.of(context).push(MaterialPageRoute(
             builder: (_) => BinLocationsScreen(status: status)));
+        void goMovements({String? type, bool today = false}) => _drill(
+            context,
+            type == 'IN' ? 'Stock In (today)' : type == 'OUT' ? 'Stock Out (today)' : 'Recent movements',
+            StockMovementsScreen(type: type, today: today));
 
         final canOpenBins = session.can('dashboard');
+        // Matches the actual permission gate on GET /api/stock/transactions.
+        final canSeeMovements = session.can(['stock_in', 'stock_out', 'dashboard']);
         final tiles = <_Kpi>[
           _Kpi('Materials', k['total_materials'], Icons.inventory_2_outlined, const Color(0xFF31c3c9),
               session.can('materials') ? goMaterials : null, null),
@@ -116,9 +121,9 @@ class DashboardScreen extends StatelessWidget {
           _Kpi('Empty Bins', k['empty_locations'], Icons.crop_free, const Color(0xFFeda100),
               canOpenBins ? () => goBins('empty') : null, null),
           _Kpi('Stock In (today)', k['stock_in_today'], Icons.south_west, const Color(0xFF1baf7a),
-              session.can('batch_tracking') ? goBatches : null, sparkIn),
+              canSeeMovements ? () => goMovements(type: 'IN', today: true) : null, sparkIn),
           _Kpi('Stock Out (today)', k['stock_out_today'], Icons.north_east, const Color(0xFFe34948),
-              session.can('gi_posting') ? goGi : null, sparkOut),
+              canSeeMovements ? () => goMovements(type: 'OUT', today: true) : null, sparkOut),
           _Kpi('Pending Users', k['pending_users'], Icons.how_to_reg_outlined, const Color(0xFFeda100),
               session.can('users_management') ? goUsers : null, null),
         ];
@@ -200,6 +205,9 @@ class DashboardScreen extends StatelessWidget {
               ),
             SectionCard(
               title: 'Recent movements',
+              trailing: canSeeMovements
+                  ? TextButton(onPressed: () => goMovements(), child: const Text('View all'))
+                  : null,
               child: recent.isEmpty
                   ? const Text('No transactions yet.', style: TextStyle(color: Colors.grey))
                   : Column(
@@ -217,7 +225,7 @@ class DashboardScreen extends StatelessWidget {
                               style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   color: isIn ? const Color(0xFF1baf7a) : const Color(0xFFe34948))),
-                          onTap: session.can('batch_tracking') ? goBatches : null,
+                          onTap: canSeeMovements ? () => goMovements() : null,
                         );
                       }).toList(),
                     ),

@@ -6,7 +6,7 @@
     total/page/limit and cap the page size.
 Runs in Phase 1 after the other hardening suites (shared DB).
 """
-import json, urllib.request, urllib.error, os, sys, subprocess
+import json, urllib.request, urllib.error, os, sys, subprocess, datetime
 
 B = "http://localhost:3000"
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -70,6 +70,20 @@ check('batches endpoint paginated', c == 200 and 'total' in r and r.get('page') 
 check('batches page size capped', len(r.get('batches', [])) <= r.get('limit', 100), (len(r.get('batches', [])), r.get('limit')))
 c, r = call('GET', '/api/cycle-count?page=1', admin)
 check('cycle-count endpoint paginated', c == 200 and 'total' in r and r.get('page') == 1 and 'limit' in r, r)
+
+# ===== 3. Stock transaction type/today filters (mobile dashboard drill-down) =====
+c, r = call('GET', '/api/stock/transactions?type=IN&limit=100', admin)
+check('transactions type=IN filter returns only IN rows', c == 200
+      and all(t.get('transaction_type') == 'IN' for t in r.get('transactions', [])), r)
+c, r = call('GET', '/api/stock/transactions?type=OUT&limit=100', admin)
+check('transactions type=OUT filter returns only OUT rows', c == 200
+      and all(t.get('transaction_type') == 'OUT' for t in r.get('transactions', [])), r)
+c, r = call('GET', '/api/stock/transactions?type=BOGUS&limit=5', admin)
+check('unrecognized type value is ignored, not an error', c == 200, r)
+today_str = datetime.date.today().isoformat()
+c, r = call('GET', '/api/stock/transactions?today=1&limit=100', admin)
+today_ok = c == 200 and all((t.get('transaction_date') or '')[:10] == today_str for t in r.get('transactions', []))
+check('transactions today=1 filter returns only today\'s rows', today_ok, r)
 
 print(f"\n===== RESULT: {passed} passed, {failed} failed =====")
 if fails: print("Failed:", fails)
