@@ -39,15 +39,15 @@ Pages.batches = {
       <table><thead><tr><th>Batch</th><th>Material</th><th>WH / Bin</th><th class="text-right">On hand</th>
         <th class="text-right">Reserved</th><th class="text-right">Available</th><th>Expiry</th><th>Quality</th><th>Alert</th></tr></thead>
       <tbody>${batches.map((b) => `
-        <tr><td><strong>${UI.esc(b.batch_number)}</strong></td><td>${UI.esc(b.material_code)}</td>
-          <td>${UI.esc(b.warehouse_code || '')} / ${UI.esc(b.bin_location || '—')}</td>
+        <tr><td><span class="chip accent">${UI.esc(b.batch_number)}</span></td><td>${UI.esc(b.material_code)}</td>
+          <td>${UI.esc(b.warehouse_code || '')} / ${b.bin_location ? `<span class="chip">${UI.esc(b.bin_location)}</span>` : '—'}</td>
           <td class="text-right">${UI.fmtQty(b.remaining_quantity)}</td>
           <td class="text-right">${UI.fmtQty(b.reserved_quantity)}</td>
           <td class="text-right">${UI.fmtQty(b.available_quantity)}</td>
           <td>${b.expiry_date || '—'}${b.days_to_expiry != null ? ` <span class="muted">(${b.days_to_expiry}d)</span>` : ''}</td>
           <td><span class="badge ${b.quality_status === 'RELEASED' ? 'active' : 'OUT'}">${UI.esc(b.quality_status)}</span></td>
           <td>${b.alert_level && b.alert_level !== 'OK' ? `<span class="badge ${ALERT_BADGE[b.alert_level]}">${b.alert_level}</span>` : '—'}</td>
-        </tr>`).join('') || '<tr><td colspan="9" class="muted">No batches</td></tr>'}
+        </tr>`).join('') || `<tr><td colspan="9">${UI.meaningfulEmptyState({ title: this.q ? 'No batches match this search' : 'No batches yet', description: this.q ? 'Try a different batch, material, or warehouse.' : 'Batches are created automatically when stock is received.' })}</td></tr>`}
       </tbody></table>`;
     const pager = this.el.querySelector('#bt-pager');
     if (pager) UI.pagination(pager, { total, page: pg, limit }, (p) => this.load(this.q, p));
@@ -68,18 +68,18 @@ Pages.expiry = {
       <div class="card"><div class="toolbar"><h3 class="mb-0">Expiry Alerts</h3><div class="spacer"></div><span id="ex-export"></span></div><div class="table-wrap"><table>
         <thead><tr><th>Batch</th><th>Material</th><th>WH / Bin</th><th class="text-right">Qty</th><th>Expiry</th><th>Days</th><th>Level</th></tr></thead>
         <tbody>${alerts.map((a) => `
-          <tr class="row-link" data-batch="${UI.esc(a.batch_number)}" title="Open in Batch Tracking">
-            <td><strong>${UI.esc(a.batch_number)}</strong></td><td>${UI.esc(a.material_code)}</td>
-            <td>${UI.esc(a.warehouse_code || '')} / ${UI.esc(a.bin_location || '—')}</td>
+          <tr class="row-link" data-batch="${UI.esc(a.batch_number)}" role="button" tabindex="0" aria-label="Open batch ${UI.esc(a.batch_number)} in Batch Tracking">
+            <td><span class="chip accent">${UI.esc(a.batch_number)}</span></td><td>${UI.esc(a.material_code)}</td>
+            <td>${UI.esc(a.warehouse_code || '')} / ${a.bin_location ? `<span class="chip">${UI.esc(a.bin_location)}</span>` : '—'}</td>
             <td class="text-right">${UI.fmtQty(a.remaining_quantity)}</td><td>${a.expiry_date}</td>
             <td>${a.days_to_expiry}</td><td><span class="badge ${ALERT_BADGE[a.alert_level]}">${a.alert_level}</span></td></tr>`).join('')
-          || '<tr><td colspan="7" class="muted">No expiry alerts 🎉</td></tr>'}</tbody>
+          || `<tr><td colspan="7">${UI.meaningfulEmptyState({ title: 'No expiry alerts', description: 'No batch is currently near, at, or past its expiry threshold.' })}</td></tr>`}</tbody>
       </table></div></div>`;
     // Drill through to the source batch record.
-    el.querySelectorAll('tr[data-batch]').forEach((tr) => tr.addEventListener('click', () => {
+    UI.makeRowsActionable(el.querySelectorAll('tr[data-batch]'), (tr) => {
       Pages.batches.preset = tr.dataset.batch;
       location.hash = '#/batches';
-    }));
+    });
     const slot = el.querySelector('#ex-export');
     if (slot) slot.appendChild(UI.exportControl({
       filename: 'expiry-alerts', title: 'Expiry Alerts', rows: alerts,
@@ -130,7 +130,7 @@ Pages.quality = {
     this.el.querySelector('#ql-pending').innerHTML = `
       <table><thead><tr><th>Batch</th><th>Material</th><th>PO / GR</th><th>WH</th><th class="text-right">Qty</th><th>Expiry</th><th>Decision</th></tr></thead>
       <tbody>${pending.map((b) => `
-        <tr><td><strong>${UI.esc(b.batch_number)}</strong></td>
+        <tr><td><span class="chip accent">${UI.esc(b.batch_number)}</span></td>
           <td>${UI.esc(b.material_code)} <span class="muted">${UI.esc(b.material_description || '')}</span></td>
           <td>${UI.esc(b.po_number || '—')} / ${UI.esc(b.gr_number || '—')}</td>
           <td>${UI.esc(b.warehouse_code || '')}</td>
@@ -140,7 +140,7 @@ Pages.quality = {
             <button class="btn success sm" data-q="RELEASED" data-id="${b.id}">Release</button>
             <button class="btn secondary sm" data-q="BLOCKED" data-id="${b.id}">Block</button>
             <button class="btn danger sm" data-q="REJECTED" data-id="${b.id}">Reject</button>
-          </td></tr>`).join('') || '<tr><td colspan="7" class="muted">Nothing awaiting inspection 🎉</td></tr>'}
+          </td></tr>`).join('') || `<tr><td colspan="7">${UI.meaningfulEmptyState({ title: 'Nothing awaiting inspection', description: 'Every received batch has passed through quality decision.' })}</td></tr>`}
       </tbody></table>`;
     this.el.querySelectorAll('#ql-pending [data-q]').forEach((btn) =>
       btn.addEventListener('click', () => this.decide(btn.dataset.id, btn.dataset.q)));
@@ -150,7 +150,7 @@ Pages.quality = {
     this.el.querySelector('#ql-table').innerHTML = `
       <table><thead><tr><th>Batch</th><th>Material</th><th>WH</th><th class="text-right">On hand</th><th>Quality</th><th>Set status</th></tr></thead>
       <tbody>${batches.map((b) => `
-        <tr><td><strong>${UI.esc(b.batch_number)}</strong></td><td>${UI.esc(b.material_code)}</td><td>${UI.esc(b.warehouse_code || '')}</td>
+        <tr><td><span class="chip accent">${UI.esc(b.batch_number)}</span></td><td>${UI.esc(b.material_code)}</td><td>${UI.esc(b.warehouse_code || '')}</td>
           <td class="text-right">${UI.fmtQty(b.remaining_quantity)}</td>
           <td><span class="badge ${b.quality_status === 'RELEASED' ? 'active' : b.quality_status === 'QUALITY_HOLD' ? 'pending' : 'OUT'}">${UI.esc(b.quality_status)}</span></td>
           <td><select class="ql-set" data-id="${b.id}" style="max-width:160px">
@@ -179,7 +179,7 @@ Pages.warehousesMaster = {
     const { warehouses } = await Api.get('/api/master/warehouses');
     this.el.querySelector('#wm-table').innerHTML = `
       <table><thead><tr><th>Code</th><th>Name</th><th>Plant</th><th>Storage Loc</th><th>Type</th><th>Supervisor</th></tr></thead>
-      <tbody>${warehouses.map((w) => `<tr><td><strong>${UI.esc(w.warehouse_code)}</strong></td><td>${UI.esc(w.warehouse_name)}</td>
+      <tbody>${warehouses.map((w) => `<tr><td><span class="chip accent">${UI.esc(w.warehouse_code)}</span></td><td>${UI.esc(w.warehouse_name)}</td>
         <td>${UI.esc(w.plant || '')}</td><td>${UI.esc(w.storage_location || '')}</td><td>${UI.esc(w.warehouse_type || '')}</td>
         <td>${UI.esc(w.supervisor_name || '—')}</td></tr>`).join('')}</tbody></table>`;
   },
@@ -228,7 +228,7 @@ Pages.binsMaster = {
     // their own columns rather than being embedded in a long combined code.
     this.el.querySelector('#bm-table').innerHTML = `
       <table><thead><tr><th>Bin Code</th><th>Warehouse</th><th>Zone</th><th>Rack</th><th>Level</th><th>Column</th><th class="text-right">Capacity</th></tr></thead>
-      <tbody>${bins.map((b) => `<tr><td><strong>${UI.esc(b.bin_code)}</strong></td>
+      <tbody>${bins.map((b) => `<tr><td><span class="chip">${UI.esc(b.bin_code)}</span></td>
         <td>${UI.esc(b.warehouse_code)}</td><td>${UI.esc(b.zone || '—')}</td><td>${UI.esc(b.rack || '—')}</td>
         <td>${UI.esc(b.level || '—')}</td><td>${UI.esc(b.column_number || '—')}</td>
         <td class="text-right">${UI.fmtQty(b.capacity)}</td></tr>`).join('')}</tbody></table>`;
@@ -269,7 +269,7 @@ Pages.movementTypes = {
     const { movement_types } = await Api.get('/api/master/movement-types');
     this.el.querySelector('#mt-table').innerHTML = `
       <table><thead><tr><th>Code</th><th>Description</th><th>Direction</th><th>Cost Object</th><th>Reversal</th></tr></thead>
-      <tbody>${movement_types.map((m) => `<tr><td><strong>${UI.esc(m.code)}</strong></td><td>${UI.esc(m.description)}</td>
+      <tbody>${movement_types.map((m) => `<tr><td><span class="chip">${UI.esc(m.code)}</span></td><td>${UI.esc(m.description)}</td>
         <td>${UI.esc(m.direction)}</td><td>${UI.esc(m.cost_object || '—')}</td><td>${m.is_reversal ? 'Yes' : 'No'}</td></tr>`).join('')}</tbody></table>`;
   },
   form() {
