@@ -29,6 +29,7 @@ import 'audit_screen.dart';
 import 'notifications_screen.dart';
 import 'analytics_screen.dart';
 import 'settings_screen.dart';
+import 'subcontractor_screen.dart';
 
 /// A navigable destination gated by a permission (string or list, any-of).
 class NavDest {
@@ -47,6 +48,7 @@ const Map<String, Color> _sectionAccent = {
   'Warehouse Execution': Color(0xFF1baf7a),
   'Shipping & Outbound': Color(0xFFd6552a),
   'Receiving & Quality': Color(0xFFeda100),
+  'Subcontractor Materials': Color(0xFF0f8a92),
   'Master Data & Admin': Color(0xFF5b6b86),
 };
 
@@ -79,6 +81,9 @@ const List<Object> _menu = [
   NavDest('Expiry Alerts', Icons.schedule_outlined, 'expiry_alerts', ExpiryScreen.new),
   NavDest('Cycle Counting', Icons.checklist_outlined, 'cycle_count', CycleCountScreen.new),
   NavDest('Physical Inventory', Icons.inventory_outlined, ['inventory_count', 'cycle_count'], InventoryScreen.new),
+  'Subcontractor Materials',
+  NavDest('Deliveries & Stock', Icons.local_shipping_outlined,
+      ['subcontractor_receiving', 'subcontractor_quality_inspection', 'subcontractor_admin'], SubcontractorScreen.new),
   'Master Data & Admin',
   NavDest('Materials', Icons.category_outlined, 'materials', MaterialsScreen.new),
   NavDest('Users', Icons.group_outlined, 'users_management', UsersScreen.new),
