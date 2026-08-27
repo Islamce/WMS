@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import '../core/api_client.dart';
 import '../core/app_lock.dart';
 import '../core/i18n.dart';
+import '../core/session.dart';
 import '../main.dart';
 import '../widgets/common.dart';
 import 'change_password_screen.dart';
@@ -14,6 +16,39 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  Future<void> _editName(BuildContext context, Session session) async {
+    final ctrl = TextEditingController(text: session.userName);
+    final name = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(t('Edit name')),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          decoration: InputDecoration(labelText: t('Name'), border: const OutlineInputBorder()),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: Text(t('Cancel'))),
+          FilledButton(
+            onPressed: () {
+              final v = ctrl.text.trim();
+              if (v.isEmpty) return;
+              Navigator.pop(context, v);
+            },
+            child: Text(t('Save')),
+          ),
+        ],
+      ),
+    );
+    if (name == null || name == session.userName) return;
+    try {
+      await session.updateName(name);
+      if (context.mounted) showSnack(context, t('Name updated.'));
+    } on ApiException catch (e) {
+      if (context.mounted) showSnack(context, e.message, error: true);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final session = SessionScope.of(context);
@@ -120,7 +155,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('${t('Name')}: ${session.userName}'),
+                Row(children: [
+                  Expanded(child: Text('${t('Name')}: ${session.userName}')),
+                  IconButton(
+                    icon: const Icon(Icons.edit_outlined, size: 18),
+                    tooltip: t('Edit name'),
+                    onPressed: () => _editName(context, session),
+                  ),
+                ]),
                 Text('${t('Role')}: ${session.userRole}'),
                 const SizedBox(height: 12),
                 OutlinedButton.icon(

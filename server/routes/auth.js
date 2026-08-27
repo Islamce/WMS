@@ -104,6 +104,34 @@ router.get('/me', authenticate, (req, res) => {
 });
 
 /**
+ * PATCH /api/auth/me
+ * Update the signed-in user's own display name. Deliberately does not allow
+ * self-service email changes: email is the login identifier, and letting a
+ * user repoint it without any verification step is a materially different,
+ * security-relevant decision — same category as self-service password
+ * reset — not a routine profile edit.
+ */
+router.patch('/me', authenticate, (req, res) => {
+  const { name } = req.body || {};
+  if (!isNonEmptyString(name)) return res.status(400).json({ error: 'Name is required.' });
+  const trimmed = name.trim();
+  if (trimmed.length > 200) return res.status(400).json({ error: 'Name is too long.' });
+
+  const oldName = req.user.name;
+  db.prepare("UPDATE users SET name = ?, updated_at = datetime('now') WHERE id = ?").run(trimmed, req.user.id);
+  audit.record({
+    entityType: 'User',
+    entityId: req.user.id,
+    action: 'PROFILE_UPDATED_BY_SELF',
+    oldValue: { name: oldName },
+    newValue: { name: trimmed },
+    user: req.user,
+    sourceScreen: 'account',
+  });
+  res.json({ message: 'Profile updated.', user: { ...req.user, name: trimmed } });
+});
+
+/**
  * PATCH /api/auth/password
  * Change the signed-in user's own password (current password required).
  */

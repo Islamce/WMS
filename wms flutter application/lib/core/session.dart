@@ -61,6 +61,16 @@ class Session extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Self-service display-name update. PATCH /api/auth/me — email is
+  /// deliberately not editable this way (see the route's own comment).
+  Future<void> updateName(String name) async {
+    await api.patch('/api/auth/me', {'name': name});
+    if (user != null) user!['name'] = name;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kUser, name);
+    notifyListeners();
+  }
+
   List<String> get permissions {
     final p = user?['permissions'];
     if (p is List) return p.map((e) => e.toString()).toList();

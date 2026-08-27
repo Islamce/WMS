@@ -77,12 +77,26 @@ _, me2 = call('POST', '/api/auth/login', body={'email': 'picker@example.com', 'p
 check('self change clears the force-change flag',
       me2.get('user', {}).get('must_change_password') is False, me2)
 
+# ===== 4B. Self-service display-name update (PATCH /api/auth/me) =====
+ptok2 = me2.get('token')
+c, r = call('PATCH', '/api/auth/me', ptok2, {'name': 'Pat the Picker'})
+check('self profile update succeeds', c == 200 and r.get('user', {}).get('name') == 'Pat the Picker', (c, r))
+_, refreshed = call('GET', '/api/auth/me', ptok2)
+check('updated name persists on /auth/me', refreshed.get('user', {}).get('name') == 'Pat the Picker', refreshed)
+c, r = call('PATCH', '/api/auth/me', ptok2, {'name': '  '})
+check('blank name is rejected (400)', c == 400, (c, r))
+c, r = call('PATCH', '/api/auth/me', None, {'name': 'Nobody'})
+check('profile update requires auth (401)', c == 401, (c, r))
+c, r = call('PATCH', '/api/auth/me', ptok2, {'email': 'picker-new@example.com'})
+check('email is not accepted for self-service update (400, name still required)', c == 400, (c, r))
+
 # Both events are audited, and neither stores the password or its hash.
 _, aud = call('GET', '/api/master/audit?limit=100&entity_type=User', admin)
 rows = aud.get('audit') or []
 actions = [x.get('action') for x in rows]
 check('admin reset is audited', 'PASSWORD_RESET_BY_ADMIN' in actions, actions[:12])
 check('self change is audited', 'PASSWORD_CHANGED_BY_SELF' in actions, actions[:12])
+check('self profile update is audited', 'PROFILE_UPDATED_BY_SELF' in actions, actions[:12])
 blob = json.dumps(rows)
 for secret in ('Interim777', 'Mine55555', '$2a$', '$2b$'):
     check(f'audit trail does not contain {secret!r}', secret not in blob)
