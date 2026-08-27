@@ -21,6 +21,7 @@ Pages.ai = {
 
     const reorderRows = data.items.filter((i) => i.below_reorder || (i.classification === 'FAST' && i.days_of_cover !== null && i.days_of_cover < data.parameters.lead_time_days * 2));
     const deadRows = data.items.filter((i) => i.classification === 'DEAD');
+    const attestedReviewRows = data.items.filter((i) => i.attested_review_required && i.attestation);
 
     el.innerHTML = `
       <div class="inline-alert ${coverage.status === 'COMPLETE' ? 'success' : 'warning'}" style="margin-bottom:14px">
@@ -28,6 +29,10 @@ Pages.ai = {
         ${UI.esc(coverage.warning || `Complete ${coverage.window_days}-day issue-history window: ${coverage.analysis_window_start} to ${coverage.analysis_window_end}.`)}
         <div class="muted" style="margin-top:5px">Observed movement: ${UI.esc(coverage.earliest_movement_date || 'none')} to ${UI.esc(coverage.latest_movement_date || 'none')} · Materials with history: ${coverage.materials_with_history ?? 0} · Without: ${coverage.materials_without_history ?? 0}</div>
       </div>
+      ${attestedReviewRows.length ? `<div class="inline-alert warning" style="margin-bottom:14px">
+        <strong>Attested evidence requires review — not dead stock</strong><br>
+        ${attestedReviewRows.map((i) => `<div class="muted" style="margin-top:5px"><strong>${UI.esc(i.item_code)}</strong>: ${UI.esc(i.attestation.review_message)} Scope ${UI.esc(i.attestation.plant_code)} · ${UI.esc(i.attestation.period_start)} to ${UI.esc(i.attestation.period_end)} · <span class="badge pending">${UI.esc(i.attestation.label)}</span></div>`).join('')}
+      </div>` : ''}
       <div class="grid kpis">
         <div class="kpi accent"><div class="label">Materials Analyzed</div><div class="value">${s.materials_analyzed}</div>
           <div class="sub">${data.parameters.window_days}-day window · ${data.parameters.lead_time_days}d lead time</div></div>
@@ -121,7 +126,7 @@ Pages.ai = {
               <td class="text-right">${i.reorder_point}</td>
               <td class="text-right">${i.eoq ?? '—'}</td>
               <td class="text-right">${UI.fmtQty(i.stock_value)}</td>
-              <td>${i.overstock ? '<span class="badge pending">overstock</span>' : ''}${i.below_reorder ? '<span class="badge OUT">understock</span>' : ''}</td>
+              <td>${i.overstock ? '<span class="badge pending">overstock</span>' : ''}${i.below_reorder ? '<span class="badge OUT">understock</span>' : ''}${i.attested_review_required && i.attestation ? `<span class="badge pending" title="${UI.esc(i.attestation.review_message)}">ATTESTED_PAYLOAD_UNVERIFIED</span>` : ''}</td>
             </tr>`).join('')}</tbody>
         </table></div>
       </div>`;

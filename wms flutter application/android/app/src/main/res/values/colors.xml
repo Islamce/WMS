@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- KYNOX brand launch-screen background, matching the Flutter splash
+         (Color(0xFF07111f)). Referenced as a drawable (not a raw hex) by
+         the layer-list launch_background.xml in drawable/ and
+         drawable-v21/ — AAPT rejects an inline color literal there. -->
+    <color name="kynox_splash_bg">#07111f</color>
+</resources>

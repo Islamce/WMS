@@ -309,6 +309,71 @@ const MIGRATIONS = [
       addColumnIfMissing(database, 'stock_movement_import_batches', 'server_computed_checksum', 'TEXT');
     },
   },
+  {
+    id: '016_analytical_scope_attestations',
+    description: 'Immutable material-and-plant analytical scope attestations with two-person approval and supersession evidence.',
+    up(database) {
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS analytical_scope_attestations (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          import_batch_id INTEGER NOT NULL REFERENCES stock_movement_import_batches(id),
+          material_id INTEGER NOT NULL REFERENCES materials(id),
+          material_code TEXT NOT NULL,
+          plant_code TEXT NOT NULL,
+          source_system TEXT NOT NULL,
+          source_extract_reference TEXT NOT NULL,
+          data_generated_at TEXT NOT NULL,
+          period_start TEXT NOT NULL,
+          period_end TEXT NOT NULL,
+          exception_window_json TEXT,
+          supersedes_attestation_id INTEGER REFERENCES analytical_scope_attestations(id),
+          evidence_state TEXT NOT NULL CHECK (evidence_state IN ('ATTESTED_PAYLOAD_UNVERIFIED')),
+          status TEXT NOT NULL DEFAULT 'SUBMITTED' CHECK (status IN ('SUBMITTED','APPROVED')),
+          submitted_by INTEGER NOT NULL REFERENCES users(id),
+          submitted_by_name TEXT,
+          submitted_at TEXT NOT NULL DEFAULT (datetime('now')),
+          approved_by INTEGER REFERENCES users(id),
+          approved_by_name TEXT,
+          approved_at TEXT,
+          CHECK (period_start <= period_end),
+          CHECK ((status='SUBMITTED' AND approved_by IS NULL AND approved_at IS NULL)
+            OR (status='APPROVED' AND approved_by IS NOT NULL AND approved_at IS NOT NULL)),
+          CHECK (approved_by IS NULL OR approved_by <> submitted_by)
+        );
+
+        CREATE TABLE IF NOT EXISTS analytical_scope_attestation_supersessions (
+          prior_attestation_id INTEGER PRIMARY KEY REFERENCES analytical_scope_attestations(id),
+          replacement_attestation_id INTEGER NOT NULL UNIQUE REFERENCES analytical_scope_attestations(id),
+          superseded_by INTEGER NOT NULL REFERENCES users(id),
+          superseded_at TEXT NOT NULL DEFAULT (datetime('now')),
+          CHECK (prior_attestation_id <> replacement_attestation_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_scope_attestation_active
+          ON analytical_scope_attestations(status, material_id, plant_code, approved_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_scope_attestation_batch
+          ON analytical_scope_attestations(import_batch_id);
+
+        CREATE TRIGGER IF NOT EXISTS scope_attestation_block_delete
+        BEFORE DELETE ON analytical_scope_attestations
+        BEGIN SELECT RAISE(ABORT, 'analytical_scope_attestations are append-only'); END;
+        CREATE TRIGGER IF NOT EXISTS scope_attestation_block_approved_update
+        BEFORE UPDATE ON analytical_scope_attestations
+        WHEN OLD.status='APPROVED'
+        BEGIN SELECT RAISE(ABORT, 'approved analytical_scope_attestations are immutable'); END;
+        CREATE TRIGGER IF NOT EXISTS scope_attestation_supersession_block_update
+        BEFORE UPDATE ON analytical_scope_attestation_supersessions
+        BEGIN SELECT RAISE(ABORT, 'attestation supersessions are append-only'); END;
+        CREATE TRIGGER IF NOT EXISTS scope_attestation_supersession_block_delete
+        BEFORE DELETE ON analytical_scope_attestation_supersessions
+        BEGIN SELECT RAISE(ABORT, 'attestation supersessions are append-only'); END;
+
+        INSERT OR IGNORE INTO permissions(key,label) VALUES
+          ('analytical_attestation_submit','Submit analytical scope attestation evidence'),
+          ('analytical_attestation_approve','Approve analytical scope attestation evidence');
+      `);
+    },
+  },
 ];
 
 function ensureTable() {

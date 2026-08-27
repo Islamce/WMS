@@ -131,6 +131,7 @@ app.use('/api/master', require('./routes/masterdata'));
 // Mount the safety-scoped reconciliation endpoint before the general import router.
 app.use('/api/import/stock/reconcile-dates', require('./routes/openingStockReconcile'));
 app.use('/api/import', require('./routes/import'));
+app.use('/api/analytical-attestations', require('./routes/analyticalAttestations'));
 app.use('/api/export', require('./routes/export'));
 app.use('/api/cycle-count', require('./routes/cycleCount'));
 app.use('/api/reallocation', require('./routes/reallocation'));
