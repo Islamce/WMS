@@ -51,10 +51,14 @@ Pages.dashboard = {
           <span class="cc-eyebrow">LIVE OPERATIONS</span>
           <h1>Warehouse Command Center</h1>
           <p>Current stock position, execution workload and exceptions requiring action.</p>
+          <div class="page-head-context">
+            <span>${new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
+          </div>
         </div>
         <div class="cc-refresh">
           <span class="cc-live"><i></i> Data loaded</span>
           <button class="btn secondary sm" id="cc-refresh">Refresh</button>
+          ${App.can('create_request') ? '<button class="btn sm" data-nav="create-request">+ Create request</button>' : ''}
         </div>
       </section>
 
@@ -97,18 +101,18 @@ Pages.dashboard = {
         <div class="grid two">
           <div class="card"><h3>Top materials by stock</h3><div class="table-wrap"><table>
             <thead><tr><th>Item code</th><th>Description</th><th class="text-right">Quantity</th><th>Unit</th></tr></thead>
-            <tbody>${(data.top_materials || []).map((m) => `<tr${App.can('materials') ? ' data-nav="materials" class="row-link"' : ''}><td>${UI.esc(m.item_code)}</td><td class="wrap">${UI.esc(m.description)}</td><td class="text-right">${UI.fmtQty(m.quantity)}</td><td>${UI.esc(m.unit)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">No stock yet</td></tr>'}</tbody>
+            <tbody>${(data.top_materials || []).map((m) => `<tr${App.can('materials') ? ' data-nav="materials" class="row-link"' : ''}><td>${UI.esc(m.item_code)}</td><td class="wrap">${UI.esc(m.description)}</td><td class="text-right">${UI.fmtQty(m.quantity)}</td><td>${UI.esc(m.unit)}</td></tr>`).join('') || `<tr><td colspan="4">${UI.meaningfulEmptyState({ title: 'No stock recorded yet', description: 'Materials with on-hand quantity will rank here once a receipt or opening-stock import lands.', actionHtml: App.can('materials') ? '<a href="#/materials" class="btn secondary sm" style="margin-top:8px">Go to Materials</a>' : '' })}</td></tr>`}</tbody>
           </table></div></div>
           <div class="card"><h3>Top bins by stock</h3><div class="table-wrap"><table>
             <thead><tr><th>Location</th><th class="text-right">Quantity</th></tr></thead>
-            <tbody>${(data.top_locations || []).map((l) => `<tr${App.can('all_locations') ? ' data-nav="all-locations" class="row-link"' : ''}><td>${UI.esc(l.code)}</td><td class="text-right">${UI.fmtQty(l.quantity)}</td></tr>`).join('') || '<tr><td colspan="2" class="muted">No stock yet</td></tr>'}</tbody>
+            <tbody>${(data.top_locations || []).map((l) => `<tr${App.can('all_locations') ? ' data-nav="all-locations" class="row-link"' : ''}><td>${UI.esc(l.code)}</td><td class="text-right">${UI.fmtQty(l.quantity)}</td></tr>`).join('') || `<tr><td colspan="2">${UI.meaningfulEmptyState({ title: 'No occupied bins yet', description: 'Bin locations will rank here once stock is received into them.', actionHtml: App.can('all_locations') ? '<a href="#/all-locations" class="btn secondary sm" style="margin-top:8px">Go to Locations</a>' : '' })}</td></tr>`}</tbody>
           </table></div></div>
         </div>
       </section>
 
       <section class="cc-section"><div class="card"><h3>Recent stock transactions</h3><div class="table-wrap"><table>
         <thead><tr><th>Type</th><th>Material</th><th>Location</th><th class="text-right">Qty</th><th>Reservation</th><th>User</th><th>Date</th></tr></thead>
-        <tbody>${(data.recent_transactions || []).map((t) => `<tr><td><span class="badge ${UI.esc(t.transaction_type)}">${UI.esc(t.transaction_type)}</span></td><td class="wrap">${UI.esc(t.item_code)} — ${UI.esc(t.material_description)}</td><td>${UI.esc(t.location_code)}</td><td class="text-right">${UI.fmtQty(t.quantity)}</td><td>${UI.esc(t.reservation_number || '—')}</td><td>${UI.esc(t.user_name)}</td><td>${UI.fmtDate(t.transaction_date)}</td></tr>`).join('') || '<tr><td colspan="7" class="muted">No transactions yet</td></tr>'}</tbody>
+        <tbody>${(data.recent_transactions || []).map((t) => `<tr><td><span class="badge ${UI.esc(t.transaction_type)}">${UI.esc(t.transaction_type)}</span></td><td class="wrap">${UI.esc(t.item_code)} — ${UI.esc(t.material_description)}</td><td><span class="chip">${UI.esc(t.location_code)}</span></td><td class="text-right">${UI.fmtQty(t.quantity)}</td><td>${t.reservation_number ? `<span class="chip accent">${UI.esc(t.reservation_number)}</span>` : '—'}</td><td>${UI.esc(t.user_name)}</td><td>${UI.fmtDate(t.transaction_date)}</td></tr>`).join('') || `<tr><td colspan="7">${UI.meaningfulEmptyState({ title: 'No warehouse activity yet', description: 'Goods receipts, issues, and stock movements will appear here as they happen.' })}</td></tr>`}</tbody>
       </table></div></div></section>`;
 
     const go = (node) => { location.hash = `#/${node.dataset.nav}`; };
