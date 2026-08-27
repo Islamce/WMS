@@ -30,6 +30,7 @@ import 'notifications_screen.dart';
 import 'analytics_screen.dart';
 import 'settings_screen.dart';
 import 'subcontractor_screen.dart';
+import 'warehouses_screen.dart';
 
 /// A navigable destination gated by a permission (string or list, any-of).
 class NavDest {
@@ -85,6 +86,8 @@ const List<Object> _menu = [
   NavDest('Deliveries & Stock', Icons.local_shipping_outlined,
       ['subcontractor_receiving', 'subcontractor_quality_inspection', 'subcontractor_admin'], SubcontractorScreen.new),
   'Master Data & Admin',
+  NavDest('Warehouses / Site Stores', Icons.warehouse_outlined,
+      ['warehouses_master', 'warehouse_dashboard'], WarehousesScreen.new),
   NavDest('Materials', Icons.category_outlined, 'materials', MaterialsScreen.new),
   NavDest('Users', Icons.group_outlined, 'users_management', UsersScreen.new),
   NavDest('Audit Trail', Icons.receipt_long_outlined, 'audit_trail', AuditScreen.new),
