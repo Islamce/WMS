@@ -52,8 +52,8 @@ Pages.reallocation = {
           ${pending ? `<button class="btn sm" data-approve="${m.id}">${t('Approve')}</button>
             <button class="btn secondary sm" data-reject="${m.id}">${t('Reject')}</button>` : ''}
           ${approved ? `<button class="btn sm" data-execute="${m.id}">${t('Execute')}</button>` : ''}` : '';
-        return `<tr data-detail="${m.id}" class="row-link">
-          <td><strong>${UI.esc(m.realloc_number)}</strong></td>
+        return `<tr data-detail="${m.id}" class="row-link" role="button" tabindex="0" aria-label="Open reallocation ${UI.esc(m.realloc_number)}">
+          <td><span class="chip accent">${UI.esc(m.realloc_number)}</span></td>
           <td>${UI.esc(m.material_code || '')}<br><span class="muted">${UI.esc(m.batch_number || '')}</span></td>
           <td class="text-right">${UI.fmtQty(m.quantity)}</td>
           <td>${UI.esc(m.from_warehouse || '')} / ${UI.esc(m.from_bin || '—')}<br><span class="muted">${UI.esc(m.from_project || '—')}</span></td>
@@ -67,10 +67,15 @@ Pages.reallocation = {
       </tbody></table>`;
     UI.pagination(this.el.querySelector('#ra-pagination'), data, (p) => { this.state.page = p; this.load(); });
 
-    box.querySelectorAll('[data-detail]').forEach((row) => row.addEventListener('click', (e) => {
-      if (e.target.closest('button')) return;
-      this.openDetail(Number(row.dataset.detail));
-    }));
+    box.querySelectorAll('[data-detail]').forEach((row) => {
+      row.addEventListener('click', (e) => {
+        if (e.target.closest('button')) return;
+        this.openDetail(Number(row.dataset.detail));
+      });
+      row.addEventListener('keydown', (e) => {
+        if ((e.key === 'Enter' || e.key === ' ') && !e.target.closest('button')) { e.preventDefault(); this.openDetail(Number(row.dataset.detail)); }
+      });
+    });
     box.querySelectorAll('[data-approve]').forEach((btn) => btn.addEventListener('click', () => this.approve(Number(btn.dataset.approve))));
     box.querySelectorAll('[data-reject]').forEach((btn) => btn.addEventListener('click', () => this.reject(Number(btn.dataset.reject))));
     box.querySelectorAll('[data-execute]').forEach((btn) => btn.addEventListener('click', () => this.execute(Number(btn.dataset.execute))));

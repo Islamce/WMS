@@ -101,17 +101,17 @@ Pages.audit = {
     this.el.querySelector('#au-table').innerHTML = `
       <table><thead><tr><th>When</th><th>Process</th><th>Entity</th><th>Request</th><th>Ln</th><th>Action</th><th>User</th><th>Role</th><th>Old → New</th><th>Reason</th></tr></thead>
       <tbody>${data.audit.map((a) => `
-        <tr ${a.request_number ? `class="row-link" data-req="${UI.esc(a.request_number)}" title="Open request ${UI.esc(a.request_number)}"` : ''}>
+        <tr ${a.request_number ? `class="row-link" data-req="${UI.esc(a.request_number)}" role="button" tabindex="0" aria-label="Open request ${UI.esc(a.request_number)}"` : ''}>
           <td>${UI.fmtDate(a.changed_at)}</td><td>${UI.esc(a.source_screen || '')}</td><td>${UI.esc(a.entity_type)}</td>
-          <td>${a.request_number ? `<strong>${UI.esc(a.request_number)}</strong>` : ''}</td><td>${a.line_number || ''}</td><td><span class="badge role">${UI.esc(a.action)}</span></td>
+          <td>${a.request_number ? `<span class="chip accent">${UI.esc(a.request_number)}</span>` : ''}</td><td>${a.line_number || ''}</td><td><span class="badge role">${UI.esc(a.action)}</span></td>
           <td>${UI.esc(a.changed_by_name || '')}</td><td>${UI.esc(a.user_role || '')}</td>
           <td class="wrap" style="max-width:260px">${UI.esc([a.old_value, a.new_value].filter(Boolean).join(' → '))}</td>
-          <td class="wrap">${UI.esc(a.reason || '')}</td></tr>`).join('') || '<tr><td colspan="10" class="muted">No audit records match the filters</td></tr>'}
+          <td class="wrap">${UI.esc(a.reason || '')}</td></tr>`).join('') || `<tr><td colspan="10">${UI.meaningfulEmptyState({ title: 'No audit records match the filters', description: 'Try widening the date range or clearing a filter.' })}</td></tr>`}
       </tbody></table>`;
-    this.el.querySelectorAll('tr[data-req]').forEach((tr) => tr.addEventListener('click', () => {
+    UI.makeRowsActionable(this.el.querySelectorAll('tr[data-req]'), (tr) => {
       Pages.requests.state = { page: 1, search: tr.dataset.req, status: '' };
       location.hash = '#/requests';
-    }));
+    });
     UI.pagination(this.el.querySelector('#au-pagination'), data, (p) => { this.state.page = p; this.load(); });
   },
 };
@@ -182,7 +182,7 @@ Pages.kpi = {
         <div class="card"><h3>Requests by status</h3><div class="chart-box"><canvas id="kpi-status"></canvas></div></div>
         <div class="card"><h3>Requests by warehouse</h3><div class="chart-box"><canvas id="kpi-wh"></canvas></div></div>
       </div>`;
-    el.querySelectorAll('[data-drill]').forEach((n) => n.addEventListener('click', () => {
+    UI.makeRowsActionable(el.querySelectorAll('[data-drill]'), (n) => {
       const [route, arg] = n.dataset.drill.split(':');
       if (route === 'requests') {
         Pages.requests.state = { page: 1, search: '', status: arg || '' };
@@ -191,7 +191,7 @@ Pages.kpi = {
           changed_by_name: '', request_number: '', date_from: '', date_to: '' };
       }
       location.hash = `#/${route}`;
-    }));
+    });
     this.renderCharts(data);
   },
   destroy() { this.charts.forEach((c) => c.destroy()); this.charts = []; },

@@ -15,19 +15,19 @@ Pages.erpOperator = {
   async loadQueue() {
     const t = this.el.querySelector('#eo-table');
     const { requests } = await Api.get('/api/erp-operator');
-    t.innerHTML = `<table><thead><tr><th>Request #</th><th>Requester</th><th>Department</th><th>Project</th><th>Cost Center</th><th>Priority</th><th>Required</th><th>Status</th><th>Movement</th><th>Reservation</th><th>Warehouse</th></tr></thead>
+    t.innerHTML = requests.length ? `<table><thead><tr><th>Request #</th><th>Requester</th><th>Department</th><th>Project</th><th>Cost Center</th><th>Priority</th><th>Required</th><th>Status</th><th>Movement</th><th>Reservation</th><th>Warehouse</th></tr></thead>
       <tbody>${requests.map((r) => `
-        <tr style="cursor:pointer" data-id="${r.id}">
-          <td><strong>${UI.esc(r.request_number)}</strong></td><td>${UI.esc(r.requester_name || '')}</td>
+        <tr class="row-link" data-id="${r.id}" role="button" tabindex="0" aria-label="Process request ${UI.esc(r.request_number)}">
+          <td><span class="chip accent">${UI.esc(r.request_number)}</span></td><td>${UI.esc(r.requester_name || '')}</td>
           <td>${UI.esc(r.department || '—')}</td><td>${UI.esc(r.project || '—')}</td>
           <td>${UI.esc(r.cost_center || '—')}</td><td>${UI.esc(r.priority || '—')}</td>
           <td>${UI.esc(r.required_date || '—')}</td>
           <td><span class="badge ${statusClass(r.request_status)}">${UI.esc(r.request_status)}</span></td>
-          <td>${UI.esc(r.movement_type || '—')}</td><td>${UI.esc(r.erp_reservation_number || r.erp_reference_number || '—')}</td>
+          <td>${UI.esc(r.movement_type || '—')}</td><td>${r.erp_reservation_number || r.erp_reference_number ? `<span class="chip">${UI.esc(r.erp_reservation_number || r.erp_reference_number)}</span>` : '—'}</td>
           <td>${UI.esc(r.issue_warehouse_code || '—')}</td>
-        </tr>`).join('') || '<tr><td colspan="11" class="muted">Queue is empty</td></tr>'}
-      </tbody></table>`;
-    t.querySelectorAll('tr[data-id]').forEach((tr) => tr.addEventListener('click', () => this.openDetail(tr.dataset.id)));
+        </tr>`).join('')}
+      </tbody></table>` : UI.meaningfulEmptyState({ title: 'Queue is empty', description: 'Approved requests awaiting ERP reservation and routing to a warehouse will appear here.' });
+    UI.makeRowsActionable(t.querySelectorAll('tr[data-id]'), (tr) => this.openDetail(tr.dataset.id));
   },
 
   renderMaterialLines(lines) {

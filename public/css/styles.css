@@ -485,6 +485,8 @@ code { background: var(--surface-2); padding: 1px 5px; border-radius: 4px; font-
 .kpi { position: relative; }
 tr.row-link { cursor: pointer; }
 tr.row-link:hover td { background: var(--hover-tint); }
+tr.row-link:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+tr.row-link:focus-visible td { background: var(--hover-tint); }
 
 .insight {
   border-left: 4px solid var(--border);

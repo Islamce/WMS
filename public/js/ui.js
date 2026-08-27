@@ -197,6 +197,23 @@ const UI = {
   },
 
   /**
+   * Make a set of clickable rows/tiles keyboard-operable: ensures a focusable
+   * role/tabindex and fires onActivate on click or Enter/Space. Use this
+   * instead of a bare click listener on a styled `<tr>`/`<div>` — a mouse-only
+   * row is a WCAG keyboard-access gap.
+   */
+  makeRowsActionable(rows, onActivate) {
+    rows.forEach((row) => {
+      if (!row.hasAttribute('tabindex')) row.setAttribute('tabindex', '0');
+      if (!row.hasAttribute('role')) row.setAttribute('role', 'button');
+      row.addEventListener('click', () => onActivate(row));
+      row.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onActivate(row); }
+      });
+    });
+  },
+
+  /**
    * Global click-to-sort on every rendered data table. Delegated once at
    * startup: clicking a header sorts the loaded rows by that column
    * (numeric-aware, toggles asc/desc). Headers that drive their own

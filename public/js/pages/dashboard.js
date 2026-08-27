@@ -115,24 +115,16 @@ Pages.dashboard = {
         <tbody>${(data.recent_transactions || []).map((t) => `<tr><td><span class="badge ${UI.esc(t.transaction_type)}">${UI.esc(t.transaction_type)}</span></td><td class="wrap">${UI.esc(t.item_code)} — ${UI.esc(t.material_description)}</td><td><span class="chip">${UI.esc(t.location_code)}</span></td><td class="text-right">${UI.fmtQty(t.quantity)}</td><td>${t.reservation_number ? `<span class="chip accent">${UI.esc(t.reservation_number)}</span>` : '—'}</td><td>${UI.esc(t.user_name)}</td><td>${UI.fmtDate(t.transaction_date)}</td></tr>`).join('') || `<tr><td colspan="7">${UI.meaningfulEmptyState({ title: 'No warehouse activity yet', description: 'Goods receipts, issues, and stock movements will appear here as they happen.' })}</td></tr>`}</tbody>
       </table></div></div></section>`;
 
-    const go = (node) => { location.hash = `#/${node.dataset.nav}`; };
-    el.querySelectorAll('[data-nav]').forEach((node) => {
-      node.classList.add('clickable');
-      node.addEventListener('click', () => go(node));
-      node.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(node); } });
-    });
+    el.querySelectorAll('[data-nav]').forEach((node) => node.classList.add('clickable'));
+    UI.makeRowsActionable(el.querySelectorAll('[data-nav]'), (node) => { location.hash = `#/${node.dataset.nav}`; });
 
-    el.querySelectorAll('[data-exception-route]').forEach((node) => {
-      const open = () => {
-        const route = node.dataset.exceptionRoute;
-        let state = {};
-        try { state = JSON.parse(node.dataset.exceptionState || '{}'); } catch (_) { state = {}; }
-        if (route === 'requests') Pages.requests.state = { page: 1, search: '', status: state.status || '' };
-        if (route === 'audit') Pages.audit.state = { page: 1, source_screen: '', entity_type: '', action: state.action || '', changed_by_name: '', request_number: '', date_from: '', date_to: '' };
-        location.hash = `#/${route}`;
-      };
-      node.addEventListener('click', open);
-      node.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+    UI.makeRowsActionable(el.querySelectorAll('[data-exception-route]'), (node) => {
+      const route = node.dataset.exceptionRoute;
+      let state = {};
+      try { state = JSON.parse(node.dataset.exceptionState || '{}'); } catch (_) { state = {}; }
+      if (route === 'requests') Pages.requests.state = { page: 1, search: '', status: state.status || '' };
+      if (route === 'audit') Pages.audit.state = { page: 1, source_screen: '', entity_type: '', action: state.action || '', changed_by_name: '', request_number: '', date_from: '', date_to: '' };
+      location.hash = `#/${route}`;
     });
 
     el.querySelector('#cc-refresh')?.addEventListener('click', () => this.render(el));
