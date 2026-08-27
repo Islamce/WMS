@@ -81,6 +81,12 @@ const MODULES = [
   { key: 'outbound', label: 'Shipping & Outbound', icon: 'truck', items: [
     { route: 'shipping', label: 'Delivery & Dispatch', icon: 'truck', permission: ['shipping', 'gi_posting'] },
   ] },
+  { key: 'subcontractor', label: 'Subcontractor Materials', icon: 'user-plus', items: [
+    { route: 'subcontractor-quality', label: 'Deliveries & Quality', icon: 'shield', permission: 'subcontractor_quality_inspection' },
+    { route: 'subcontractor-receiving', label: 'Receiving', icon: 'download', permission: 'subcontractor_receiving' },
+    { route: 'subcontractor-stock', label: 'On-Hand Stock', icon: 'archive', permission: ['subcontractor_receiving', 'subcontractor_quality_inspection', 'subcontractor_admin'] },
+    { route: 'subcontractors', label: 'Subcontractors & Categories', icon: 'users', permission: 'subcontractor_admin' },
+  ] },
   { key: 'receiving', label: 'Receiving & Quality', icon: 'download', items: [
     { route: 'receiving', label: 'Goods Receipt & QR', icon: 'download', permission: ['goods_receipt', 'erp_operator', 'picking'] },
     { route: 'qr-printing', label: 'QR Label Printing', icon: 'printer', permission: ['qr_printing', 'goods_receipt'] },
@@ -133,6 +139,10 @@ const ROUTE_PAGES = {
   'gi-posting': { title: 'Goods Issue Posting', page: 'giPosting', permission: 'gi_posting' },
   'reallocation': { title: 'Stock Reallocation', page: 'reallocation', permission: ['reallocation', 'bin_batch_assignment'] },
   'shipping': { title: 'Shipping & Outbound', page: 'shipping', permission: ['shipping', 'gi_posting'] },
+  'subcontractor-quality': { title: 'Subcontractor Deliveries & Quality', page: 'subcontractorQuality', permission: 'subcontractor_quality_inspection' },
+  'subcontractor-receiving': { title: 'Subcontractor Receiving', page: 'subcontractorReceiving', permission: 'subcontractor_receiving' },
+  'subcontractor-stock': { title: 'Subcontractor On-Hand Stock', page: 'subcontractorStock', permission: ['subcontractor_receiving', 'subcontractor_quality_inspection', 'subcontractor_admin'] },
+  'subcontractors': { title: 'Subcontractors & Categories', page: 'subcontractors', permission: 'subcontractor_admin' },
   'physical-inventory': { title: 'Physical Inventory', page: 'inventory', permission: ['inventory_count', 'cycle_count'] },
   'receiving': { title: 'Goods Receipt & QR', page: 'receiving', permission: ['goods_receipt', 'erp_operator', 'picking'] },
   'qr-printing': { title: 'QR Label Printing', page: 'qrPrinting', permission: ['qr_printing', 'goods_receipt'] },

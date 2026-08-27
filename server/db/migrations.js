@@ -374,6 +374,108 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    id: '017_subcontractor_materials',
+    description: 'Subcontractor material receiving (site warehouses) — free-text goods, quality inspection before receipt, no material-master or ERP linkage.',
+    up(database) {
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS subcontractors (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          trade_category TEXT,
+          contract_reference TEXT,
+          contact_name TEXT,
+          contact_phone TEXT,
+          is_active INTEGER NOT NULL DEFAULT 1,
+          created_by INTEGER REFERENCES users(id),
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS subcontractor_categories (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL UNIQUE,
+          is_active INTEGER NOT NULL DEFAULT 1,
+          created_by INTEGER REFERENCES users(id),
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        -- Header: what a subcontractor dropped off at a site, before it enters stock.
+        CREATE TABLE IF NOT EXISTS subcontractor_deliveries (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          warehouse_code TEXT NOT NULL REFERENCES warehouses(warehouse_code),
+          subcontractor_id INTEGER NOT NULL REFERENCES subcontractors(id),
+          delivery_note_ref TEXT,
+          delivered_date TEXT NOT NULL DEFAULT (date('now')),
+          status TEXT NOT NULL DEFAULT 'Pending Inspection'
+            CHECK (status IN ('Pending Inspection','Inspected','Received','Closed')),
+          logged_by INTEGER REFERENCES users(id),
+          logged_by_name TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        -- Lines: free-text description/qty/category, no material_id — this stream
+        -- is deliberately outside the SAP-linked material master.
+        CREATE TABLE IF NOT EXISTS subcontractor_delivery_lines (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          delivery_id INTEGER NOT NULL REFERENCES subcontractor_deliveries(id),
+          line_number INTEGER NOT NULL,
+          description TEXT NOT NULL,
+          category_id INTEGER REFERENCES subcontractor_categories(id),
+          uom TEXT NOT NULL DEFAULT 'EA',
+          quantity_delivered REAL NOT NULL CHECK (quantity_delivered > 0),
+          quality_status TEXT NOT NULL DEFAULT 'Pending'
+            CHECK (quality_status IN ('Pending','Approved','Approved with Remarks','Rejected')),
+          quality_notes TEXT,
+          quantity_approved REAL,
+          inspected_by INTEGER REFERENCES users(id),
+          inspected_by_name TEXT,
+          inspected_at TEXT,
+          quantity_received REAL NOT NULL DEFAULT 0,
+          UNIQUE(delivery_id, line_number)
+        );
+
+        -- Receipt: Site Warehouse Supervisor pulls quality-approved lines into stock.
+        -- Kept separate from the delivery/inspection step so "who approved quality"
+        -- and "who received into stock" are always two distinct, auditable actors.
+        CREATE TABLE IF NOT EXISTS subcontractor_receipts (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          warehouse_code TEXT NOT NULL REFERENCES warehouses(warehouse_code),
+          received_by INTEGER REFERENCES users(id),
+          received_by_name TEXT,
+          received_at TEXT NOT NULL DEFAULT (datetime('now')),
+          notes TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS subcontractor_receipt_lines (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          receipt_id INTEGER NOT NULL REFERENCES subcontractor_receipts(id),
+          delivery_line_id INTEGER NOT NULL REFERENCES subcontractor_delivery_lines(id),
+          quantity_received REAL NOT NULL CHECK (quantity_received > 0)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_subc_delivery_warehouse ON subcontractor_deliveries(warehouse_code, status);
+        CREATE INDEX IF NOT EXISTS idx_subc_delivery_lines_delivery ON subcontractor_delivery_lines(delivery_id);
+        CREATE INDEX IF NOT EXISTS idx_subc_receipt_lines_delivery_line ON subcontractor_receipt_lines(delivery_line_id);
+
+        INSERT OR IGNORE INTO permissions(key,label) VALUES
+          ('subcontractor_admin','Manage Subcontractors & Categories'),
+          ('subcontractor_quality_inspection','Subcontractor Delivery Quality Inspection'),
+          ('subcontractor_receiving','Subcontractor Material Receiving');
+
+        -- Grant to the existing roles that already do this job in the field
+        -- (quality inspection = Quality role, receiving = Warehouse Supervisor role).
+        INSERT OR IGNORE INTO role_permissions (role_id, permission_id)
+          SELECT r.id, p.id FROM roles r, permissions p
+          WHERE r.name = 'quality' AND p.key = 'subcontractor_quality_inspection';
+        INSERT OR IGNORE INTO role_permissions (role_id, permission_id)
+          SELECT r.id, p.id FROM roles r, permissions p
+          WHERE r.name = 'warehouse_supervisor' AND p.key = 'subcontractor_receiving';
+        INSERT OR IGNORE INTO role_permissions (role_id, permission_id)
+          SELECT r.id, p.id FROM roles r, permissions p
+          WHERE r.name = 'warehouse_supervisor' AND p.key = 'subcontractor_admin';
+      `);
+    },
+  },
 ];
 
 function ensureTable() {

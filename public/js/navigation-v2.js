@@ -47,6 +47,11 @@
       label: 'Governance & Administration',
       routes: ['audit', 'users', 'permissions'],
     },
+    {
+      key: 'subcontractor',
+      label: 'Subcontractor Materials',
+      routes: ['subcontractor-quality', 'subcontractor-receiving', 'subcontractor-stock', 'subcontractors'],
+    },
   ];
 
   // Presentation-only workspace profiles. Group routes remain permission-filtered
@@ -99,6 +104,10 @@
     audit: 'Audit & Traceability',
     users: 'User Administration',
     permissions: 'Roles & Permissions',
+    'subcontractor-quality': 'Deliveries & Quality Inspection',
+    'subcontractor-receiving': 'Subcontractor Receiving',
+    'subcontractor-stock': 'Subcontractor On-Hand Stock',
+    subcontractors: 'Subcontractors & Categories',
   };
 
   function routeOf(link) {
@@ -124,7 +133,7 @@
     const wrapper = document.createElement('div');
     wrapper.className = 'nav-group kynox-nav-group';
     wrapper.dataset.key = `v2-${def.key}`;
-    if (profile.groups?.slice(0, 2).includes(def.key)) wrapper.classList.add('profile-primary');
+    if (profile?.groups?.slice(0, 2).includes(def.key)) wrapper.classList.add('profile-primary');
 
     const hasActive = def.routes.includes(activeRoute);
     const saved = localStorage.getItem(groupPreferenceKey(profile, def));
@@ -198,7 +207,7 @@
     const unassigned = [...links.entries()].filter(([route]) => !GROUPS.some((g) => g.routes.includes(route)));
     if (unassigned.length) {
       const other = { key: 'other', label: 'Additional Operations', routes: unassigned.map(([route]) => route) };
-      fragment.appendChild(makeGroup(other, links, active));
+      fragment.appendChild(makeGroup(other, links, active, profile));
     }
 
     tree.replaceChildren(fragment);

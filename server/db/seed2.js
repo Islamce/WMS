@@ -37,6 +37,9 @@ const PERMISSIONS = [
   { key: 'shipping', label: 'Shipping & Outbound' },
   { key: 'analytical_attestation_submit', label: 'Submit Analytical Scope Attestation' },
   { key: 'analytical_attestation_approve', label: 'Approve Analytical Scope Attestation' },
+  { key: 'subcontractor_admin', label: 'Manage Subcontractors & Categories' },
+  { key: 'subcontractor_quality_inspection', label: 'Subcontractor Delivery Quality Inspection' },
+  { key: 'subcontractor_receiving', label: 'Subcontractor Material Receiving' },
 ];
 
 // Roles for the end-to-end process and the screens each one gets by default.
@@ -46,11 +49,11 @@ const ROLES = {
   erp_operator: ['dashboard', 'material_requests', 'erp_operator', 'movement_types_master', 'notifications'],
   warehouse_supervisor: ['dashboard', 'warehouse_dashboard', 'bin_batch_assignment', 'picker_assignment',
     'goods_receipt', 'qr_printing', 'expiry_alerts', 'batch_tracking', 'bins_master', 'cycle_count',
-    'reallocation', 'inventory_count', 'shipping', 'notifications'],
+    'reallocation', 'inventory_count', 'shipping', 'notifications', 'subcontractor_admin', 'subcontractor_receiving'],
   warehouse_operator: ['dashboard', 'warehouse_dashboard', 'gi_posting', 'batch_tracking', 'cycle_count',
     'inventory_count', 'shipping', 'notifications'],
   picker: ['dashboard', 'picking', 'notifications'],
-  quality: ['dashboard', 'quality', 'batch_tracking', 'expiry_alerts', 'notifications'],
+  quality: ['dashboard', 'quality', 'batch_tracking', 'expiry_alerts', 'notifications', 'subcontractor_quality_inspection'],
   integration_admin: ['dashboard', 'material_requests', 'audit_trail', 'kpi_dashboard', 'notifications'],
   auditor: ['dashboard', 'material_requests', 'audit_trail', 'kpi_dashboard', 'notifications'],
 };
