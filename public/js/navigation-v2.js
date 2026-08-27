@@ -49,6 +49,22 @@
     },
   ];
 
+  // Presentation-only workspace profiles. Group routes remain permission-filtered
+  // by the base application; these presets only order visible groups and choose
+  // their initial open state for the logged-in role.
+  const ROLE_PROFILES = {
+    picker: {
+      label: 'Picker workspace', groups: ['execution', 'inbound', 'inventory-control', 'demand', 'command'], defaultOpen: ['execution'],
+    },
+    erp_operator: {
+      label: 'ERP Operator workspace', groups: ['demand', 'command', 'master-integration', 'execution', 'inventory-control'], defaultOpen: ['demand'],
+    },
+    warehouse_supervisor: {
+      label: 'Warehouse Manager workspace', groups: ['execution', 'inventory-control', 'inbound', 'outbound', 'command', 'demand'], defaultOpen: ['execution'],
+    },
+    admin: { label: 'Admin / System workspace', groups: null, defaultOpen: GROUPS.map((group) => group.key) },
+  };
+
   const LABELS = {
     dashboard: 'Operations Overview',
     kpi: 'Performance Cockpit',
@@ -90,14 +106,29 @@
     return href.replace(/^#\//, '').split('/')[0];
   }
 
-  function makeGroup(def, links, activeRoute) {
+  function roleProfile() {
+    const role = window.App?.user?.role || 'default';
+    const profile = ROLE_PROFILES[role] || { label: 'Workspace', groups: null, defaultOpen: GROUPS.map((group) => group.key) };
+    return { ...profile, role };
+  }
+
+  function orderedGroups(profile) {
+    if (!profile.groups) return [...GROUPS];
+    const rank = new Map(profile.groups.map((key, index) => [key, index]));
+    return [...GROUPS].sort((left, right) => (rank.get(left.key) ?? Number.MAX_SAFE_INTEGER) - (rank.get(right.key) ?? Number.MAX_SAFE_INTEGER));
+  }
+
+  function groupPreferenceKey(profile, group) { return `wms_v2_group_${profile.role}_${group.key}`; }
+
+  function makeGroup(def, links, activeRoute, profile) {
     const wrapper = document.createElement('div');
     wrapper.className = 'nav-group kynox-nav-group';
     wrapper.dataset.key = `v2-${def.key}`;
+    if (profile.groups?.slice(0, 2).includes(def.key)) wrapper.classList.add('profile-primary');
 
     const hasActive = def.routes.includes(activeRoute);
-    const saved = localStorage.getItem(`wms_v2_group_${def.key}`);
-    const isOpen = hasActive || saved !== 'closed';
+    const saved = localStorage.getItem(groupPreferenceKey(profile, def));
+    const isOpen = hasActive || (saved == null ? profile.defaultOpen.includes(def.key) : saved === 'open');
     if (isOpen) wrapper.classList.add('open');
 
     const head = document.createElement('button');
@@ -122,7 +153,7 @@
     head.addEventListener('click', () => {
       const open = wrapper.classList.toggle('open');
       head.setAttribute('aria-expanded', String(open));
-      localStorage.setItem(`wms_v2_group_${def.key}`, open ? 'open' : 'closed');
+      localStorage.setItem(groupPreferenceKey(profile, def), open ? 'open' : 'closed');
     });
 
     wrapper.append(head, body);
@@ -151,9 +182,16 @@
       fragment.appendChild(home);
     }
 
-    GROUPS.forEach((group) => {
+    const profile = roleProfile();
+    const profileLabel = document.createElement('div');
+    profileLabel.className = 'nav-profile kynox-nav-profile';
+    profileLabel.setAttribute('aria-label', 'Current workspace');
+    profileLabel.textContent = profile.label;
+    fragment.appendChild(profileLabel);
+
+    orderedGroups(profile).forEach((group) => {
       if (group.routes.some((route) => links.has(route))) {
-        fragment.appendChild(makeGroup(group, links, active));
+        fragment.appendChild(makeGroup(group, links, active, profile));
       }
     });
 
@@ -171,7 +209,13 @@
     const brand = document.querySelector('.sidebar .brand-name');
     if (brand && brand.textContent !== 'KYNOX WMS') brand.textContent = 'KYNOX WMS';
     const mark = document.querySelector('.sidebar .brand-mark');
-    if (mark && mark.textContent !== 'K') mark.textContent = 'K';
+    if (mark && !mark.querySelector('img')) {
+      mark.textContent = '';
+      const img = document.createElement('img');
+      img.src = '/img/kynox-mark.png';
+      img.alt = 'KYNOX';
+      mark.appendChild(img);
+    }
     if (!document.documentElement.classList.contains('kynox-v2')) {
       document.documentElement.classList.add('kynox-v2');
     }

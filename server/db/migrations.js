@@ -303,7 +303,14 @@ const MIGRATIONS = [
     },
   },
   {
-    id: '015_analytical_scope_attestations',
+    id: '015_import_checksum_and_permission_scope',
+    description: 'Server-computed import checksum for provenance verification (WMS-R14) and dedicated analytical-import permission scoping (WMS-R15).',
+    up(database) {
+      addColumnIfMissing(database, 'stock_movement_import_batches', 'server_computed_checksum', 'TEXT');
+    },
+  },
+  {
+    id: '016_analytical_scope_attestations',
     description: 'Immutable material-and-plant analytical scope attestations with two-person approval and supersession evidence.',
     up(database) {
       database.exec(`

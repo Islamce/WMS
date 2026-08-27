@@ -1,0 +1,320 @@
+name: Manual production release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_ref:
+        description: Full commit SHA from main to deploy manually after CI passes.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wms-production-release
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate requested release
+    uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ inputs.release_ref }}
+
+  deploy:
+    name: Deploy manually approved release
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: production
+      url: https://wms.kynox.io/healthz
+    env:
+      REMOTE_APP_DIR: /home/u716763642/domains/wms.kynox.io/.builds/current/nodejs
+      REMOTE_BUILD_ROOT: /home/u716763642/domains/wms.kynox.io/.builds
+      REMOTE_NODE: /opt/alt/alt-nodejs20/root/usr/bin/node
+      REMOTE_BACKUP_DIR: /home/u716763642/secure/wms-backups
+      REMOTE_DATA_DIR: /home/u716763642/domains/wms.kynox.io/nodejs/data
+      REMOTE_ENV_FILE: /home/u716763642/domains/wms.kynox.io/.builds/config/.env
+      REMOTE_DB_PATH: /home/u716763642/domains/wms.kynox.io/nodejs/data/wms.db
+      WMS_HEALTH_URL: https://wms.kynox.io/healthz
+    steps:
+      - name: Check out current main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Verify release ref is the current main commit
+        id: release
+        env:
+          RELEASE_REF: ${{ inputs.release_ref }}
+        run: |
+          set -Eeuo pipefail
+          if [[ ! "$RELEASE_REF" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "release_ref must be a full lowercase 40-character commit SHA."
+            exit 1
+          fi
+          main_sha="$(git rev-parse HEAD)"
+          if [[ "$RELEASE_REF" != "$main_sha" ]]; then
+            echo "Refusing deployment: release_ref is not the current main commit."
+            echo "expected main=$main_sha"
+            exit 1
+          fi
+          printf 'release_sha=%s\n' "$main_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Create immutable source bundle
+        env:
+          DEPLOY_SHA: ${{ steps.release.outputs.release_sha }}
+        run: |
+          set -Eeuo pipefail
+          git archive --format=tar "$DEPLOY_SHA" | gzip -n > wms-release.tar.gz
+          sha256sum wms-release.tar.gz > wms-release.tar.gz.sha256
+          test -s wms-release.tar.gz
+          sha256sum -c wms-release.tar.gz.sha256
+
+      - name: Validate existing deployment credentials
+        env:
+          SSH_KEY: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.HOSTINGER_KNOWN_HOSTS }}
+          SSH_HOST: ${{ secrets.HOSTINGER_HOST }}
+          SSH_USER: ${{ secrets.HOSTINGER_USERNAME }}
+          SSH_PORT: ${{ secrets.HOSTINGER_PORT }}
+        run: |
+          set -Eeuo pipefail
+          for name in SSH_KEY KNOWN_HOSTS SSH_HOST SSH_USER SSH_PORT; do
+            if [[ -z "${!name}" ]]; then
+              echo "Missing required existing repository deployment secret: $name"
+              exit 1
+            fi
+          done
+          [[ "$SSH_PORT" =~ ^[0-9]{1,5}$ ]]
+
+      - name: Configure pinned Hostinger SSH access
+        env:
+          SSH_KEY: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.HOSTINGER_KNOWN_HOSTS }}
+          SSH_HOST: ${{ secrets.HOSTINGER_HOST }}
+          SSH_USER: ${{ secrets.HOSTINGER_USERNAME }}
+          SSH_PORT: ${{ secrets.HOSTINGER_PORT }}
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_wms_release
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_wms_release ~/.ssh/known_hosts
+          {
+            echo "Host hostinger"
+            echo "  HostName $SSH_HOST"
+            echo "  User $SSH_USER"
+            echo "  Port $SSH_PORT"
+            echo "  IdentityFile ~/.ssh/id_wms_release"
+            echo "  IdentitiesOnly yes"
+            echo "  StrictHostKeyChecking yes"
+            echo "  UserKnownHostsFile ~/.ssh/known_hosts"
+          } > ~/.ssh/config
+          chmod 600 ~/.ssh/config
+
+      - name: Verify live release and create a verified backup
+        run: |
+          set -Eeuo pipefail
+          ssh hostinger "bash -s -- '$REMOTE_APP_DIR' '$REMOTE_NODE' '$REMOTE_BACKUP_DIR' '$REMOTE_DATA_DIR' '$REMOTE_ENV_FILE' '$REMOTE_DB_PATH'" <<'REMOTE'
+          set -Eeuo pipefail
+          APP_DIR="$1"
+          NODE_BIN="$2"
+          BACKUP_DIR="$3"
+          DATA_DIR="$4"
+          ENV_FILE="$5"
+          DB_PATH="$6"
+
+          fail_guard() {
+            echo "::error::Preflight guard failed: $1"
+            exit 1
+          }
+          require_dir() {
+            if [ -d "$1" ]; then echo "PASS: preflight directory $2"; else fail_guard "missing directory $2"; fi
+          }
+          require_file() {
+            if [ -f "$1" ]; then echo "PASS: preflight file $2"; else fail_guard "missing file $2"; fi
+          }
+          require_env_value() {
+            if ENV_FILE="$ENV_FILE" EXPECTED_LINE="$1" "$NODE_BIN" -e '
+              const fs = require("fs");
+              const dotenv = require("dotenv");
+              const expected = process.env.EXPECTED_LINE;
+              const separator = expected.indexOf("=");
+              const key = expected.slice(0, separator);
+              const value = expected.slice(separator + 1);
+              const parsed = dotenv.parse(fs.readFileSync(process.env.ENV_FILE));
+              process.exit(parsed[key] === value ? 0 : 1);
+            '; then
+              echo "PASS: production configuration $2"
+            else
+              fail_guard "production configuration $2"
+            fi
+          }
+
+          cd "$APP_DIR"
+          echo "PASS: active release directory accessible"
+          require_dir node_modules active_node_modules
+          require_dir "$DATA_DIR" persistent_data
+          if [ -f "$ENV_FILE" ]; then
+            echo "PASS: preflight file persistent_env_file"
+          else
+            echo "INFO: expected persistent environment file is absent; reporting .env paths only."
+            find "$APP_DIR/../../.." -maxdepth 5 -type f -name .env -printf 'INFO: discovered environment file %p\n' 2>/dev/null || true
+            fail_guard "missing file persistent_env_file"
+          fi
+          require_file "$DB_PATH" persistent_database
+          runtime="$($NODE_BIN --version)"
+          if [ "$runtime" = "v20.19.4" ]; then echo "PASS: production runtime $runtime"; else fail_guard "production runtime expected v20.19.4"; fi
+          require_env_value 'NODE_ENV=production' NODE_ENV
+          require_env_value 'SKIP_AUTO_SEED=1' SKIP_AUTO_SEED
+          require_env_value 'ALLOW_AUTO_SEED=0' ALLOW_AUTO_SEED
+          require_env_value 'PRODUCTION_INITIALIZATION_ENABLED=false' PRODUCTION_INITIALIZATION_ENABLED
+          require_env_value "DB_PATH=$DB_PATH" DB_PATH
+
+          BACKUP_DIR="$BACKUP_DIR" DB_PATH="$DB_PATH" "$NODE_BIN" scripts/backup.js
+          BACKUP_DIR="$BACKUP_DIR" "$NODE_BIN" scripts/verify-backup.js
+          REMOTE
+
+      - name: Upload verified source bundle to Hostinger staging
+        env:
+          DEPLOY_SHA: ${{ steps.release.outputs.release_sha }}
+        run: |
+          set -Eeuo pipefail
+          STAGE_DIR="$REMOTE_BUILD_ROOT/staging/$DEPLOY_SHA-${GITHUB_RUN_ID}"
+          ssh hostinger "mkdir -p '$STAGE_DIR'"
+          scp wms-release.tar.gz wms-release.tar.gz.sha256 "hostinger:$STAGE_DIR/"
+          ssh hostinger "cd '$STAGE_DIR' && sha256sum -c wms-release.tar.gz.sha256"
+          printf 'stage_dir=%s\n' "$STAGE_DIR" >> "$GITHUB_ENV"
+
+      - name: Build, migrate, and atomically switch candidate release
+        env:
+          DEPLOY_SHA: ${{ steps.release.outputs.release_sha }}
+          RELEASE_ID: gha-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -Eeuo pipefail
+          ssh hostinger "bash -s -- '$REMOTE_APP_DIR' '$REMOTE_BUILD_ROOT' '$REMOTE_NODE' '$REMOTE_DATA_DIR' '$REMOTE_ENV_FILE' '$REMOTE_DB_PATH' '$DEPLOY_SHA' '$RELEASE_ID' '$stage_dir' '$WMS_HEALTH_URL'" <<'REMOTE'
+          set -Eeuo pipefail
+          APP_DIR="$1"
+          BUILD_ROOT="$2"
+          NODE_BIN="$3"
+          DATA_DIR="$4"
+          ENV_FILE="$5"
+          DB_PATH="$6"
+          DEPLOY_SHA="$7"
+          RELEASE_ID="$8"
+          STAGE_DIR="$9"
+          HEALTH_URL="${10}"
+          CANDIDATE_ROOT="$BUILD_ROOT/versions/$RELEASE_ID"
+          CANDIDATE_APP="$CANDIDATE_ROOT/nodejs"
+          CURRENT_LINK="$BUILD_ROOT/current"
+          NEXT_LINK="$BUILD_ROOT/.current-$RELEASE_ID"
+          ARCHIVE="$STAGE_DIR/wms-release.tar.gz"
+          checkpoint() { echo "PASS: candidate checkpoint $1"; }
+
+          checkpoint candidate_initialization
+          test -d "$APP_DIR"
+          test -d "$BUILD_ROOT/versions"
+          test -L "$CURRENT_LINK"
+          test -s "$ARCHIVE"
+          cd "$STAGE_DIR"
+          sha256sum -c wms-release.tar.gz.sha256
+          checkpoint source_bundle_verified
+          test ! -e "$CANDIDATE_ROOT"
+          mkdir -p "$CANDIDATE_APP"
+          tar -xzf "$ARCHIVE" -C "$CANDIDATE_APP"
+          checkpoint candidate_source_extracted
+          dependency_fingerprint() {
+            "$NODE_BIN" -e '
+              const fs = require("fs");
+              const pkg = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+              const runtimeCritical = {
+                engines: pkg.engines || {},
+                packageManager: pkg.packageManager || null,
+                dependencies: pkg.dependencies || {},
+                optionalDependencies: pkg.optionalDependencies || {},
+                bundledDependencies: pkg.bundledDependencies || [],
+                os: pkg.os || [],
+                cpu: pkg.cpu || [],
+              };
+              process.stdout.write(JSON.stringify(runtimeCritical));
+            ' "$1"
+          }
+          test "$(dependency_fingerprint "$APP_DIR/package.json")" = "$(dependency_fingerprint "$CANDIDATE_APP/package.json")" || {
+            echo "Refusing deployment: runtime dependency manifest changed. Use the dedicated native-addon release procedure."
+            rm -rf "$CANDIDATE_ROOT"
+            exit 1
+          }
+          cmp -s "$APP_DIR/package-lock.json" "$CANDIDATE_APP/package-lock.json" || {
+            echo "Refusing deployment: package lock changed. Use the dedicated native-addon release procedure."
+            rm -rf "$CANDIDATE_ROOT"
+            exit 1
+          }
+          checkpoint runtime_dependency_manifest_verified
+          test -f "$ENV_FILE"
+          install -m 600 "$ENV_FILE" "$CANDIDATE_APP/.env"
+          test -d "$DATA_DIR"
+          test -f "$DB_PATH"
+          ln -s "$(readlink -f "$APP_DIR/node_modules")" "$CANDIDATE_APP/node_modules"
+          ln -s "$(readlink -f "$DATA_DIR")" "$CANDIDATE_APP/data"
+          mkdir -p "$CANDIDATE_APP/tmp"
+          checkpoint candidate_runtime_initialized
+
+          checkpoint migration_start
+          if DB_PATH="$DB_PATH" "$NODE_BIN" "$CANDIDATE_APP/server/db/migrate.js"; then
+            checkpoint migration_completed
+          else
+            code=$?
+            echo "::error::Candidate migration process exited $code; release switch has not started."
+            exit "$code"
+          fi
+          checkpoint resolving_previous_release
+          PREVIOUS_TARGET="$(readlink -f "$CURRENT_LINK")"
+          EXPECTED_TARGET="$(readlink -f "$CANDIDATE_ROOT")"
+          test -d "$PREVIOUS_TARGET/nodejs"
+          test -d "$EXPECTED_TARGET/nodejs"
+          checkpoint previous_release_verified
+          ln -s "$CANDIDATE_ROOT" "$NEXT_LINK"
+          checkpoint next_release_link_created
+          mv -Tf "$NEXT_LINK" "$CURRENT_LINK"
+          checkpoint atomic_release_switch_completed
+          CURRENT_TARGET="$(readlink -f "$CURRENT_LINK")"
+          if test "$CURRENT_TARGET" != "$EXPECTED_TARGET"; then
+            echo "::error::Atomic release verification failed; restoring the previous release target."
+            ln -s "$PREVIOUS_TARGET" "$NEXT_LINK"
+            mv -Tf "$NEXT_LINK" "$CURRENT_LINK"
+            test "$(readlink -f "$CURRENT_LINK")" = "$PREVIOUS_TARGET"
+            touch "$CURRENT_LINK/nodejs/tmp/restart.txt"
+            exit 1
+          fi
+          checkpoint current_release_target_verified
+          touch "$CANDIDATE_APP/tmp/restart.txt"
+          checkpoint restart_signal_written
+          sleep 8
+          checkpoint health_check_start
+          if ! curl -fsS "$HEALTH_URL"; then
+            echo "New release failed health check; restoring prior code release."
+            ln -s "$PREVIOUS_TARGET" "$NEXT_LINK"
+            mv -Tf "$NEXT_LINK" "$CURRENT_LINK"
+            touch "$CURRENT_LINK/nodejs/tmp/restart.txt"
+            sleep 8
+            curl -fsS "$HEALTH_URL" || true
+            exit 1
+          fi
+          checkpoint health_check_completed
+          rm -rf "$STAGE_DIR"
+          printf 'DEPLOYED_SHA=%s\n' "$DEPLOY_SHA"
+          REMOTE
+
+      - name: Verify public health endpoint
+        run: |
+          set -Eeuo pipefail
+          curl -fsS --retry 3 --retry-delay 3 "$WMS_HEALTH_URL"
+
+      - name: Scrub release SSH key
+        if: always()
+        run: rm -f ~/.ssh/id_wms_release

@@ -1,0 +1,160 @@
+name: Manual Hostinger release layout diagnostic
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_release_id:
+        description: Candidate release ID to inspect without mutating production.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wms-hostinger-release-layout-diagnostic
+  cancel-in-progress: false
+
+jobs:
+  inspect:
+    name: Read-only release layout inspection
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: production
+      url: https://wms.kynox.io/healthz
+    env:
+      REMOTE_APP_DIR: /home/u716763642/domains/wms.kynox.io/.builds/current/nodejs
+      REMOTE_BUILD_ROOT: /home/u716763642/domains/wms.kynox.io/.builds
+      REMOTE_DATA_DIR: /home/u716763642/domains/wms.kynox.io/nodejs/data
+      REMOTE_ENV_FILE: /home/u716763642/domains/wms.kynox.io/.builds/config/.env
+      REMOTE_DB_PATH: /home/u716763642/domains/wms.kynox.io/nodejs/data/wms.db
+
+    steps:
+      - name: Validate existing deployment credentials
+        env:
+          SSH_KEY: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.HOSTINGER_KNOWN_HOSTS }}
+          SSH_HOST: ${{ secrets.HOSTINGER_HOST }}
+          SSH_USER: ${{ secrets.HOSTINGER_USERNAME }}
+          SSH_PORT: ${{ secrets.HOSTINGER_PORT }}
+        run: |
+          set -Eeuo pipefail
+          for name in SSH_KEY KNOWN_HOSTS SSH_HOST SSH_USER SSH_PORT; do
+            if [[ -z "${!name}" ]]; then
+              echo "Missing required existing repository deployment secret: $name"
+              exit 1
+            fi
+          done
+          [[ "$SSH_PORT" =~ ^[0-9]{1,5}$ ]]
+
+      - name: Configure pinned Hostinger SSH access
+        env:
+          SSH_KEY: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.HOSTINGER_KNOWN_HOSTS }}
+          SSH_HOST: ${{ secrets.HOSTINGER_HOST }}
+          SSH_USER: ${{ secrets.HOSTINGER_USERNAME }}
+          SSH_PORT: ${{ secrets.HOSTINGER_PORT }}
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_wms_release
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_wms_release ~/.ssh/known_hosts
+          {
+            echo "Host hostinger"
+            echo "  HostName $SSH_HOST"
+            echo "  User $SSH_USER"
+            echo "  Port $SSH_PORT"
+            echo "  IdentityFile ~/.ssh/id_wms_release"
+            echo "  IdentitiesOnly yes"
+            echo "  StrictHostKeyChecking yes"
+            echo "  UserKnownHostsFile ~/.ssh/known_hosts"
+          } > ~/.ssh/config
+          chmod 600 ~/.ssh/config
+
+      - name: Inspect release layout without mutation
+        env:
+          CANDIDATE_RELEASE_ID: ${{ inputs.candidate_release_id }}
+        run: |
+          set -Eeuo pipefail
+          [[ "$CANDIDATE_RELEASE_ID" =~ ^gha-[0-9]+-[0-9]+$ ]]
+          ssh hostinger "bash -s -- '$REMOTE_APP_DIR' '$REMOTE_BUILD_ROOT' '$REMOTE_DATA_DIR' '$REMOTE_ENV_FILE' '$REMOTE_DB_PATH' '$CANDIDATE_RELEASE_ID'" <<'REMOTE'
+          set -Eeuo pipefail
+          APP_DIR="$1"
+          BUILD_ROOT="$2"
+          DATA_DIR="$3"
+          ENV_FILE="$4"
+          DB_PATH="$5"
+          CANDIDATE_ID="$6"
+          CURRENT_LINK="$BUILD_ROOT/current"
+          CANDIDATE_ROOT="$BUILD_ROOT/versions/$CANDIDATE_ID"
+          CANDIDATE_APP="$CANDIDATE_ROOT/nodejs"
+          NEXT_LINK="$BUILD_ROOT/.current-$CANDIDATE_ID"
+
+          require_path() {
+            if test "$1" "$2"; then
+              echo "PASS: $3"
+            else
+              echo "FAIL: $3"
+              exit 1
+            fi
+          }
+          require_absent() {
+            if test ! -e "$1"; then
+              echo "PASS: $2"
+            else
+              echo "FAIL: $2"
+              exit 1
+            fi
+          }
+
+          require_path -d "$APP_DIR" live_application_directory
+          require_path -L "$CURRENT_LINK" current_release_symlink
+          require_path -d "$DATA_DIR" persistent_data_directory
+          require_path -f "$ENV_FILE" persistent_environment_file
+          require_path -f "$DB_PATH" persistent_database
+          require_path -d "$CANDIDATE_ROOT" candidate_release_directory
+          require_path -d "$CANDIDATE_APP" candidate_application_directory
+          require_path -L "$CANDIDATE_APP/node_modules" candidate_node_modules_link
+          require_path -L "$CANDIDATE_APP/data" candidate_data_link
+          require_path -d "$CANDIDATE_APP/tmp" candidate_restart_directory
+          require_absent "$NEXT_LINK" next_release_symlink_absent
+
+          current_link_value="$(readlink "$CURRENT_LINK")"
+          current_target="$(readlink -f "$CURRENT_LINK")"
+          candidate_target="$(readlink -f "$CANDIDATE_ROOT")"
+          require_path -d "$current_target/nodejs" current_release_target
+          case "$current_link_value" in
+            /*) echo "INFO: active_release_link_format=absolute" ;;
+            *) echo "INFO: active_release_link_format=relative" ;;
+          esac
+          echo "INFO: active_release_identifier=$(basename "$current_target")"
+          echo "INFO: inspected_candidate_identifier=$(basename "$candidate_target")"
+          if test "$current_target" = "$candidate_target"; then
+            echo "PASS: active_release_matches_inspected_candidate"
+          else
+            echo "INFO: active_release_does_not_match_inspected_candidate"
+          fi
+          require_path -e "$(readlink -f "$CANDIDATE_APP/node_modules")" candidate_node_modules_target
+          require_path -e "$(readlink -f "$CANDIDATE_APP/data")" candidate_data_target
+
+          asset_sha() {
+            if test -f "$1"; then
+              sha256sum "$1" | awk '{print $1}'
+            else
+              echo missing
+            fi
+          }
+          for asset in public/js/pages/requests.js public/js/pages/requestDetail.js public/css/kynox-v2.css; do
+            echo "INFO: active_asset_sha256 $asset $(asset_sha "$current_target/nodejs/$asset")"
+            echo "INFO: candidate_asset_sha256 $asset $(asset_sha "$candidate_target/nodejs/$asset")"
+          done
+
+          echo "PASS: read-only release layout inspection complete"
+          REMOTE
+
+      - name: Scrub diagnostic SSH key
+        if: always()
+        run: rm -f ~/.ssh/id_wms_release

@@ -350,6 +350,135 @@ const UI = {
   },
 
   /**
+   * Universal operational object header. Presentation-only: it derives no new
+   * workflow state and leaves action authorization to the existing callers and
+   * backend contracts.
+   */
+  operationalObjectHeader(row, { title = '', subtitle = '', primaryAction = '', exception = '' } = {}) {
+    const status = row.request_status || row.task_status || row.status || 'Unknown';
+    const requestNumber = row.request_number || row.id || 'Request';
+    const priority = row.priority || 'NORMAL';
+    const owner = row.assigned_picker_name || row.current_owner_name || row.owner_name || '';
+    const age = row.created_at ? UI.fmtDate(row.created_at) : '';
+    const exceptionHtml = exception || ['ERP Error', 'Escalated to Supervisor', 'Closed with Shortage', 'Partially Completed', 'Partially Picked'].includes(status)
+      ? `<div class="operational-exception-banner ${status === 'ERP Error' || status === 'Escalated to Supervisor' ? 'danger' : 'warning'}" role="status"><strong>${UI.esc(exception || status)}</strong><span>Review the evidence and complete the permitted next action.</span></div>`
+      : '';
+    return `<section class="operational-object-header" aria-labelledby="operational-object-title">
+      <div class="operational-object-heading">
+        <div><span class="eyebrow">${UI.esc(title || 'Operational object')}</span><h1 id="operational-object-title">${UI.esc(requestNumber)}</h1>${subtitle ? `<p class="muted">${UI.esc(subtitle)}</p>` : ''}</div>
+        <div class="operational-object-actions">${primaryAction}${primaryAction ? '' : ''}</div>
+      </div>
+      <div class="operational-object-meta">
+        <span class="badge ${statusClass(status)}">${UI.esc(status)}</span>
+        <span class="badge ${['URGENT', 'HIGH'].includes(priority) ? 'pending' : ''}">${UI.esc(priority)}</span>
+        ${owner ? `<span><strong>Owner</strong> ${UI.esc(owner)}</span>` : ''}
+        ${age ? `<span><strong>Created</strong> ${UI.esc(age)}</span>` : ''}
+        ${row.issue_warehouse_code ? `<span><strong>Warehouse</strong> ${UI.esc(row.issue_warehouse_code)}</span>` : ''}
+      </div>
+      ${UI.requestStageIndicator(row)}
+      ${exceptionHtml}
+    </section>`;
+  },
+
+  /**
+   * Workflow-stage display for request surfaces. This is deliberately a
+   * presentation-only summary: the canonical status is always rendered beside
+   * the five business stages and remains the source of operational detail.
+   */
+  requestStageIndicator(row) {
+    const status = row.request_status || row.task_status || row.status || 'Unknown';
+    const stages = ['Requested', 'ERP Processed', 'Assigned', 'Picking', 'Issued'];
+    const stageByStatus = {
+      'Draft': 0, 'Submitted': 0, 'Pending Manager Approval': 0, 'Under Review': 0,
+      'Returned to Requester': 0, 'Approved': 0, 'Approved - Pending ERP Processing': 0,
+      'Pending ERP Reservation': 0,
+      'ERP Reservation Created': 1, 'Movement Type Assigned': 1, 'Warehouse Assigned': 1,
+      'Pending Warehouse Action': 1,
+      'Pending Bin Location Assignment': 2, 'Location Assigned': 2, 'Batch Assigned': 2,
+      'Pending Picker Assignment': 2, 'Assigned to Picker': 2, 'Pending Picker Acceptance': 2,
+      'Reminder Sent': 2, 'Escalated to Supervisor': 2, 'Accepted by Picker': 2,
+      'Picking Started': 3, 'Picking in Progress': 3, 'Picking Completed': 3,
+      'Partially Picked': 3, 'Pending ERP GI': 3, 'ERP Error': 3,
+      'GI Posted': 4, 'Completed': 4, 'Partially Completed': 4, 'Closed with Shortage': 4,
+    };
+    const terminal = {
+      'Rejected': 'Rejected', 'Cancelled': 'Cancelled', 'On Hold': 'On hold', 'Reversed': 'Reversed',
+    };
+    const exception = {
+      'Reminder Sent': 'warning', 'Escalated to Supervisor': 'danger', 'ERP Error': 'danger',
+      'Closed with Shortage': 'warning', 'Partially Picked': 'warning', 'Partially Completed': 'warning',
+    };
+    const terminalLabel = terminal[status];
+    const active = stageByStatus[status] == null ? 0 : stageByStatus[status];
+    const exceptionClass = exception[status] || '';
+    const items = stages.map((label, index) => {
+      const state = index < active ? 'done' : index === active ? 'current' : 'future';
+      const marker = index === active && exceptionClass ? `<span class="request-stage-exception ${exceptionClass}" aria-label="Exception: ${UI.esc(status)}">!</span>` : '';
+      return `<li class="request-stage-step ${state} ${index === active ? exceptionClass : ''}" ${index === active ? 'aria-current="step"' : ''}>
+        <span class="request-stage-dot" aria-hidden="true">${index < active ? '✓' : index + 1}</span>
+        <span class="request-stage-label">${UI.esc(label)}</span>${marker}
+      </li>`;
+    }).join('');
+    return `<div class="request-stage" role="group" aria-label="Workflow stage: ${UI.esc(terminalLabel || stages[active])}. Current status: ${UI.esc(status)}">
+      <ol class="request-stage-list">${items}</ol>
+      <div class="request-stage-status ${terminalLabel ? 'terminal' : ''} ${exceptionClass}">
+        <span class="sr-only">Current status: </span>${UI.esc(terminalLabel || status)}
+      </div>
+    </div>`;
+  },
+
+  /**
+   * Read-only material summary. Callers supply content only after an explicit
+   * user disclosure where line data is lazily loaded; this helper never fetches.
+   */
+  materialDisclosure({ lineCount = 0, bodyHtml = '', expanded = false, label = 'Materials', requestId = '' } = {}) {
+    const count = Number(lineCount) || 0;
+    const lineLabel = `${count} line${count === 1 ? '' : 's'}`;
+    const requestAttr = requestId === '' ? '' : `data-request-id="${UI.esc(requestId)}"`;
+    return `<details class="material-disclosure" ${requestAttr} ${expanded ? 'open' : ''}>
+      <summary><span>${UI.esc(label)}</span><span class="material-disclosure-count">${UI.esc(lineLabel)}</span></summary>
+      <div class="material-disclosure-body">${bodyHtml || '<p class="muted">Material details are available when expanded.</p>'}</div>
+    </details>`;
+  },
+
+  /** A contextual empty state that distinguishes an empty queue from a failed request. */
+  meaningfulEmptyState({ title, description, actionHtml = '' }) {
+    return `<div class="meaningful-empty" role="status">
+      <div class="meaningful-empty-mark" aria-hidden="true">✓</div>
+      <div><h3>${UI.esc(title)}</h3><p>${UI.esc(description)}</p>${actionHtml}</div>
+    </div>`;
+  },
+
+  /**
+   * Shared request shell for list and assignment surfaces. It has no workflow
+   * side effects: callers provide their existing action controls and optional
+   * lazy material disclosure markup.
+   */
+  requestCard(row, { actionHtml = '', materialsHtml = '', pickerHtml = '', link = '', extraHtml = '' } = {}) {
+    const requestNumber = row.request_number || row.id || 'Request';
+    const title = link
+      ? `<a class="request-card-number" href="${UI.esc(link)}">${UI.esc(requestNumber)}</a>`
+      : `<span class="request-card-number">${UI.esc(requestNumber)}</span>`;
+    const priority = row.priority || 'NORMAL';
+    const priorityClass = ['URGENT', 'HIGH'].includes(priority) ? 'pending' : 'role';
+    const context = [
+      row.requester_name && `Requester: ${row.requester_name}`,
+      (row.issue_warehouse_code || row.warehouse_code) && `Warehouse: ${row.issue_warehouse_code || row.warehouse_code}`,
+      row.required_date && `Required: ${row.required_date}`,
+    ].filter(Boolean).map((value) => `<span>${UI.esc(value)}</span>`).join('');
+    return `<article class="request-card" data-request-id="${UI.esc(row.id || '')}">
+      <div class="request-card-main">
+        <div class="request-card-heading"><div>${title}<span class="badge ${priorityClass}">${UI.esc(priority)}</span></div>${actionHtml ? `<div class="request-card-action">${actionHtml}</div>` : ''}</div>
+        ${UI.requestStageIndicator(row)}
+        <div class="request-card-context">${context || '<span class="muted">Request context is not recorded.</span>'}</div>
+        ${pickerHtml ? `<div class="request-card-picker">${pickerHtml}</div>` : ''}
+        ${extraHtml}
+      </div>
+      ${materialsHtml ? `<div class="request-card-materials">${materialsHtml}</div>` : ''}
+    </article>`;
+  },
+
+  /**
    * Material picker: a searchable dropdown. Attaches to a text input; opens on
    * focus (showing the first materials) and filters as you type. Calls
    * onSelect(material) — where material includes total_available — when an

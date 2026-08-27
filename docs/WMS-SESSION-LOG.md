@@ -647,12 +647,12 @@ Item 4 is worth emphasising: it was reachable exactly when the database looked e
 
 **Changes:**
 
-| File | Change |
-| --- | --- |
-| `scripts/reset-admin.js` | Production requires explicit email, explicit password, and the exact phrase `RESET ADMIN PASSWORD`. Built-in defaults refused. Never seeds — an empty roles table now refuses and points at read-only diagnosis. Writes an audit record. |
-| `server/routes/users.js` | Administrator reset sets `must_change_password = 1` and is audited. |
-| `server/routes/auth.js` | Self-service change is audited; it remains the only path that clears the flag. |
-| `tests/e2e/password_test.py` | Extended from 10 to 25 checks: credential lifecycle, audit presence, secret-leak assertions, and the `reset-admin` refusal matrix. |
+| File                         | Change                                                                                                                                                                                                                                   |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `scripts/reset-admin.js`     | Production requires explicit email, explicit password, and the exact phrase `RESET ADMIN PASSWORD`. Built-in defaults refused. Never seeds — an empty roles table now refuses and points at read-only diagnosis. Writes an audit record. |
+| `server/routes/users.js`     | Administrator reset sets `must_change_password = 1` and is audited.                                                                                                                                                                      |
+| `server/routes/auth.js`      | Self-service change is audited; it remains the only path that clears the flag.                                                                                                                                                           |
+| `tests/e2e/password_test.py` | Extended from 10 to 25 checks: credential lifecycle, audit presence, secret-leak assertions, and the `reset-admin` refusal matrix.                                                                                                       |
 
 **Evidence:**
 
@@ -768,17 +768,17 @@ The mechanism was reproduced, so it is no longer a hypothesis. Booting the real 
 
 Method: the new suite was run against the **previous** `server/index.js`, where it failed exactly two end-to-end cases — "does NOT seed with no opt-in" and "does NOT seed when `NODE_ENV=development`" — and passed 19/19 against the new implementation. The test therefore catches the real defect rather than restating the new code.
 
-**Root cause:** the guard was opt-out and keyed on `NODE_ENV`, so it failed **open**. Safety depended on a variable being *present*. Any runtime that does not export `NODE_ENV` — plausible under managed Node.js/Passenger — reached the seed branch.
+**Root cause:** the guard was opt-out and keyed on `NODE_ENV`, so it failed **open**. Safety depended on a variable being _present_. Any runtime that does not export `NODE_ENV` — plausible under managed Node.js/Passenger — reached the seed branch.
 
 **Changes:**
 
-| File | Change |
-| --- | --- |
-| `server/services/firstRunSeed.js` | New. Pure, testable policy: auto-seed requires explicit `ALLOW_AUTO_SEED=1`; `SKIP_AUTO_SEED=1` overrides it. Absence of configuration means refuse. Carries the operator warning text. |
-| `server/index.js` | Uses the policy instead of the inline `NODE_ENV` guard. Adds a per-boot database identity line (`[db] path=… size=… users=… migrations=…`), an explicit ask in Issue #40. |
-| `tests/e2e/autoseed_guard_test.py` | New. Policy truth table plus end-to-end boots against throwaway databases on isolated ports. |
-| `tests/run.sh` | Suite wired into Phase 1. |
-| `DEPLOY-HOSTINGER.md` | First-run bootstrap documented as opt-in, with the reason. |
+| File                               | Change                                                                                                                                                                                  |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `server/services/firstRunSeed.js`  | New. Pure, testable policy: auto-seed requires explicit `ALLOW_AUTO_SEED=1`; `SKIP_AUTO_SEED=1` overrides it. Absence of configuration means refuse. Carries the operator warning text. |
+| `server/index.js`                  | Uses the policy instead of the inline `NODE_ENV` guard. Adds a per-boot database identity line (`[db] path=… size=… users=… migrations=…`), an explicit ask in Issue #40.               |
+| `tests/e2e/autoseed_guard_test.py` | New. Policy truth table plus end-to-end boots against throwaway databases on isolated ports.                                                                                            |
+| `tests/run.sh`                     | Suite wired into Phase 1.                                                                                                                                                               |
+| `DEPLOY-HOSTINGER.md`              | First-run bootstrap documented as opt-in, with the reason.                                                                                                                              |
 
 **Evidence:**
 
@@ -795,7 +795,7 @@ Method: the new suite was run against the **previous** `server/index.js`, where 
 
 **Remaining work:**
 
-- Read the Passenger **runtime** environment. This is now needed as *evidence for Issue #40* — whether the auto-seed path actually fired in production — rather than as a safety gate, since the deployed fix makes an unset environment fail safe.
+- Read the Passenger **runtime** environment. This is now needed as _evidence for Issue #40_ — whether the auto-seed path actually fired in production — rather than as a safety gate, since the deployed fix makes an unset environment fail safe.
 - Verify production's deployed commit and reconcile it to `main`.
 - Issue #40 also asks for `reset-admin` hardening (refuse default credentials in production, require typed confirmation) and audit-logging of password resets. Not done in this session.
 
@@ -814,16 +814,16 @@ Method: the new suite was run against the **previous** `server/index.js`, where 
 
 **Verified (repo) evidence:**
 
-| Fact | Value | Method |
-| --- | --- | --- |
-| `origin/main` | `b9ec782dddfd3e57dbb3448f9906b340427bb2f4` | `git rev-parse origin/main` |
-| Migrations in code | 12, latest `012_opening_stock_batch_registry` | `server/db/migrations.js` |
-| PR #43 fix present on `main` | yes (`server/routes/import.js`) | source inspection |
-| Temporary debug endpoint | absent | repository search |
-| E2E inventory | 21 suites, 397 assertions | `tests/run.sh`, `tests/e2e/*.py` |
-| CI on `main` | run #155 on `b9ec782`, success | Actions API |
-| Latest offsite backup | run #11, `2026-07-27T06:03:54Z`, success | Actions API |
-| Backup history | 8 consecutive successes (#4–#11); #2 failed 2026-07-20, fixed by #3 | Actions API |
+| Fact                         | Value                                                               | Method                           |
+| ---------------------------- | ------------------------------------------------------------------- | -------------------------------- |
+| `origin/main`                | `b9ec782dddfd3e57dbb3448f9906b340427bb2f4`                          | `git rev-parse origin/main`      |
+| Migrations in code           | 12, latest `012_opening_stock_batch_registry`                       | `server/db/migrations.js`        |
+| PR #43 fix present on `main` | yes (`server/routes/import.js`)                                     | source inspection                |
+| Temporary debug endpoint     | absent                                                              | repository search                |
+| E2E inventory                | 21 suites, 397 assertions                                           | `tests/run.sh`, `tests/e2e/*.py` |
+| CI on `main`                 | run #155 on `b9ec782`, success                                      | Actions API                      |
+| Latest offsite backup        | run #11, `2026-07-27T06:03:54Z`, success                            | Actions API                      |
+| Backup history               | 8 consecutive successes (#4–#11); #2 failed 2026-07-20, fixed by #3 | Actions API                      |
 
 **Could NOT be verified — no production access:**
 
@@ -1032,3 +1032,232 @@ Prevent repeated loss of context between AI sessions and continue production rec
 ```
 
 Every future AI or human session that changes understanding, code, data, configuration, deployment, or plans must append an entry before completion.
+
+## 2026-08-17 — KYNOX WMS experience redesign baseline and first implementation wave
+
+**Objective:** Execute the attached KYNOX WMS experience redesign program from repository truth, reconcile open PRs, establish the target UX architecture, and implement the first controlled presentation wave without merge, deployment, or production access.
+
+**Starting state:** `main` was verified at `22b4a16`. Open PRs #68 and #69 were verified, with #69 based on the complete #68 stack. PRs #67 and #59 were also open but unrelated to the initial redesign surface.
+
+**Actions:** Cloned `Islamce/WMS`, read the repository-required operating documents, inspected the web shell, route/page inventory, Flutter navigation and screens, canonical workflow states, shared workflow-context service, existing V2 transformation artifacts, and representative Command Center/request/picking surfaces. Created `feat/wms-experience-redesign-execution` from `origin/feat/d02-execution-cards` so the redesign extends the complete #68 → #69 stack. Produced the baseline, screen inventory, market benchmark, and architecture documents under `docs/WMS-REDESIGN-*.md`.
+
+**Implementation:** Added a reusable presentation-only operational object header to `public/js/ui.js`, applied it to `public/js/pages/requestDetail.js`, and added responsive object/exception styles to `public/css/kynox-v2.css`. No workflow transition, API contract, permission, schema, database, ERP, audit, SoD, allocation, picking, or production behavior was changed.
+
+**Validation:** `node --check` for changed JavaScript and `git diff --check` passed. `npm run lint` completed with 0 errors and the repository's existing warnings. After local `npm ci --ignore-scripts` and `npm rebuild better-sqlite3`, `npm test` passed all suites. `npm run test:smoke` passed 6/6 base smoke, 10/10 request-line visibility, and 11/11 design-foundation checks after installing the local Playwright Chromium runtime. The local environment is Node v22.13.0 while the repository declares Node 20.x; this compatibility caveat remains recorded.
+
+**Production state:** Unchanged. No Hostinger access, deployment, migration, Passenger restart, live database access, import, seed/reset, environment-variable change, or PR merge occurred.
+
+**Next step:** Complete the remaining implementation waves for Command Center queue continuity, inventory/exception surfaces, and Flutter task-first presentation only where existing contracts support them; capture visual evidence; run the full applicable regression matrix; push the branch and open a Draft PR.
+
+## 2026-08-17 — Controlled manual-release pipeline first run
+
+**Objective:** Merge and execute the manually dispatched CI/CD release path for the current `main` commit while preserving the WMS production safeguards.
+**Starting state:** PR #71 had merged the first release workflow. GitHub Actions environment reviewer and wait-timer rules were unavailable on the repository plan, and the user explicitly approved the reduced-control, manual-dispatch model.
+**Actions:** Created the minimal `production` environment without unsupported protection rules. Merged PR #72, which aligns the workflow with the active Hostinger release symlink and the existing `HOSTINGER_*` repository credential convention. Dispatched run `32018477290` for SHA `754d1e8482bbc1768011844138bc158944214644`.
+**Evidence/results:** The reusable CI validation passed. The deployment job authenticated using pinned SSH configuration and executed the remote pre-deployment backup. The new backup manifest passed checksum validation, SQLite `integrity_check`, and a read-only restore drill (`users=10`, `audit_rows=130`). The release stopped before any code update, migration, Passenger restart, or public health check because the active Hostinger checkout cannot authenticate to GitHub over HTTPS (`fatal: could not read Username for 'https://github.com'`).
+**Decisions:** Treat the remote Git credential failure as a hard deployment stop. Do not add a production Git credential or bypass the check. Replace the remote-pull assumption with a runner-originated source-bundle and atomic candidate-release procedure, retaining the existing verified SSH path and dependency/native-addon guardrails.
+**Risks/incidents:** Production code and schema were not changed by the failed run. A verified fresh backup exists in the protected remote backup directory. The initial workflow must not be re-run until the source-bundle revision is reviewed and merged.
+**Files/PRs/commits changed:** PR #72 merged at `754d1e8482bbc1768011844138bc158944214644`; follow-up workflow revision pending.
+**Production state:** Live WMS was not restarted or migrated. Backup-only state changed as intended.
+**Exact next step:** Implement, validate, merge, and retest the runner-originated source-bundle release workflow.
+
+## 2026-08-17 — Source-bundle release preflight stop
+
+**Objective:** Retry the manually dispatched production release after replacing remote Git pull with a checksummed source-bundle candidate-release procedure.
+**Actions:** PR #73 merged the source-bundle workflow revision and run `32019239246` was dispatched for SHA `d9f88adfe5dee9b432574aedba9ef95aafc0fd9f`.
+**Evidence/results:** Reusable CI passed. The deploy job passed release-SHA, credential, and pinned-SSH setup gates, then stopped in the live-release preflight before backup, migration, code staging, symlink switch, Passenger restart, or public health validation. The stop was caused by the workflow incorrectly requiring `data` inside the active `.builds/current/nodejs` release tree. The verified architecture deliberately stores the persistent database/data path outside release trees at `/home/u716763642/domains/wms.kynox.io/nodejs/data`.
+**Decisions:** Keep the fail-closed preflight. Correct the workflow to validate and link the verified persistent data directory explicitly rather than assuming release-local data.
+**Production state:** No database mutation, release switch, restart, or code deployment occurred in this run.
+**Exact next step:** Merge the data-path correction, then retry only after CI passes.
+
+## 2026-08-17 — Persistent environment-file preflight stop
+
+**Objective:** Retry the source-bundle release after correcting the persistent data-path model.
+**Actions:** PR #74 merged the data-path correction and run `32019776313` was dispatched for SHA `09a69b3461236015b95c37ebef17f8b20e23e713`.
+**Evidence/results:** Reusable CI passed. The release passed SHA, source-bundle, credential, and pinned-SSH gates, then stopped immediately in the live-release preflight before backup, candidate staging, migration, symlink switch, restart, or health validation. The active versioned release does not contain a local `.env`; the durable Hostinger environment file is expected at the legacy persistent application path, consistent with the production runbook.
+**Decisions:** Preserve the fail-closed environment validation. Correct the candidate-release workflow to validate and copy the persistent legacy `.env` file explicitly rather than assuming release-local configuration.
+**Production state:** No database mutation, backup write, code deployment, release switch, or restart occurred in this run.
+**Exact next step:** Merge the persistent environment-file correction, then retry only after CI passes.
+
+## 2026-08-17 — Opaque persistent-configuration guard stop
+
+**Objective:** Retry the source-bundle release after adding persistent data and environment-file handling.
+**Actions:** PR #75 merged the persistent environment-file correction and run `32020383440` was dispatched for SHA `f87321182fc52b50e919608efa2510121337c84c`.
+**Evidence/results:** Reusable CI passed. The release passed SHA, source-bundle, credential, and pinned-SSH gates. The live-release preflight stopped before backup, candidate staging, migration, release switch, restart, or health validation. The remote shell intentionally emitted no secret configuration values, and the generic non-zero result did not identify which non-secret existence/runtime/configuration guard failed.
+**Decisions:** Do not weaken or remove the guard. Add explicit non-secret check labels and limited filesystem/runtime diagnostics to the preflight, then dispatch one evidence-gathering run. Only correct a mismatch demonstrated by that run.
+**Production state:** No backup, database mutation, code deployment, release switch, or restart occurred in this run.
+**Exact next step:** Merge the safe preflight diagnostics and use its evidence to resolve the remaining blocked guard.
+
+## 2026-08-17 — Environment-file location mismatch identified
+
+**Objective:** Use labelled, non-secret preflight diagnostics to identify the previously opaque release stop.
+
+**Actions:** PR #76 was CI-validated and merged at `8aab72fb1210e149a5bdd6d4b51ff13a5523ed36`. Release run `32021044746` was manually dispatched for that exact main SHA.
+
+**Evidence/results:** The reusable CI gate passed. The Hostinger preflight reported that the active release directory, its `node_modules` directory, and the persistent data directory exist. It then stopped at the named guard `missing file persistent_env_file`. No backup began and no source transfer, candidate build, migration, symlink switch, restart, or health check occurred.
+
+**Decision:** Preserve the strict environment-content guards. Add an additional read-only, non-secret diagnostic that reports which approved Hostinger environment-file locations exist, if any; the guard must continue to fail closed until a verified source is identified.
+
+**Production state:** No production code, database, data, environment value, migration, release link, or Passenger state changed in this run.
+
+**Exact next step:** Add the safe environment-file location diagnostic; validate it in CI; then run the same guarded manual release procedure.
+
+## 2026-08-17 — Verified Hostinger configuration-file location
+
+**Objective:** Locate the production configuration file without reading its contents after the persistent legacy path was shown absent.
+
+**Actions:** PR #77 was CI-validated and merged at `908178cd42547ec35b2df10ae27903f827fc7143`. Release run `32021565660` was manually dispatched for that exact main SHA. Its read-only, path-only preflight diagnostic searched the approved WMS release root only after the configured legacy environment-file path was absent.
+
+**Evidence/results:** The reusable CI gate passed. The preflight again confirmed the active release directory, active `node_modules`, and persistent data directory, then reported exactly one environment file at `/home/u716763642/domains/wms.kynox.io/config/.env`. The run stopped immediately afterward at the existing missing-file guard. No backup, source transfer, candidate creation, migration, symlink switch, restart, or health check started.
+
+**Decision:** Change only `REMOTE_ENV_FILE` to the verified Hostinger configuration path. Retain the strict required-file and production-configuration-line guards, the path-only fallback diagnostic, verified backup gate, native-addon manifest guard, atomic release switch, and health-check rollback.
+
+**Production state:** No production code, database, data, configuration value, migration, release link, or Passenger state changed in this run.
+
+**Exact next step:** CI-validate and merge the verified environment-file path correction, then retry the manual guarded release for the current main SHA.
+
+## 2026-08-17 — Hostinger configuration path resolved through release symlink
+
+**Objective:** Correct the verified-but-lexically misinterpreted environment-file path after run `32021992513` still failed its required-file guard.
+
+**Actions:** PR #78 was CI-validated and merged at `22661027956b091f8d6e2c40aef7ba6506616bad`; run `32021992513` was manually dispatched for that exact SHA.
+
+**Evidence/results:** CI passed. The preflight reported the same path-only discovery as the prior run: `$REMOTE_APP_DIR/../../../config/.env`. Because `current` is a release symlink, that expression resolves physically from the versioned release to `/home/u716763642/domains/wms.kynox.io/.builds/config/.env`, not `/home/u716763642/domains/wms.kynox.io/config/.env`. The latter was therefore correctly rejected as absent. The run stopped before backup, staging, migration, release switching, restart, or health validation.
+
+**Decision:** Change only `REMOTE_ENV_FILE` to the physical symlink-resolved path under `.builds/config/.env`. Continue to validate the required file and all required production configuration lines before a backup can begin.
+
+**Production state:** No production code, database, data, configuration value, migration, release link, or Passenger state changed in this run.
+
+**Exact next step:** CI-validate and merge the symlink-resolved configuration-path correction, then retry the same guarded release procedure.
+
+## 2026-08-17 — Environment guard aligned to application parsing semantics
+
+**Objective:** Resolve the format-sensitive `NODE_ENV` preflight failure after the physical configuration-file path was verified.
+
+**Actions:** PR #79 was CI-validated and merged at `b17f8bed450b5dd5f4774f35bb1ea9a39e67f9ab`; run `32022477189` was manually dispatched for that exact SHA.
+
+**Evidence/results:** CI passed. The preflight passed the active release, runtime dependencies, persistent data, physical `.builds/config/.env` configuration file, persistent database, and Node `v20.19.4` guards. It stopped at the exact-text `NODE_ENV=production` check before the backup step. The application itself uses `dotenv.parse` semantics, under which harmless whitespace or quoted formatting can differ from a literal line while still resolving to the same safe value. No backup, staging, migration, release switch, restart, or health check began.
+
+**Decision:** Preserve the required values but evaluate them using the same `dotenv` parsing semantics as the application. The guard returns only a labelled pass/fail result and never prints environment keys' values or contents.
+
+**Production state:** No production code, database, data, configuration value, migration, release link, or Passenger state changed in this run.
+
+**Exact next step:** CI-validate and merge the semantic configuration-guard correction, then retry the guarded manual release procedure.
+
+## 2026-08-17 — Native-addon manifest guard stopped candidate release
+
+**Objective:** Continue the manual release after correcting the physical configuration-file path and semantic environment guard.
+
+**Actions:** PR #80 was CI-validated and merged at `796cb2b4197df1f0b1ae884f5a974d2040d8bffd`; run `32022965082` was manually dispatched for that exact SHA.
+
+**Evidence/results:** The reusable CI passed. The live preflight passed the active release, runtime dependencies, persistent data, physical configuration file, persistent database, Node `v20.19.4`, and all five parsed production-configuration guards. A fresh SQLite-consistent backup and its verification completed successfully. The immutable source bundle was transferred and its SHA-256 verification passed. Candidate creation then stopped at the deliberate package manifest guard because the candidate `package.json` differs from the deployed release. The candidate root was removed before exit. No migration, release symlink switch, Passenger restart, or public health validation occurred.
+
+**Decision:** Do not weaken or bypass the package manifest guard. Treat this as a separate native-addon dependency-release procedure requiring a dependency diff, an isolated candidate `npm ci --omit=dev` using the verified Node 20 runtime, native binary validation before the release switch, and explicit confirmation before dispatching a workflow that can perform that installation and deployment.
+
+**Production state:** One fresh verified backup was created. Production code, database schema/data, configuration values, release link, and Passenger state remain unchanged.
+
+**Exact next step:** Compare the deployed `1bd15f1` package manifests to current main, document the dependency impact and a rollback-safe candidate install procedure, then request confirmation for that separate procedure.
+
+## 2026-08-17 — Manifest guard narrowed to runtime dependency changes
+
+**Objective:** Assess the package-manifest guard stop in run `32022965082` without bypassing native-addon protection.
+
+**Evidence/results:** A direct comparison of deployed revision `1bd15f1` with current main found no `package-lock.json` change and no dependency, optional-dependency, bundled-dependency, Node-engine, platform, or package-manager change. The only `package.json` difference is an expanded `test:smoke` script that adds browser checks for request-line visibility and the design foundation. Therefore the existing `node_modules` tree and its native `better-sqlite3` addon remain compatible with the candidate dependency graph.
+
+**Decision:** Replace the byte-for-byte `package.json` comparison with a deterministic runtime-dependency fingerprint comparison while retaining the exact package-lock guard. Any dependency tree, runtime engine, platform, or package-manager change continues to stop the release and requires the dedicated native-addon procedure. No candidate `npm ci` is proposed or required for this release.
+
+**Production state:** Unchanged after the verified backup noted in the preceding entry. No migration, release-link switch, restart, or production mutation has occurred.
+
+**Exact next step:** CI-validate and merge the narrowed runtime-dependency guard, then retry the already approved guarded release for current main.
+
+## 2026-08-17 — Hostinger reachability interruption during guarded release
+
+**Objective:** Retry the approved guarded release after merging PR #81's runtime-dependency fingerprint safeguard.
+
+**Actions:** PR #81 was CI-validated and merged at `c81c8367d48ce1a3122f0473822bc1cdc223a777`; run `32023580760` was manually dispatched for that exact SHA.
+
+**Evidence/results:** The reusable CI and all local release-ref, source-bundle, credential, and pinned-SSH setup steps passed. The job then timed out establishing the remote SSH connection before its live preflight began; no remote command or backup executed. A separate read-only public request to `https://wms.kynox.io/healthz` also timed out after 20 seconds with no response. This is a Hostinger reachability or service-availability symptom, not evidence of a deployment defect.
+
+**Decision:** Do not repeat deployment attempts while both SSH and the public health endpoint are unreachable. Record an incident, preserve the current fail-closed release workflow, and ask the owner to verify Hostinger service and application availability through hPanel or their independent access before a single guarded retry.
+
+**Production state:** No code, database, configuration, migration, release link, Passenger state, or backup changed in this run; the SSH session never connected.
+
+**Exact next step:** Confirm Hostinger reachability has recovered, then re-run the existing manual release workflow for unchanged main SHA `c81c8367d48ce1a3122f0473822bc1cdc223a777`.
+
+## 2026-08-17 — Candidate migration completed; release switch did not execute
+
+**Objective:** Retry the guarded release after public health recovered from the transient Hostinger reachability interruption.
+
+**Actions:** Main advanced to `c88b7a6da622c9352458ec787a3658acbc1f8dd7` with the incident documentation only. Release run `32024319821` was manually dispatched for that exact SHA.
+
+**Evidence/results:** Reusable CI, live preflight, verified backup, source-bundle transfer, and bundle checksum all passed. The candidate migration process ran and reported migrations `013_canonical_analytical_movements` and `014_operational_movement_semantics` applied, for 14 total. Immediately afterward the candidate-release step exited with code 1 before the workflow's `PREVIOUS_TARGET` capture, atomic symlink switch, Passenger restart, or health-check gate. The public `/healthz` endpoint was independently checked immediately afterward and returned HTTP 200 with `{"status":"ok","service":"wms"}`.
+
+**Decision:** Do not re-run a workflow that reaches migrations until the specific post-migration failed guard is identified. Treat the live schema as 14 migrations recorded, retain the existing release target, and use a separate manual read-only Hostinger layout diagnostic to inspect only the conditions after migration and before release switching.
+
+**Production state:** A verified backup was created, and two reviewed migrations were applied to the persistent production database. The code release symlink, Passenger restart state, and public endpoint were not changed by this run. Public health remained OK after the stop.
+
+**Exact next step:** CI-validate and dispatch a read-only Hostinger release-layout diagnostic; do not re-run migrations or alter the live release until its result is documented.
+
+## 2026-08-17 — Explicit authorization for checkpointed idempotent release retry
+
+**Authorization:** The owner explicitly confirmed to proceed after reviewing that migrations 013 and 014 were already applied while the code release remained unchanged.
+
+**Authorized scope:** Add labelled post-migration checkpoints, validate the safeguard in CI, then perform one controlled retry. The retry must retain parsed configuration guards, a fresh verified backup, migration idempotency validation, atomic symlink switching, Passenger restart signaling, public health verification, and automatic code rollback on a failed health check.
+
+**Constraints retained:** Do not alter production environment values, seed/reset data, bypass the verified-backup gate, weaken runtime dependency protections, or manually change the release symlink outside the workflow.
+
+## 2026-08-17 — Atomic switch occurred; non-canonical target comparison stopped before restart
+
+**Objective:** Execute the owner-authorized checkpointed retry after migrations had already reached the idempotent 14-recorded state.
+
+**Actions:** PR #84 merged at `18a4559a02b6f1e540c0dc72142c6176a06a00ba`; run `32026143071` was manually dispatched for that exact SHA.
+
+**Evidence/results:** CI, preflight, fresh verified backup, bundle transfer, candidate initialization, and idempotent migration completion all passed. The checkpoint log then confirmed prior-target verification, next-link creation, and the atomic symlink move. It stopped at the subsequent target-comparison guard before writing the Passenger restart signal. An immediate read-only public health check returned HTTP 200 with `{"status":"ok","service":"wms"}`.
+
+**Root cause:** The guard compared `readlink -f "$CURRENT_LINK"` with an uncanonicalized candidate-root path. Because the Hostinger release layout includes symlink resolution, equivalent targets may have different textual paths. This is a workflow verification defect, not evidence of an invalid candidate release.
+
+**Decision:** Canonicalize both expected and current release targets before comparison. If the comparison ever fails, automatically restore the recorded previous release target, signal a restart for that restored target, and exit fail-closed before health validation. First use the existing read-only diagnostic to establish whether the active release currently resolves to the candidate; do not perform any further release mutation until that evidence is recorded.
+
+**Production state:** A fresh verified backup was created. The migration run was idempotent. The atomic symlink move occurred, but no restart signal or workflow health validation followed. The public endpoint was healthy immediately afterward.
+
+## 2026-08-17 — Read-only active-target diagnostic after atomic-switch stop
+
+**Objective:** Establish whether the `current` release symlink points to the candidate from run `32026143071` after the workflow reported an atomic move but failed its target verification.
+
+**Evidence/results:** The merged read-only diagnostic run `32026696423` completed successfully. It confirmed the live application directory, current symlink, persistent data/configuration/database, and all candidate runtime links exist. It reported `active_release_does_not_match_inspected_candidate`. A public health check immediately before this inspection had returned HTTP 200.
+
+**Conclusion:** The healthy active release is not the candidate from the failed activation attempt. The candidate remains intact for read-only inspection. The workflow's apparent atomic-move success must be reconciled with Hostinger's actual release-link semantics before any activation attempt is made.
+
+**Decision:** Add only read-only identity output for the current symlink target, raw link value, candidate target, and release-directory type. Do not modify links, restart Passenger, or retry the release until this evidence identifies the correct activation mechanism.
+
+**Production state:** Public health is OK. No additional production mutation has been performed after the failed target-verification guard.
+
+## 2026-08-17 — Guarded production release completed successfully
+
+**Objective:** Complete the final owner-authorized release using canonical target verification and automatic rollback safeguards.
+
+**Actions:** The canonical verification and rollback correction merged in PR #85; read-only run `32027133610` then confirmed the active symlink already resolved to candidate `gha-32026143071-1`. The final manual release run `32027249672` was dispatched for current main SHA `87271334e22a3cbdf3579757b1489e74d5d499d7`.
+
+**Evidence/results:** The reusable CI and every deployment job step succeeded. Preflight validated the active release, runtime dependencies, persistent data/configuration/database, Node `v20.19.4`, and all parsed production safety values. A fresh SQLite-consistent backup completed and was verified before candidate handling. The checksummed source bundle transferred successfully. Candidate migration reported `Migrations: up to date (14 recorded)`. The workflow then confirmed the prior release, created the next link, completed the canonicalized atomic switch, verified the current release target, wrote the Passenger restart signal, and passed both in-workflow and final public `/healthz` checks. It emitted `DEPLOYED_SHA=87271334e22a3cbdf3579757b1489e74d5d499d7`.
+
+**Production state:** The active release is the final candidate generated by run `32027249672`; Passenger restart signaling and public health verification completed successfully. The persistent database has 14 recorded migrations. No seed, reset, production-environment change, or rollback was required.
+
+**Follow-up verification:** The public login page loaded and rendered successfully after deployment. Authenticated dashboard and request-detail visual verification remains dependent on a suitable pre-authorized test session; no credentials were requested or entered in this release session.
+
+## 2026-08-19 — GitHub connector established; working agreement recorded; open items reassessed
+
+**Objective:** Restore working access to the repository for a new session picking up the outstanding follow-up list (Hostinger cache purge, verification, redesign waves) and correct an access-security issue that occurred during that process.
+
+**Actions:** The session initially had no repository access. Two GitHub personal access tokens were pasted directly into chat by the owner during troubleshooting; both were flagged as exposed on receipt, and the owner confirmed the first was deleted. Rather than accept further pasted tokens, a proper GitHub OAuth connection was established through an available connector (Composio), authorized by the owner via a redirect link, with no credential text entering the conversation. The connection is active under account `Islamce`, alias `wms-kynox`.
+
+**Evidence/results:** Repository access confirmed: 14 repositories visible, including `Islamce/WMS` (this project). Read access to `docs/WMS-SESSION-LOG.md` and `docs/WMS-CURRENT-STATUS.md` confirmed working. Reviewing the existing log showed the most recent entries (2026-08-17) already record a **successful guarded production release** (run `32027249672`, deployed SHA `87271334e22a3cbdf3579757b1489e74d5d499d7`, canonical target verification, Passenger restart, public `/healthz` OK) — this is inconsistent with the stale-HCDN-cache blocker described at the start of this session, indicating that blocker was either already superseded or belongs to an untracked later thread. No live check against `wms.kynox.io` has been performed in this session; production was not touched.
+
+**Also surfaced:** `WMS-CURRENT-STATUS.md` item 12 (open hygiene follow-up) records that the owner's Hostinger backup SSH private key was pasted into a chat session on 2026-08-11 and marked for rotation. This session found no evidence in the repo confirming that rotation occurred. This is carried forward as still-open below.
+
+**Working agreement recorded (owner directive):** The owner is the Kynox portfolio owner, not a coding engineer or technical advisor, and has low coding experience. Going forward, the assisting session is directed to act as solution manager and coding consultant — making implementation and technical-approach decisions directly rather than presenting engineering options for the owner to choose between — while still surfacing decisions that are irreversible, costly, touch production data, or carry real security exposure, since those remain the owner's call regardless of technical background.
+
+**Decision:** Treat the original cache-purge follow-up list as unconfirmed pending a fresh live check rather than assume it still applies. Treat the unrotated SSH key as the top-priority open item, above any redesign or cache work, since it is a live credential exposure. No production access, deployment, migration, or mutation occurred in this session.
+
+**Production state:** Unchanged. No SSH, Hostinger, or live-site access was performed or attempted in this session.
+
+**Exact next step:** (1) Confirm with the owner whether the Hostinger SSH key from 2026-08-11 has been rotated; if not, treat as priority zero. (2) Perform a fresh read-only check of `https://wms.kynox.io/healthz` and the HCDN cache state before resuming any purge/verification work, since the last logged production state is healthy. (3) Resume the KYNOX redesign waves (Command Center, Inventory, Exceptions/Analytics, Flutter M1–M4) per the existing plan once (1) and (2) are resolved.

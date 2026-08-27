@@ -145,7 +145,16 @@ app.use('/api/kpi', require('./routes/kpi'));
 app.use('/api/analytics', require('./routes/analytics'));
 
 // --- Static frontend ------------------------------------------------------
-app.use(express.static(path.join(__dirname, '..', 'public')));
+const publicRoot = path.join(__dirname, '..', 'public');
+// Hostinger's edge cache has been observed serving stale same-path assets even
+// with max-age=0 and query-string cache busting. A release-scoped URL path
+// keeps the browser/CDN cache key distinct without copying or mutating assets.
+app.use('/release-assets/:release', (req, res, next) => {
+  const relativeAsset = req.path.replace(/^\//, '');
+  if (!relativeAsset || relativeAsset.includes('..') || relativeAsset.startsWith('release-assets/')) return next();
+  return express.static(publicRoot)(req, res, next);
+});
+app.use(express.static(publicRoot));
 // Chart.js is served from node_modules so the app has no CDN dependency.
 app.use('/vendor', express.static(path.join(__dirname, '..', 'node_modules', 'chart.js', 'dist')));
 
@@ -206,7 +215,7 @@ if (process.env.SCHEDULER_ENABLED !== '0') {
 
 // Optional automated daily database backup (enable by setting BACKUP_DIR).
 if (process.env.BACKUP_DIR) {
-  const { backup } = require('../scripts/backup');
+  const { backup } = require('./services/backup');
   const runBackup = () => backup().then((d) => console.log(`Backup written: ${d}`))
     .catch((e) => console.error('Backup failed:', e.message));
   runBackup();

@@ -43,7 +43,7 @@ class AnalyticsScreen extends StatelessWidget {
               child: Column(children: [
                 Row(children: [
                   classPill('Fast', s['fast_count'], const Color(0xFF1baf7a)),
-                  classPill('Normal', s['normal_count'], const Color(0xFF2a78d6)),
+                  classPill('Normal', s['normal_count'], const Color(0xFF31c3c9)),
                   classPill('Slow', s['slow_count'], const Color(0xFFeda100)),
                   classPill('Dead', s['dead_count'], const Color(0xFFe34948)),
                 ]),
@@ -69,7 +69,7 @@ class AnalyticsScreen extends StatelessWidget {
                         ? const Color(0xFFe34948)
                         : sev.contains('warn') || sev.contains('med')
                             ? const Color(0xFFeda100)
-                            : const Color(0xFF2a78d6);
+                            : const Color(0xFF31c3c9);
                     return ListTile(
                       dense: true,
                       contentPadding: EdgeInsets.zero,

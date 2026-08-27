@@ -42,7 +42,7 @@ class NavDest {
 /// Section accent colours — same palette as the web launchpad, so the two
 /// home pages read as one product.
 const Map<String, Color> _sectionAccent = {
-  'General': Color(0xFF2a78d6),
+  'General': Color(0xFF31c3c9),
   'Material Requests': Color(0xFF7c3aed),
   'Warehouse Execution': Color(0xFF1baf7a),
   'Shipping & Outbound': Color(0xFFd6552a),
@@ -165,7 +165,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (dests.isEmpty) {
       return Scaffold(
-        appBar: AppBar(title: const Text('WMS Mobile')),
+        appBar: AppBar(title: const Text('KYNOX WMS')),
         drawer: _buildDrawer(session, dests),
         body: const _NoAccess(),
       );
@@ -251,7 +251,7 @@ class _HomeScreenState extends State<HomeScreen> {
     for (final e in _menu) {
       if (e is String) { flush(); section = e; }
       else if (e is NavDest && e.permission != null && session.can(e.permission)) {
-        final accent = _sectionAccent[section] ?? const Color(0xFF2a78d6);
+        final accent = _sectionAccent[section] ?? const Color(0xFF31c3c9);
         final idx = dests.indexOf(e);
         tiles.add(_LaunchTile(
           label: t(e.label), icon: e.icon, accent: accent,
@@ -309,12 +309,12 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             DrawerHeader(
               margin: EdgeInsets.zero,
-              decoration: const BoxDecoration(color: Color(0xFF2a78d6)),
+              decoration: const BoxDecoration(color: Color(0xFF31c3c9)),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.warehouse, color: Colors.white, size: 36),
+                  Image.asset('assets/brand/kynox_mark.png', width: 36, height: 36),
                   const Spacer(),
                   Text(session.userName,
                       style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),

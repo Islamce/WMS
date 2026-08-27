@@ -53,6 +53,10 @@ body {
 .sidebar { background: var(--sidebar-bg); border-right: 1px solid rgba(121, 170, 195, .12); }
 .sidebar .brand { height: 68px; padding-inline: 15px; background: rgba(255, 255, 255, .015); }
 .sidebar .brand-mark { width: 34px; height: 34px; border-radius: 11px; display: inline-flex; align-items: center; justify-content: center; background: linear-gradient(135deg, var(--kynox-cyan), var(--kynox-blue)); color: #06111d; font-weight: 900; box-shadow: 0 0 24px rgba(49, 195, 201, .22); }
+.sidebar .brand-mark { background: none; box-shadow: none; padding: 0; overflow: hidden; }
+.sidebar .brand-mark img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.auth-card .logo-mark { width: 56px; height: 56px; margin: 0 auto 14px; display: block; }
+
 .sidebar .brand-name { font-size: 15px; letter-spacing: .11em; }
 .nav-search { margin-top: 14px; background: rgba(255, 255, 255, .045); border-color: rgba(176, 208, 225, .10); border-radius: 11px; }
 .nav-tree { padding: 8px 10px 20px; }
@@ -81,6 +85,24 @@ tbody tr:hover td { background: rgba(49, 195, 201, .035); }
 .auth-wrap { background: radial-gradient(circle at 30% 20%, rgba(49, 195, 201, .18), transparent 28rem), radial-gradient(circle at 75% 75%, rgba(86, 119, 255, .16), transparent 30rem), #06101d; }
 .auth-card { background: rgba(11, 26, 43, .86); border: 1px solid rgba(141, 183, 207, .17); backdrop-filter: blur(22px); box-shadow: 0 28px 70px rgba(0, 0, 0, .40); }
 .auth-card .logo { color: var(--kynox-cyan); letter-spacing: .06em; }
+
+/* Wave W3 — Universal operational object */
+.operational-object-header { margin-bottom: 20px; padding: 22px; border: 1px solid var(--border); border-radius: 18px; background: linear-gradient(135deg, rgba(49, 195, 201, .10), rgba(86, 119, 255, .06) 58%, var(--surface)); box-shadow: var(--shadow); }
+.operational-object-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+.operational-object-heading h1 { margin: 4px 0 3px; font-size: clamp(25px, 3.2vw, 36px); }
+.operational-object-heading p { margin: 0; }
+.operational-object-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.operational-object-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 9px 14px; margin-top: 14px; color: var(--text-muted); font-size: 12px; }
+.operational-object-meta strong { color: var(--text); margin-right: 4px; }
+.operational-object-header .request-stage { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
+.operational-exception-banner { display: flex; align-items: flex-start; gap: 10px; margin-top: 16px; padding: 12px 14px; border: 1px solid currentColor; border-radius: 11px; font-size: 13px; }
+.operational-exception-banner strong { display: block; }
+.operational-exception-banner span { color: var(--text-muted); margin-left: auto; text-align: right; }
+.operational-exception-banner.warning { color: var(--warning); background: var(--warning-bg); }
+.operational-exception-banner.danger { color: var(--danger); background: var(--danger-bg); }
+.queue-return-context { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: -8px 0 18px; padding: 10px 13px; border: 1px solid rgba(49, 195, 201, .24); border-radius: 11px; background: rgba(49, 195, 201, .07); color: var(--text-muted); font-size: 12px; }
+.queue-return-context strong { color: var(--primary); letter-spacing: .035em; }
+.queue-return-context span { text-align: right; }
 
 /* Phase 2 — Operations Command Center */
 .cc-hero { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 24px; padding: 26px; border: 1px solid var(--border); border-radius: 18px; background: linear-gradient(135deg, rgba(49, 195, 201, .12), rgba(86, 119, 255, .08) 58%, var(--surface)); box-shadow: var(--shadow); }
@@ -125,6 +147,14 @@ tbody tr:hover td { background: rgba(49, 195, 201, .035); }
 
 @media (max-width: 767px) {
   .content { padding: 14px; }
+  .operational-object-header { padding: 17px; }
+  .operational-object-heading { flex-direction: column; }
+  .operational-object-actions { width: 100%; justify-content: flex-start; }
+  .operational-object-actions .btn { flex: 1 1 auto; }
+  .operational-exception-banner { flex-direction: column; }
+  .operational-exception-banner span { margin-left: 0; text-align: left; }
+  .queue-return-context { align-items: flex-start; flex-direction: column; gap: 3px; margin-top: -10px; }
+  .queue-return-context span { text-align: left; }
   .topbar { height: 58px; padding-inline: 10px; }
   .breadcrumbs .crumb:not(.current), .breadcrumbs .sep { display: none; }
   .user-meta { display: none; }
@@ -137,3 +167,26 @@ tbody tr:hover td { background: rgba(49, 195, 201, .035); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
 }
+
+/* Home launchpad hero banner (KYNOX brand imagery) */
+.lp-hero {
+  position: relative;
+  background-image: linear-gradient(120deg, rgba(6,12,20,.88), rgba(6,12,20,.55) 55%, rgba(6,12,20,.30)), url('/img/hero-operations.jpg');
+  background-size: cover;
+  background-position: center 42%;
+  border-radius: 16px;
+  padding: 26px;
+  overflow: hidden;
+}
+.lp-hero h1 { color: #eef6ff; text-shadow: 0 2px 10px rgba(0,0,0,.45); }
+.lp-hero p { color: #cfe0ec; text-shadow: 0 2px 8px rgba(0,0,0,.4); }
+.cc-hero { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 24px; padding: 26px; border: 1px solid var(--border); border-radius: 18px; background: linear-gradient(135deg, rgba(49, 195, 201, .12), rgba(86, 119, 255, .08) 58%, var(--surface)); box-shadow: var(--shadow); }
+.cc-hero {
+  background-image: linear-gradient(120deg, rgba(6,12,20,.86), rgba(6,12,20,.55) 55%, rgba(6,12,20,.28)), url('/img/hero-network.jpg');
+  background-size: cover;
+  background-position: center 40%;
+  border-color: rgba(255,255,255,.10);
+}
+.cc-hero h1, .cc-hero .cc-eyebrow { color: #eef6ff; text-shadow: 0 2px 10px rgba(0,0,0,.45); }
+.cc-hero p { color: #cfe0ec; text-shadow: 0 2px 8px rgba(0,0,0,.4); }
+.cc-hero .cc-live { color: #cfe0ec; }

@@ -1,6 +1,6 @@
 # WMS Current Status
 
-Last updated: 2026-08-11
+Last updated: 2026-08-17
 
 ## Executive status
 
@@ -10,10 +10,10 @@ Last updated: 2026-08-11
 - Production app path: `~/domains/wms.kynox.io/nodejs`
 - Production database: SQLite at `data/wms.db` using WAL mode
 - Production runtime: Node `v20.19.4`, npm `10.8.2`
-- Current deployed commit (**Reported (production), 2026-08-01; independently corroborated 2026-08-04** — see the resolved section below): `1bd15f12d70112a977983a96bae63e1b3c441310` (PR #53 merge commit). This commit contains PR #43 (opening-stock idempotency), PR #46 (auto-seed fail-closed), PR #48 (credential hardening), PR #49 (opening-stock validation harness), and PR #53 (Hostinger native-addon recovery).
-- `main` branch head (Verified (repo), 2026-08-04): `065736cbda165dfc73478e2f6ce43468a0d63304`. Production is 3 commits behind; the only difference is unrelated `chore(kaaf)` architecture-tooling vendoring, not application code — production is not missing any shipped feature or fix.
-- Health endpoint: healthy, returning `{"status":"ok","service":"wms"}` (**Reported (production)** during the 2026-08-01 recovery; **independently re-verified** live by this session on 2026-08-04).
-- Database migrations: 12 recorded in production; unchanged by the native-addon recovery, which replaces only the installed `better-sqlite3` binary and never touches the database. 12 defined in code at the deployed commit.
+- Current deployed commit (**Verified (GitHub Actions release run `32027249672`, 2026-08-17)**): `87271334e22a3cbdf3579757b1489e74d5d499d7`. The guarded release completed through canonical target verification, Passenger restart signaling, and final public-health validation.
+- `main` branch deployment revision (**Verified (repo), 2026-08-17**): `87271334e22a3cbdf3579757b1489e74d5d499d7` at release dispatch. Subsequent documentation-only commits do not alter the deployed application bundle.
+- Health endpoint: healthy, returning `{"status":"ok","service":"wms"}` (**Verified** in the successful deployment job and rechecked from this session on 2026-08-17).
+- Database migrations: 14 recorded in production (**Verified** by the idempotent final migration gate, which reported `Migrations: up to date (14 recorded)`). Migrations 013 and 014 were applied in the earlier controlled candidate stage and were not re-applied during the successful final release.
 - Offsite backup: **Verified (repo), 2026-08-11:** `production-backup.yml` run #39 (`31535041998`) completed fully successfully — all 15 steps, including local retention pruning — following five fixes made the same day (SSH key, host-key, `REMOTE_APP_DIR`, `DB_PATH`, and a retention-step error-handling bug). `INC-2026-08-06-01` is closed. The workflow is back on its normal daily schedule (02:30 UTC).
 - PR #53 merged 2026-08-01; its CI and native-build checks were green at merge (see `WMS-INCIDENT-LOG.md` → `INC-2026-07-31-01` for the full artifact/inspection history).
 
@@ -248,3 +248,15 @@ reset-admin
 ```
 
 Do not delete, replace, truncate, or recreate the SQLite database or WAL files outside an approved and documented recovery procedure.
+
+## KYNOX experience redesign execution — 2026-08-17
+
+**Verified (repo):** A controlled successor branch, `feat/wms-experience-redesign-execution`, was created from the complete PR #68 → #69 stack at `f68c728`. This preserves the merged workflow-context and analytics-integrity work on `main` while extending the open request-line, picker-state, request-card, and role-focused navigation work without reconstructing it.
+
+**Verified (repo):** The first redesign wave adds a presentation-only operational object header and exception treatment to the web Material Request detail surface. It uses the existing canonical workflow-stage indicator and does not change routes, permissions, APIs, workflow transitions, schema, inventory behavior, ERP behavior, audit controls, or production configuration.
+
+**Verified (repo):** Local `npm test` passed all suites after rebuilding `better-sqlite3` for the available Node v22.13.0 runtime. `npm run test:smoke` passed 6/6 base smoke, 10/10 request-line visibility, and 11/11 design-foundation checks after installing the local Playwright Chromium runtime. `npm run lint` completed with 0 errors and the repository's existing warnings. The repository declares Node 20.x, so local runtime compatibility is a caveat; CI remains the authoritative merge gate.
+
+**Production safety:** No production access, deployment, migration, import, reset/seed, Passenger restart, live database access, or PR merge occurred.
+
+**Artifacts:** `docs/WMS-REDESIGN-BASELINE-2026-08-17.md`, `docs/WMS-REDESIGN-SCREEN-INVENTORY-2026-08-17.md`, `docs/WMS-REDESIGN-MARKET-BENCHMARK-2026-08-17.md`, and `docs/WMS-REDESIGN-ARCHITECTURE-2026-08-17.md` record the audit, benchmark, target IA, workflow architecture, role matrix, design decisions, and residual risks.

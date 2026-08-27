@@ -22,7 +22,7 @@ class _CycleCountScreenState extends State<CycleCountScreen> {
       case 'POSTED':
         return const Color(0xFF1baf7a);
       case 'COUNTED':
-        return const Color(0xFF2a78d6);
+        return const Color(0xFF31c3c9);
       case 'CANCELLED':
         return const Color(0xFFe34948);
       default:
