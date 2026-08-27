@@ -2,85 +2,114 @@
 
 This file is the mandatory starting point for Claude, ChatGPT, Copilot, Codex, and any other AI agent working on this repository.
 
-## Required reading order
+## Operating objective
 
-Before analysis, commands, code changes, deployment, database work, or user guidance, read:
+Deliver the real task with the minimum sufficient authoritative context. Do not bulk-load project memory by default, do not create new governance layers, and do not update multiple documents merely to keep copies of the same fact synchronized.
 
-1. `docs/WMS-CURRENT-STATUS.md`
-2. `docs/WMS-UNIFIED-AI-HANDOFF.md`
-3. `docs/WMS-PRODUCTION-RUNBOOK.md`
-4. `docs/WMS-INCIDENT-LOG.md`
-5. `docs/WMS-DECISION-LOG.md`
-6. `docs/WMS-SESSION-LOG.md`
-7. `docs/WMS-V1.0-EXECUTION-PLAN.md`
-8. `docs/WORKFLOW-GAP-ANALYSIS.md`
-9. `docs/OPS-RUNBOOK.md`
-10. `docs/ANDROID-UAT-V1.0.md`
-11. `DEPLOY-HOSTINGER.md`
+The task-scoped reading policy below supersedes the older blanket mandatory-reading list in `docs/WMS-UNIFIED-AI-HANDOFF.md` §3. That older section remains historical context until a real task demonstrates that it must be changed; do not treat it as a reason to read every listed file before every task.
 
-Then inspect the relevant code, migrations, tests, PRs, issues, Actions runs, and Git history. Never restart reasoning from zero when these records contain prior context.
+## Authority by fact type
 
-`docs/WMS-UNIFIED-AI-HANDOFF.md` defines the shared management baseline, trust hierarchy, delivered capability map, production-safety rules, and ordered V1.0 closure phases. It does not replace current production verification.
+Use the authority that matches the fact being asserted:
 
-## Mandatory continuity rules
+- **Current production/deployed behavior:** current read-only runtime evidence. Never infer production state from Git or documentation.
+- **Implemented behavior:** current Git code, migrations, tests, commits, PRs, issues, and workflow evidence.
+- **Architecture, safety and execution governance:** this file plus the applicable rules/decisions in `docs/WMS-UNIFIED-AI-HANDOFF.md` and `docs/WMS-DECISION-LOG.md`.
+- **Historical incidents and prior evidence:** `docs/WMS-INCIDENT-LOG.md`, relevant session-log entries, PRs, issues, and commits.
+- **Product/workflow intent:** the current task plus the most recent applicable specification/decision. If intent and implementation differ, record the gap; do not silently choose one as if both describe current state.
+- **Conversation text:** context only; never authoritative over runtime, Git, or recorded decisions.
 
-- Treat the files above as the durable project memory, but resolve conflicts using the trust hierarchy in `docs/WMS-UNIFIED-AI-HANDOFF.md`.
-- Before proposing a fix, check whether the same incident, decision, workaround, deployment step, or rejected approach is already recorded.
-- Distinguish clearly between verified facts, current observations, historical facts, inferences, assumptions, and proposed actions.
-- Never assume production state from repository state alone.
-- Never assume a merge has been deployed.
-- Never run destructive or data-changing production commands without an explicit backup, dry run where available, rollback plan, and user approval.
-- Never run demo, reset, or automatic seed commands in production.
-- Record every meaningful session, code change, deployment, incident, command, result, unresolved issue, and decision in the appropriate documentation before considering work complete.
-- Do not record passwords, private keys, tokens, service-account JSON, password hashes, database rows containing personal data, or other secrets.
-- Conversation transcripts do not belong verbatim in Git. Record durable summaries, exact commands where operationally important, outcomes, decisions, evidence, and links to PRs/commits.
+When evidence conflicts, prefer the most recent directly verified evidence for that fact type. Label important findings as verified fact, current observation, historical fact, inference, assumption, or proposed action. Never replace missing evidence with a confident statement.
 
-## Required close-out for every future work session
+## Task-scoped context loading
 
-Update at least:
+Start from the requested task, inspect relevant Git/code/test evidence, then load only the documents needed to answer or implement that task.
 
-- `docs/WMS-CURRENT-STATUS.md` for the latest operational and delivery state.
-- `docs/WMS-SESSION-LOG.md` with date, objective, actions, evidence, result, and next step.
+Use this map instead of reading the whole documentation set:
 
-Also update when applicable:
+- **Production, deployment, database, backup or recovery work:** read `docs/WMS-CURRENT-STATUS.md`, the relevant section of `docs/WMS-PRODUCTION-RUNBOOK.md`, applicable incidents/decisions, and `DEPLOY-HOSTINGER.md` only when deployment/Hostinger details are involved.
+- **Workflow, reservation, allocation, picking, issue/receipt, analytics or mobile work:** read the relevant code/tests first, then the applicable parts of `docs/WORKFLOW-GAP-ANALYSIS.md`, `docs/WMS-V1.0-EXECUTION-PLAN.md`, `docs/OPS-RUNBOOK.md`, or `docs/ANDROID-UAT-V1.0.md` only as needed.
+- **Architecture, security, governance or a disputed prior decision:** read the applicable portions of `docs/WMS-UNIFIED-AI-HANDOFF.md` and `docs/WMS-DECISION-LOG.md`.
+- **Known/repeated incident:** search `docs/WMS-INCIDENT-LOG.md`, relevant PRs/issues/commits, and only the relevant session-log entries.
+- **Simple isolated code/test fix:** do not read unrelated operational or historical documents.
 
-- `docs/WMS-UNIFIED-AI-HANDOFF.md` only when the management baseline, trust model, production-safety rules, capability map, or V1.0 execution sequence changes.
-- `docs/WMS-INCIDENT-LOG.md` for any failure, outage, data-risk event, recovery, or near miss.
-- `docs/WMS-DECISION-LOG.md` for architecture, process, security, data, deployment, or product decisions.
-- `docs/WMS-PRODUCTION-RUNBOOK.md` when a production command, validation, recovery, rollback, or deployment process changes.
+Never restart reasoning from zero when relevant evidence exists, but never preload unrelated project history merely because it exists.
+
+## Minimal drift handling
+
+Do not stop a real task to design a new governance system.
+
+If a task exposes a documentation/context conflict, stale instruction, duplicated fact, or unclear authority:
+
+1. Resolve the task using the applicable authority and direct evidence.
+2. If the conflict is material, record one concise `DRIFT:` note in the active PR/task record or the session record already being used. Do not create a new drift framework or file for a single observation.
+3. Do not perform a repository-wide documentation cleanup as a side effect.
+4. Build a new validator/process rule only when the same failure pattern has repeated in real work and the smallest deterministic control is clearly cheaper than continued rework.
+
+Be liberal about logging a one-line drift note when friction is real, but keep the note small. The value is in recurring patterns, not in creating another documentation workload.
+
+## Documentation update rule
+
+Documentation updates are **event-driven, not session-driven**.
+
+- Update a document only when a fact owned by that document materially changed or when the current task directly exposes a material stale statement that affects safe execution.
+- Do not update `docs/WMS-CURRENT-STATUS.md` or `docs/WMS-SESSION-LOG.md` merely because a work session occurred.
+- Do not copy the same current-state statement into several files for completeness.
+- Prefer references to existing decisions/incidents/evidence over rewriting the same history.
+- Preserve historical records; mark or explain supersession when needed rather than silently rewriting history.
+- Never store passwords, private keys, tokens, service-account JSON, password hashes, personal database rows, or other secrets.
+
+A task is complete when the requested behavior/evidence and its directly affected authoritative record are correct. Documentation volume is not a completion criterion.
+
+## Role routing
+
+Use the smallest role set needed for the task:
+
+- **Codex:** primary code implementation, refactoring, tests, deterministic validators, and engineering fixes.
+- **Claude:** semantic/specification reconciliation, evidence synthesis, complex cross-component integration review, and contradiction analysis when a real conflict appears.
+- **ChatGPT:** program orchestration, scope/architecture review, prioritization, and pattern review across tasks; do not create new governance architecture without repeated evidence.
+- **Founder:** product/business/design decisions that cannot be resolved from existing evidence. Do not escalate routine documentation reconciliation.
+
+Do not require multiple AI agents to review every normal task. Use deterministic tests/gates first; add a second agent only for material architecture, security, production-risk, or unresolved semantic conflicts.
 
 ## Production safety invariants
 
-- Production app path: `~/domains/wms.kynox.io/nodejs`
-- Production database: `data/wms.db`
-- Host runtime path: `/opt/alt/alt-nodejs20/root/usr/bin`
-- Required production flags:
-  - `NODE_ENV=production`
-  - `SKIP_AUTO_SEED=1`
-  - `ALLOW_AUTO_SEED=0`
-  - `PRODUCTION_INITIALIZATION_ENABLED=false`
-- Forbidden in production unless a separately reviewed emergency procedure explicitly replaces this rule:
-  - `npm run seed`
-  - `npm run fresh-start`
-  - `npm run reset-admin`
-  - `node scripts/reset-admin.js`
-  - deleting or replacing `data/wms.db`, `data/wms.db-wal`, or `data/wms.db-shm`
-  - applying a reconciliation or initialization operation before reviewing its dry-run output
-  - running tests against the production database
-  - changing `DB_PATH` without a reviewed migration plan
+Production app path: `~/domains/wms.kynox.io/nodejs`
+
+Production database: `data/wms.db`
+
+Host runtime path: `/opt/alt/alt-nodejs20/root/usr/bin`
+
+Required production flags:
+
+- `NODE_ENV=production`
+- `SKIP_AUTO_SEED=1`
+- `ALLOW_AUTO_SEED=0`
+- `PRODUCTION_INITIALIZATION_ENABLED=false`
+
+Forbidden in production unless a separately reviewed emergency procedure explicitly replaces this rule:
+
+- `npm run seed`
+- `npm run fresh-start`
+- `npm run reset-admin`
+- `node scripts/reset-admin.js`
+- deleting or replacing `data/wms.db`, `data/wms.db-wal`, or `data/wms.db-shm`
+- applying reconciliation or initialization before reviewing its dry-run output
+- running tests against the production database
+- changing `DB_PATH` without a reviewed migration plan
+
+Before any destructive or data-changing production operation, require an explicit backup, dry run where available, rollback plan, and user approval. Never assume a merge has been deployed.
 
 ## Current critical context
 
-Production database files were accidentally deleted on 2026-07-25. Recovery involved an open process file descriptor and later a validated final live copy, integrity checks, rollback preservation, migration only, Passenger restart, and health verification.
+Production database files were accidentally deleted on 2026-07-25. Recovery ultimately used a validated final live copy with integrity checks, rollback preservation, migration-only recovery, Passenger restart, health verification, and restored administrator login.
 
-Administrator authentication was restored after the validated database copy was returned, and the operator confirmed successful login. PR #45 reconciled the stale documentation that had incorrectly left authentication marked as open.
+The old first-run auto-seed behavior and an independent `reset-admin` hidden-seed path were hardened in later PRs. Current production state must still be verified from runtime evidence before relying on repository history for a risky operation.
 
-The old first-run auto-seed guard was empirically proven to fail open when `NODE_ENV` was absent. PR #46 changed auto-seed to explicit opt-in (`ALLOW_AUTO_SEED=1`), added database-identity logging, and pinned the rule with an executable regression suite.
+Opening Stock re-import and reconciliation remain safety-sensitive. Verify deployed code and use dry-run/review gates before any production apply.
 
-PR #48 closed a second, independent path to the same failure: `scripts/reset-admin.js` ran the full demo seed whenever the roles table was empty, and defaulted to the published credentials `admin@example.com` / `Admin@123456` with no guard, no confirmation and no audit record. It now refuses default credentials, requires an explicit email, password and the typed phrase `RESET ADMIN PASSWORD` in production, never seeds, and audits. Administrator resets now set `must_change_password=1`; self-service changes clear it; both are audited without storing passwords or hashes (`DEC-012`).
+Do not treat this section as current. It is a pointer to where risk has concentrated historically, not a live status feed — always re-check `docs/WMS-CURRENT-STATUS.md` and the latest run of any relevant workflow before a production or backup operation.
 
-Production is not known to contain either fix until its deployed commit is verified.
+## Working agreement
 
-The last production commit recorded in project memory also predates PR #43's Opening Stock idempotency fix. Never re-import production Opening Stock until the deployed commit is verified to contain both PR #43 and the later fail-closed auto-seed hardening.
-
-The first assignment for a new agent is Phase 1 of `docs/WMS-UNIFIED-AI-HANDOFF.md`: establish one unified source of truth without modifying production or the database.
+The project owner is a non-technical portfolio owner, not a coding engineer. Make implementation and technical-approach decisions directly rather than presenting engineering options to choose between. Still surface a decision to the owner first only when it is irreversible, costly, touches production data, or carries real security exposure — routine reconciliation, refactors, PR merges, and technical-approach calls are not that.
