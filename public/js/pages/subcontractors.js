@@ -239,6 +239,8 @@ const SubcontractorDeliveries = {
 Pages.subcontractorQuality = SubcontractorDeliveries;
 
 // --- Current stock (computed, read-only) ------------------------------------
+// Subcontractors never get a system login — sharing their on-hand position
+// is done by exporting this view to CSV/Excel, not by granting access.
 Pages.subcontractorStock = {
   async render(el) {
     this.el = el;
@@ -247,7 +249,10 @@ Pages.subcontractorStock = {
       <div class="toolbar"><h3 class="mb-0">Subcontractor Material — On Hand</h3>
         <select id="ss-warehouse" style="max-width:220px"><option value="">All warehouses</option>
           ${meta.warehouses.map((w) => `<option value="${UI.esc(w.warehouse_code)}">${UI.esc(w.warehouse_code)} — ${UI.esc(w.warehouse_name)}</option>`).join('')}</select>
+        <div class="spacer"></div>
+        <span id="ss-export"></span>
       </div>
+      <p class="muted" style="margin:0 0 12px">Subcontractors have no system access. Export this list to send them their current on-hand position.</p>
       <div class="table-wrap" id="ss-table"><div class="loading">Loading…</div></div></div>`;
     el.querySelector('#ss-warehouse').addEventListener('change', (e) => this.load(e.target.value));
     await this.load('');
@@ -261,5 +266,15 @@ Pages.subcontractorStock = {
       <tbody>${stock.map((s) => `<tr><td>${UI.esc(s.warehouse_code)}</td><td>${UI.esc(s.description)}</td><td>${UI.esc(s.category_name || '—')}</td>
         <td class="text-right">${UI.fmtQty(s.quantity_on_hand)} ${UI.esc(s.uom)}</td><td class="muted">${UI.esc(s.subcontractors)}</td></tr>`).join('')}</tbody></table>`
       : UI.meaningfulEmptyState({ title: 'No subcontractor stock on hand', description: 'Stock appears here once received quantities are logged against a delivery.' });
+    const slot = this.el.querySelector('#ss-export');
+    slot.innerHTML = '';
+    slot.appendChild(UI.exportControl({
+      filename: 'subcontractor-stock', title: 'Subcontractor Material — On Hand', rows: stock,
+      columns: [
+        { key: 'warehouse_code', label: 'Warehouse' }, { key: 'description', label: 'Description' },
+        { key: 'category_name', label: 'Category' }, { key: 'quantity_on_hand', label: 'On hand' },
+        { key: 'uom', label: 'Unit' }, { key: 'subcontractors', label: 'Subcontractor(s)' },
+      ],
+    }));
   },
 };
