@@ -66,5 +66,7 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Face ID unlocks the app when the optional device lock is turned on in Settings.</string>
 </dict>
 </plist>

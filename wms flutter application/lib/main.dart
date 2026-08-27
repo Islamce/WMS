@@ -5,6 +5,7 @@ import 'core/session.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/change_password_screen.dart';
+import 'screens/app_lock_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -64,8 +65,34 @@ class WmsApp extends StatelessWidget {
   }
 }
 
-class _Root extends StatelessWidget {
+class _Root extends StatefulWidget {
   const _Root();
+  @override
+  State<_Root> createState() => _RootState();
+}
+
+class _RootState extends State<_Root> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // paused/hidden = backgrounded; re-lock (a no-op if the lock isn't
+    // enabled or nothing is signed in) so returning to the app re-prompts.
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden) {
+      SessionScope.of(context).lockIfEnabled();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final session = SessionScope.of(context);
@@ -74,6 +101,7 @@ class _Root extends StatelessWidget {
     }
     if (!session.isAuthenticated) return const LoginScreen();
     if (session.mustChangePassword) return const ChangePasswordScreen(forced: true);
+    if (session.locked) return const AppLockScreen();
     return const HomeScreen();
   }
 }

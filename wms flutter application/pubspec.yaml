@@ -32,6 +32,9 @@ dependencies:
   connectivity_plus: ^6.1.0
   # Reads the real installed version/build number for the Settings footer.
   package_info_plus: ^8.1.2
+  # Optional app-lock: delegates to the device's own biometric/PIN/pattern
+  # prompt — the app never stores or checks a credential itself.
+  local_auth: ^2.3.0
 
 dev_dependencies:
   flutter_test:

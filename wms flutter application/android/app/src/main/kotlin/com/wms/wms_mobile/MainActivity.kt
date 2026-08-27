@@ -1,5 +1,7 @@
 package com.wms.wms_mobile
 
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 
-class MainActivity : FlutterActivity()
+// FlutterFragmentActivity (not plain FlutterActivity) is required by
+// local_auth to present the device's biometric/PIN prompt.
+class MainActivity : FlutterFragmentActivity()
