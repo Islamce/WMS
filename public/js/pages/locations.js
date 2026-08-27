@@ -40,14 +40,14 @@ Pages.locations = {
             ${data.locations.map((l) => `
               <tr>
                 <td>${l.id}</td>
-                <td><strong>${UI.esc(l.code)}</strong></td>
+                <td><span class="chip">${UI.esc(l.code)}</span></td>
                 <td class="text-right">${UI.fmtQty(l.total_stock)}</td>
                 <td>${UI.fmtDate(l.created_at)}</td>
                 <td>
                   <button class="btn secondary sm" data-edit="${l.id}" data-code="${UI.esc(l.code)}">Edit</button>
                   <button class="btn danger sm" data-del="${l.id}" data-code="${UI.esc(l.code)}">Delete</button>
                 </td>
-              </tr>`).join('') || '<tr><td colspan="5" class="muted">No locations found</td></tr>'}
+              </tr>`).join('') || `<tr><td colspan="5">${UI.meaningfulEmptyState({ title: this.state.search ? 'No locations match this search' : 'No locations yet', description: this.state.search ? 'Try a different search term.' : 'Add a location to get started.', actionHtml: this.state.search ? '' : '<button class="btn secondary sm" id="loc-empty-add" style="margin-top:8px">+ Add Location</button>' })}</td></tr>`}
           </tbody>
         </table>`;
 
@@ -64,6 +64,7 @@ Pages.locations = {
         });
       }));
 
+      tableEl.querySelector('#loc-empty-add')?.addEventListener('click', () => this.openForm());
       UI.pagination(this.el.querySelector('#loc-pagination'), data, (p) => {
         this.state.page = p;
         this.load();

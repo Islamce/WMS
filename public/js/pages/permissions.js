@@ -45,20 +45,39 @@ Pages.permissions = {
                   <span>${UI.esc(p.label)}</span>
                 </label>`).join('')}
             </div>
-            <button class="btn" data-save="${role.id}">Save role permissions</button>`}
+            <div style="display:flex;align-items:center;gap:10px">
+              <button class="btn" data-save="${role.id}" disabled>Save role permissions</button>
+              <span class="muted sm" data-dirty-note="${role.id}" style="display:none">Unsaved changes</span>
+            </div>`}
         </div>`).join('')}`;
+
+    // Unsaved-change feedback: Save stays disabled until a checkbox actually
+    // changes from its loaded state, so it's never a no-op click.
+    el.querySelectorAll('.card[data-role]').forEach((card) => {
+      const roleId = card.dataset.role;
+      const saveBtn = card.querySelector(`[data-save="${roleId}"]`);
+      const dirtyNote = card.querySelector(`[data-dirty-note="${roleId}"]`);
+      if (!saveBtn) return;
+      card.querySelectorAll('input[type=checkbox]').forEach((cb) => {
+        cb.addEventListener('change', () => {
+          saveBtn.disabled = false;
+          dirtyNote.style.display = '';
+        });
+      });
+    });
 
     el.querySelectorAll('[data-save]').forEach((btn) => {
       btn.addEventListener('click', async () => {
         const card = el.querySelector(`.card[data-role="${btn.dataset.save}"]`);
+        const dirtyNote = card.querySelector(`[data-dirty-note="${btn.dataset.save}"]`);
         const ids = [...card.querySelectorAll('input[type=checkbox]:checked')].map((c) => Number(c.value));
         btn.disabled = true;
         try {
           const { message } = await Api.put(`/api/permissions/roles/${btn.dataset.save}`, { permission_ids: ids });
           UI.toast(message);
+          if (dirtyNote) dirtyNote.style.display = 'none';
         } catch (err) {
           UI.toast(err.message, 'error');
-        } finally {
           btn.disabled = false;
         }
       });
