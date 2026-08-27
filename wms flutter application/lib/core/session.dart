@@ -30,6 +30,14 @@ class Session extends ChangeNotifier {
   bool get isAuthenticated => token != null && token!.isNotEmpty && user != null;
   String get userName => (user?['name'] ?? '').toString();
   String get userRole => (user?['role'] ?? '').toString();
+  bool get mustChangePassword => user?['must_change_password'] == true;
+
+  /// Called after a successful password change so the forced-change gate
+  /// (mirrors the web app's) lifts immediately without a re-login.
+  void clearMustChangePassword() {
+    if (user != null) user!['must_change_password'] = false;
+    notifyListeners();
+  }
 
   List<String> get permissions {
     final p = user?['permissions'];

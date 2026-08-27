@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/i18n.dart';
 import '../main.dart';
 import '../widgets/common.dart';
+import 'change_password_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -60,6 +61,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 Text('${t('Name')}: ${session.userName}'),
                 Text('${t('Role')}: ${session.userRole}'),
                 const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.password_outlined),
+                  label: Text(t('Change Password')),
+                  onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const ChangePasswordScreen())),
+                ),
+                const SizedBox(height: 8),
                 OutlinedButton.icon(
                   icon: const Icon(Icons.logout),
                   label: Text(t('Sign out')),
