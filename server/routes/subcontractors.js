@@ -280,4 +280,48 @@ router.get('/consumption', requirePermission(['subcontractor_receiving', 'subcon
   res.json({ consumption: rows });
 });
 
+/**
+ * GET /api/subcontractor/reconciliation — site closeout view: received,
+ * consumed, and remaining side by side, including fully-depleted items the
+ * on-hand stock view drops. Consumption is matched by (warehouse,
+ * description, category, uom) rather than to one subcontractor's delivery —
+ * if two subcontractors deliver an identically-described item to the same
+ * site, consumption cannot be attributed between them from this data model;
+ * "subcontractors" lists every contributor to that pooled quantity.
+ */
+router.get('/reconciliation', requirePermission(['subcontractor_receiving', 'subcontractor_quality_inspection', 'subcontractor_admin']), (req, res) => {
+  const filters = [];
+  const params = [];
+  if (req.query.warehouse_code) { filters.push('rec.warehouse_code = ?'); params.push(req.query.warehouse_code); }
+  const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+  const rows = db.prepare(`
+    WITH received AS (
+      SELECT r.warehouse_code, dl.description, dl.category_id, dl.uom,
+        SUM(rl.quantity_received) AS qty, GROUP_CONCAT(DISTINCT s.name) AS subcontractors
+      FROM subcontractor_receipt_lines rl
+      JOIN subcontractor_receipts r ON r.id = rl.receipt_id
+      JOIN subcontractor_delivery_lines dl ON dl.id = rl.delivery_line_id
+      JOIN subcontractor_deliveries d ON d.id = dl.delivery_id
+      JOIN subcontractors s ON s.id = d.subcontractor_id
+      WHERE rl.quantity_received > 0
+      GROUP BY r.warehouse_code, dl.description, dl.category_id, dl.uom
+    ),
+    consumed AS (
+      SELECT warehouse_code, description, category_id, uom, SUM(quantity_issued) AS qty
+      FROM subcontractor_consumptions
+      GROUP BY warehouse_code, description, category_id, uom
+    )
+    SELECT rec.warehouse_code, rec.description, c.name AS category_name, rec.uom, rec.subcontractors,
+      rec.qty AS quantity_received, COALESCE(con.qty, 0) AS quantity_consumed,
+      rec.qty - COALESCE(con.qty, 0) AS quantity_on_hand
+    FROM received rec
+    LEFT JOIN consumed con ON con.warehouse_code = rec.warehouse_code AND con.description = rec.description
+      AND con.category_id IS rec.category_id AND con.uom = rec.uom
+    LEFT JOIN subcontractor_categories c ON c.id = rec.category_id
+    ${where}
+    ORDER BY rec.warehouse_code, rec.description
+  `).all(...params);
+  res.json({ reconciliation: rows });
+});
+
 module.exports = router;
