@@ -23,8 +23,8 @@ Pages.emptylocations = {
             <thead><tr><th>ID</th><th>Location Code</th></tr></thead>
             <tbody>
               ${locations.map((l) => `
-                <tr><td>${l.id}</td><td><strong>${UI.esc(l.code)}</strong></td></tr>`).join('')
-                || '<tr><td colspan="2" class="muted">No empty locations — the warehouse is fully occupied.</td></tr>'}
+                <tr><td>${l.id}</td><td><span class="chip">${UI.esc(l.code)}</span></td></tr>`).join('')
+                || `<tr><td colspan="2">${UI.meaningfulEmptyState({ title: 'No empty locations', description: 'Every location currently holds stock — the warehouse is fully occupied.' })}</td></tr>`}
             </tbody>
           </table>
         </div>
