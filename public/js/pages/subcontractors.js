@@ -320,3 +320,48 @@ Pages.subcontractorStock = {
       : UI.meaningfulEmptyState({ title: 'No consumption logged yet', description: 'Use "Log Use" on a stock row when subcontractor material is issued or installed on site.' });
   },
 };
+
+// --- Reconciliation: received / consumed / remaining, side by side ----------
+// Includes fully-depleted items the on-hand view drops — the report a site
+// closeout or a subcontractor settlement conversation actually needs.
+Pages.subcontractorReconciliation = {
+  async render(el) {
+    this.el = el;
+    const meta = await Api.get('/api/meta');
+    el.innerHTML = `<div class="card">
+      <div class="toolbar"><h3 class="mb-0">Subcontractor Material — Reconciliation</h3>
+        <select id="rc-warehouse" style="max-width:220px"><option value="">All warehouses</option>
+          ${meta.warehouses.map((w) => `<option value="${UI.esc(w.warehouse_code)}">${UI.esc(w.warehouse_code)} — ${UI.esc(w.warehouse_name)}</option>`).join('')}</select>
+        <div class="spacer"></div>
+        <span id="rc-export"></span>
+      </div>
+      <p class="muted" style="margin:0 0 12px">Received vs. consumed vs. remaining for every item ever logged at a site — including items fully used up, for closeout and subcontractor settlement.</p>
+      <div class="table-wrap" id="rc-table"><div class="loading">Loading…</div></div></div>`;
+    el.querySelector('#rc-warehouse').addEventListener('change', (e) => this.load(e.target.value));
+    await this.load('');
+  },
+
+  async load(warehouseCode) {
+    const q = warehouseCode ? `?warehouse_code=${encodeURIComponent(warehouseCode)}` : '';
+    const { reconciliation } = await Api.get(`/api/subcontractor/reconciliation${q}`);
+    this.el.querySelector('#rc-table').innerHTML = reconciliation.length ? `
+      <table><thead><tr><th>Warehouse</th><th>Description</th><th>Category</th><th class="text-right">Received</th><th class="text-right">Consumed</th><th class="text-right">Remaining</th><th>Subcontractor(s)</th></tr></thead>
+      <tbody>${reconciliation.map((r) => `<tr><td>${UI.esc(r.warehouse_code)}</td><td>${UI.esc(r.description)}</td><td>${UI.esc(r.category_name || '—')}</td>
+        <td class="text-right">${UI.fmtQty(r.quantity_received)} ${UI.esc(r.uom)}</td>
+        <td class="text-right">${UI.fmtQty(r.quantity_consumed)} ${UI.esc(r.uom)}</td>
+        <td class="text-right">${r.quantity_on_hand === 0 ? '<span class="badge role">0</span>' : UI.fmtQty(r.quantity_on_hand) + ' ' + UI.esc(r.uom)}</td>
+        <td class="muted">${UI.esc(r.subcontractors)}</td></tr>`).join('')}</tbody></table>`
+      : UI.meaningfulEmptyState({ title: 'Nothing to reconcile yet', description: 'Once a delivery is quality-approved, it appears here with its received, consumed, and remaining quantities.' });
+    const slot = this.el.querySelector('#rc-export');
+    slot.innerHTML = '';
+    slot.appendChild(UI.exportControl({
+      filename: 'subcontractor-reconciliation', title: 'Subcontractor Material — Reconciliation', rows: reconciliation,
+      columns: [
+        { key: 'warehouse_code', label: 'Warehouse' }, { key: 'description', label: 'Description' },
+        { key: 'category_name', label: 'Category' }, { key: 'quantity_received', label: 'Received' },
+        { key: 'quantity_consumed', label: 'Consumed' }, { key: 'quantity_on_hand', label: 'Remaining' },
+        { key: 'uom', label: 'Unit' }, { key: 'subcontractors', label: 'Subcontractor(s)' },
+      ],
+    }));
+  },
+};

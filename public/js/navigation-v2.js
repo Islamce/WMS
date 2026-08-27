@@ -50,7 +50,7 @@
     {
       key: 'subcontractor',
       label: 'Subcontractor Materials',
-      routes: ['subcontractor-quality', 'subcontractor-stock', 'subcontractors'],
+      routes: ['subcontractor-quality', 'subcontractor-stock', 'subcontractor-reconciliation', 'subcontractors'],
     },
   ];
 
@@ -106,6 +106,7 @@
     permissions: 'Roles & Permissions',
     'subcontractor-quality': 'Deliveries & Quality Inspection',
     'subcontractor-stock': 'Subcontractor On-Hand Stock',
+    'subcontractor-reconciliation': 'Subcontractor Reconciliation',
     subcontractors: 'Subcontractors & Categories',
   };
 
