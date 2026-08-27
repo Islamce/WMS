@@ -16,6 +16,7 @@ const { authenticate, requirePermission } = require('./../middleware/auth');
 const { isId, isPositiveNumber, isNonEmptyString } = require('./../utils/validate');
 const audit = require('./../services/audit');
 const notify = require('./../services/notify');
+const { withIdempotency } = require('./../middleware/idempotency');
 const qrService = require('./../services/qr');
 const { calcExpiry } = require('./../services/expiry');
 const { streamLabelsPdf } = require('./../services/labels');
@@ -38,7 +39,7 @@ function syncQr(batch) {
     .run(batch.gr_number, batch.bin_location, batch.qr_code_id);
 }
 
-router.post('/', requirePermission('goods_receipt'), (req, res) => {
+router.post('/', requirePermission('goods_receipt'), withIdempotency('POST /api/receiving', (req, res) => {
   const b = req.body || {};
   if (!isId(b.material_id)) return res.status(400).json({ error: 'Material is required.' });
   if (!isPositiveNumber(b.received_quantity)) return res.status(400).json({ error: 'Received quantity must be greater than zero.' });
@@ -118,7 +119,7 @@ router.post('/', requirePermission('goods_receipt'), (req, res) => {
     batch_id: batchId, batch_number: batchNumber, qr,
     warehouse_code: b.warehouse_code, bin_location: binLocation,
   });
-});
+}));
 
 router.get('/pending-gr', requirePermission(['goods_receipt', 'erp_operator']), (req, res) => {
   const rows = db.prepare(`

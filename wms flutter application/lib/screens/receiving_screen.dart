@@ -65,25 +65,54 @@ class _ReceivingScreenState extends State<ReceivingScreen> {
     if (_warehouse == null) { showSnack(context, 'Select a warehouse.', error: true); return; }
     if (_po.text.trim().isEmpty) { showSnack(context, 'PO number is mandatory.', error: true); return; }
 
-    setState(() => _busy = true);
-    try {
-      final res = await SessionScope.of(context).api.post('/api/receiving', {
-        'material_id': _material!['id'],
-        'received_quantity': qty,
-        'warehouse_code': _warehouse,
-        'po_number': _po.text.trim(),
-        if (_mfg.text.trim().isNotEmpty) 'manufacturing_date': _mfg.text.trim(),
-        if (_expiry.text.trim().isNotEmpty) 'expiry_date': _expiry.text.trim(),
-      });
-      if (mounted) {
-        showSnack(context, '${res['message'] ?? 'Received.'}');
-        setState(() {
+    final session = SessionScope.of(context);
+    // A stable idempotency_key travels with this receipt from the first
+    // attempt through any offline-queued replay, so a network drop after the
+    // server already created the batch can never create a second one when
+    // the same request is resent — see server/middleware/idempotency.js.
+    final path = '/api/receiving';
+    final body = <String, dynamic>{
+      'material_id': _material!['id'],
+      'received_quantity': qty,
+      'warehouse_code': _warehouse,
+      'po_number': _po.text.trim(),
+      if (_mfg.text.trim().isNotEmpty) 'manufacturing_date': _mfg.text.trim(),
+      if (_expiry.text.trim().isNotEmpty) 'expiry_date': _expiry.text.trim(),
+      'idempotency_key': 'mobile-gr-${DateTime.now().microsecondsSinceEpoch}',
+    };
+    final description = 'Goods receipt — ${_material!['item_code']} × $qty';
+
+    void resetForm() => setState(() {
           _material = null;
           _qty.clear(); _po.clear(); _mfg.clear(); _expiry.clear();
         });
+
+    if (!session.online) {
+      await session.enqueueOffline(method: 'POST', path: path, body: body, description: description);
+      if (mounted) {
+        showSnack(context, 'Offline — receipt saved, will sync when connected.');
+        resetForm();
+      }
+      return;
+    }
+
+    setState(() => _busy = true);
+    try {
+      final res = await session.api.post(path, body);
+      if (mounted) {
+        showSnack(context, '${res['message'] ?? 'Received.'}');
+        resetForm();
       }
     } on ApiException catch (e) {
-      if (mounted) showSnack(context, e.message, error: true);
+      if (e.statusCode == 0) {
+        await session.enqueueOffline(method: 'POST', path: path, body: body, description: description);
+        if (mounted) {
+          showSnack(context, 'Offline — receipt saved, will sync when connected.');
+          resetForm();
+        }
+      } else if (mounted) {
+        showSnack(context, e.message, error: true);
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }

@@ -126,5 +126,22 @@ check('GI replay returns existing posting',
       replay_gi.get('idempotent') is True
       and replay_gi.get('gi', {}).get('giDocumentNumber') == first_gi.get('gi', {}).get('giDocumentNumber'), replay_gi)
 
+gr_key = f'mobile-gr-{rid}'
+gr_body = {
+    'material_id': material_id, 'received_quantity': 5, 'warehouse_code': 'WH01',
+    'po_number': f'PO-IDEMP-{rid}', 'idempotency_key': gr_key,
+}
+first_gr = must('first goods receipt (with idempotency_key)', 'POST', '/api/receiving', erp, gr_body, expected=201)
+replay_gr = must('replay goods receipt (same idempotency_key)', 'POST', '/api/receiving', erp, gr_body, expected=201)
+check('goods receipt replay returns the same batch, not a new one',
+      replay_gr.get('batch_id') == first_gr.get('batch_id')
+      and replay_gr.get('batch_number') == first_gr.get('batch_number'),
+      {'first': first_gr, 'replay': replay_gr})
+
+different_key_gr = must('goods receipt with a different idempotency_key creates a new batch', 'POST', '/api/receiving', erp,
+                         {**gr_body, 'idempotency_key': f'{gr_key}-2'}, expected=201)
+check('different idempotency_key is not deduplicated against the first',
+      different_key_gr.get('batch_id') != first_gr.get('batch_id'), different_key_gr)
+
 print(f"\nIdempotency regression: {passed} passed, {failed} failed")
 sys.exit(1 if failed else 0)
