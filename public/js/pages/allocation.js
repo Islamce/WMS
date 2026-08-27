@@ -20,14 +20,14 @@ Pages.allocation = {
     t.innerHTML = `<table><thead><tr><th>Request #</th><th>Requester</th><th>Department</th><th>Project</th><th>Warehouse</th><th>Movement</th><th>Status</th><th>Lines</th><th></th></tr></thead>
       <tbody>${pending.map((r) => `
         <tr data-id="${r.id}">
-          <td><strong>${UI.esc(r.request_number)}</strong></td>
+          <td><span class="chip accent">${UI.esc(r.request_number)}</span></td>
           <td>${UI.esc(r.requester_name || '')}</td><td>${UI.esc(r.department || '—')}</td><td>${UI.esc(r.project || '—')}</td>
           <td>${UI.esc(r.issue_warehouse_code || '')}</td>
           <td>${UI.esc(r.movement_type || '')}</td><td><span class="badge ${statusClass(r.request_status)}">${UI.esc(r.request_status)}</span></td>
           <td>${r.total_lines}</td>
           <td><button class="btn sm" data-alloc="${r.id}">Allocate</button>
               <button class="btn secondary sm" data-view="${r.id}">View</button></td>
-        </tr>`).join('') || '<tr><td colspan="9" class="muted">Nothing awaiting allocation</td></tr>'}
+        </tr>`).join('') || `<tr><td colspan="9">${UI.meaningfulEmptyState({ title: 'Nothing awaiting allocation', description: 'Approved requests routed to the warehouse will appear here for bin/batch allocation.' })}</td></tr>`}
       </tbody></table>`;
     t.querySelectorAll('[data-alloc]').forEach((b) => b.addEventListener('click', () => this.allocate(b.dataset.alloc)));
     t.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => this.view(b.dataset.view)));
@@ -52,9 +52,9 @@ Pages.allocation = {
           <span class="muted">requested ${UI.fmtQty(r.requested)}, allocated ${UI.fmtQty(r.allocated)}${r.shortfall ? `, shortfall ${UI.fmtQty(r.shortfall)}` : ''}</span>
           <div class="table-wrap"><table>
             <thead><tr><th>Seq</th><th>Batch</th><th>Bin</th><th class="text-right">Qty</th><th>Expiry</th></tr></thead>
-            <tbody>${r.allocations.map((a) => `<tr><td>${a.sequence}</td><td>${UI.esc(a.batch_number)}</td>
-              <td>${UI.esc(a.bin_location || '')}</td><td class="text-right">${UI.fmtQty(a.proposed_quantity)}</td>
-              <td>${a.expiry_date || '—'}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">No stock available</td></tr>'}</tbody>
+            <tbody>${r.allocations.map((a) => `<tr><td>${a.sequence}</td><td><span class="chip accent">${UI.esc(a.batch_number)}</span></td>
+              <td>${a.bin_location ? `<span class="chip">${UI.esc(a.bin_location)}</span>` : '—'}</td><td class="text-right">${UI.fmtQty(a.proposed_quantity)}</td>
+              <td>${a.expiry_date || '—'}</td></tr>`).join('') || `<tr><td colspan="5">${UI.meaningfulEmptyState({ title: 'No stock available', description: 'No batch could be allocated for this line — it is a full shortage.' })}</td></tr>`}</tbody>
           </table></div>
         </div>`).join('')}</div>`;
   },

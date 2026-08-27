@@ -53,11 +53,11 @@ Pages.requestDetail = {
           <div class="item"><div class="k">Cost Center</div><div class="v">${UI.esc(r.cost_center || '—')}</div></div>
           <div class="item"><div class="k">WBS</div><div class="v">${UI.esc(r.wbs_element || '—')}</div></div>
           <div class="item"><div class="k">Movement Type</div><div class="v">${UI.esc(r.movement_type || '—')}</div></div>
-          <div class="item"><div class="k">Reservation #</div><div class="v">${UI.esc(r.erp_reservation_number || r.erp_reference_number || '—')}</div></div>
+          <div class="item"><div class="k">Reservation #</div><div class="v">${r.erp_reservation_number || r.erp_reference_number ? `<span class="chip accent">${UI.esc(r.erp_reservation_number || r.erp_reference_number)}</span>` : '—'}</div></div>
           <div class="item"><div class="k">ERP Reference #</div><div class="v">${UI.esc(r.erp_reference_number || '—')}</div></div>
           <div class="item"><div class="k">Warehouse</div><div class="v">${UI.esc(r.issue_warehouse_code || '—')}</div></div>
           <div class="item"><div class="k">Storage Location</div><div class="v">${UI.esc(r.storage_location || '—')}</div></div>
-          <div class="item"><div class="k">GI Document</div><div class="v">${UI.esc(r.gi_document_number || '—')}</div></div>
+          <div class="item"><div class="k">GI Document</div><div class="v">${r.gi_document_number ? `<span class="chip">${UI.esc(r.gi_document_number)}</span>` : '—'}</div></div>
           <div class="item"><div class="k">ERP Status</div><div class="v">${UI.esc(r.erp_posting_status || '—')}</div></div>
         </div>
         <p class="muted" style="margin-top:10px"><strong>Purpose:</strong> ${UI.esc(r.purpose || '')}</p>
@@ -77,8 +77,8 @@ Pages.requestDetail = {
                 <td class="text-right">${UI.fmtQty(l.requested_quantity)}</td>
                 <td class="text-right">${l.approved_quantity != null ? UI.fmtQty(l.approved_quantity) : '—'}</td>
                 <td class="text-right">${UI.fmtQty(l.picked_quantity)}</td>
-                <td>${UI.esc(l.batch_number || '—')}</td>
-                <td>${UI.esc(l.bin_location || '—')}</td>
+                <td>${l.batch_number ? `<span class="chip accent">${UI.esc(l.batch_number)}</span>` : '—'}</td>
+                <td>${l.bin_location ? `<span class="chip">${UI.esc(l.bin_location)}</span>` : '—'}</td>
                 <td><span class="badge ${statusClass(l.line_status)}">${UI.esc(l.line_status)}</span></td>
               </tr>`).join('')}
           </tbody>
@@ -193,9 +193,11 @@ Pages.requestDetail = {
       box.querySelectorAll('[data-dl]').forEach((a) => a.addEventListener('click', (e) => {
         e.preventDefault(); this.download(a.dataset.dl);
       }));
-      box.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', async () => {
-        try { await Api.delete(`/api/attachments/${b.dataset.del}`); UI.toast(t('Attachment deleted.')); this.loadAttachments(el, id); }
-        catch (err) { UI.toast(err.message, 'error'); }
+      box.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', () => {
+        UI.confirm(t('Delete this attachment? This cannot be undone.'), async () => {
+          try { await Api.delete(`/api/attachments/${b.dataset.del}`); UI.toast(t('Attachment deleted.')); this.loadAttachments(el, id); }
+          catch (err) { UI.toast(err.message, 'error'); }
+        });
       }));
     } catch (err) { box.innerHTML = `<span class="muted">${UI.esc(err.message)}</span>`; }
   },

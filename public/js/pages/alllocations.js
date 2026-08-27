@@ -93,9 +93,7 @@ Pages.alllocations = {
           : '<p class="muted">This location is empty.</p>'}
         </div>`).join('') || '<div class="card"><p class="muted">No locations match.</p></div>';
 
-      el.querySelectorAll('[data-nav="batches"]').forEach((row) => {
-        row.addEventListener('click', () => { location.hash = '#/batches'; });
-      });
+      UI.makeRowsActionable(el.querySelectorAll('[data-nav="batches"]'), () => { location.hash = '#/batches'; });
     };
 
     renderList();

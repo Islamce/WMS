@@ -82,7 +82,7 @@ Pages.ai = {
           <thead><tr><th>Item</th><th>Class</th><th class="text-right">Stock</th><th class="text-right">Avg daily demand</th>
             <th class="text-right">Safety stock</th><th class="text-right">Reorder point</th><th class="text-right">Days of cover</th><th>Status</th></tr></thead>
           <tbody>${reorderRows.map((i) => `
-            <tr><td><strong>${UI.esc(i.item_code)}</strong> <span class="muted">${UI.esc(i.description)}</span></td>
+            <tr><td><span class="chip">${UI.esc(i.item_code)}</span> <span class="muted">${UI.esc(i.description)}</span></td>
               <td><span class="badge ${clsBadge[i.classification] || 'role'}">${i.classification}</span></td>
               <td class="text-right">${UI.fmtQty(i.current_stock)}</td>
               <td class="text-right">${i.avg_daily_demand}</td>
@@ -90,7 +90,7 @@ Pages.ai = {
               <td class="text-right">${i.reorder_point}</td>
               <td class="text-right">${i.days_of_cover ?? '—'}</td>
               <td>${i.below_reorder ? '<span class="badge OUT">REPLENISH NOW</span>' : '<span class="badge pending">watch</span>'}</td>
-            </tr>`).join('') || '<tr><td colspan="8" class="muted">No reorder risks detected 🎉</td></tr>'}</tbody>
+            </tr>`).join('') || `<tr><td colspan="8">${UI.meaningfulEmptyState({ title: 'No reorder risks detected', description: 'No material is currently below its calculated reorder point.' })}</td></tr>`}</tbody>
         </table></div>
       </div>
 
@@ -100,12 +100,12 @@ Pages.ai = {
           <thead><tr><th>Item</th><th>Group</th><th class="text-right">Stock</th><th class="text-right">Value</th>
             <th class="text-right">Days since last issue</th></tr></thead>
           <tbody>${deadRows.map((i) => `
-            <tr><td><strong>${UI.esc(i.item_code)}</strong> <span class="muted">${UI.esc(i.description)}</span></td>
+            <tr><td><span class="chip">${UI.esc(i.item_code)}</span> <span class="muted">${UI.esc(i.description)}</span></td>
               <td>${UI.esc(i.material_group || '')}</td>
               <td class="text-right">${UI.fmtQty(i.current_stock)}</td>
               <td class="text-right">${UI.fmtQty(i.stock_value)}</td>
               <td class="text-right">${i.days_since_last_issue ?? 'never issued'}</td>
-            </tr>`).join('') || '<tr><td colspan="5" class="muted">No dead stock 🎉</td></tr>'}</tbody>
+            </tr>`).join('') || `<tr><td colspan="5">${UI.meaningfulEmptyState({ title: 'No dead stock', description: 'No material has complete-coverage, zero-issue history in this analysis window.' })}</td></tr>`}</tbody>
         </table></div>
       </div>
 
@@ -115,7 +115,7 @@ Pages.ai = {
           <thead><tr><th>Item</th><th>Class</th><th>Confidence</th><th>ABC</th><th>XYZ</th><th>FSN</th><th class="text-right">Stock</th><th class="text-right">Net use (${data.parameters.window_days}d)</th>
             <th>Last issue</th><th class="text-right">Issue freq/mo</th><th class="text-right">Reorder pt</th><th class="text-right">EOQ</th><th class="text-right">Value</th><th>Flags</th></tr></thead>
           <tbody>${data.items.map((i) => `
-            <tr><td><strong>${UI.esc(i.item_code)}</strong></td>
+            <tr><td><span class="chip">${UI.esc(i.item_code)}</span></td>
               <td><span class="badge ${clsBadge[i.classification] || 'role'}">${i.classification}</span></td>
               <td>${UI.esc(i.classification_confidence || '—')}</td>
               <td>${i.abc_class || '—'}</td><td>${i.xyz_class || '—'}</td><td>${i.fsn_class || '—'}</td>

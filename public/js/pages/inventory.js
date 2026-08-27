@@ -35,7 +35,7 @@ Pages.inventory = {
         <th class="text-right">${t('Variances')}</th><th>${t('Freeze')}</th><th>${t('Created')}</th><th></th></tr></thead>
       <tbody>${data.sessions.map((s) => `
         <tr>
-          <td><strong>${UI.esc(s.session_number)}</strong></td>
+          <td><span class="chip accent">${UI.esc(s.session_number)}</span></td>
           <td>${UI.esc(s.session_type)}</td><td>${UI.esc(s.warehouse_code)}</td>
           <td><span class="badge ${statusClass(s.status)}">${UI.esc(s.status)}</span></td>
           <td class="text-right">${s.total_lines}</td><td class="text-right">${s.counted_lines}</td>
@@ -43,7 +43,7 @@ Pages.inventory = {
           <td>${s.freeze_stock ? '🧊' : '—'}</td>
           <td>${UI.fmtDate(s.created_at)}</td>
           <td><button class="btn sm" data-open="${s.id}">${t('Open')}</button></td>
-        </tr>`).join('') || `<tr><td colspan="10" class="muted">${t('No inventory sessions yet')}</td></tr>`}
+        </tr>`).join('') || `<tr><td colspan="10">${UI.meaningfulEmptyState({ title: t('No inventory sessions yet'), description: t('Start a new count session above to begin an annual, periodic, or cycle count.') })}</td></tr>`}
       </tbody></table>`;
     box.querySelectorAll('[data-open]').forEach((b) => b.addEventListener('click', () => this.openSession(b.dataset.open)));
     UI.pagination(this.el.querySelector('#pi-pagination'), data, (p) => { this.state.page = p; this.load(); });
@@ -110,7 +110,7 @@ Pages.inventory = {
           <th class="text-right">${t('Variance')}</th><th>${t('Status')}</th><th>${t('Counter')}</th><th></th></tr></thead>
         <tbody>${lines.map((l) => `
           <tr>
-            <td>${UI.esc(l.bin_location || '—')}</td><td>${UI.esc(l.batch_number)}</td>
+            <td>${l.bin_location ? `<span class="chip">${UI.esc(l.bin_location)}</span>` : '—'}</td><td><span class="chip accent">${UI.esc(l.batch_number)}</span></td>
             <td>${UI.esc(l.material_code)} <span class="muted">${UI.esc(l.material_description || '')}</span></td>
             <td class="text-right">${l.system_quantity === null ? '🔒' : UI.fmtQty(l.system_quantity)}</td>
             <td class="text-right">${l.recount_quantity ?? l.counted_quantity ?? '—'}</td>

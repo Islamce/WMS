@@ -26,8 +26,8 @@ Pages.cycleCount = {
           <tbody>
             ${(data.counts || []).map((c) => `
               <tr>
-                <td>${UI.esc(c.count_number)}</td>
-                <td>${UI.esc(c.material_code || '')}<div class="muted sm">${UI.esc(c.bin_location || '')}</div></td>
+                <td><span class="chip accent">${UI.esc(c.count_number)}</span></td>
+                <td>${UI.esc(c.material_code || '')}<div class="muted sm">${c.bin_location ? `<span class="chip">${UI.esc(c.bin_location)}</span>` : ''}</div></td>
                 <td>${c.system_quantity}</td>
                 <td>${c.counted_quantity ?? '—'}</td>
                 <td>${c.variance == null ? '—' : `<span class="${c.variance < 0 ? 'neg' : c.variance > 0 ? 'pos' : ''}">${c.variance > 0 ? '+' : ''}${c.variance}</span>`}</td>
@@ -36,7 +36,7 @@ Pages.cycleCount = {
                   ${c.status === 'OPEN' ? `<button class="btn sm" data-count="${c.id}">${t('Enter count')}</button>` : ''}
                   ${c.status === 'COUNTED' ? `<button class="btn sm" data-post="${c.id}">${t('Post')}</button>` : ''}
                 </td>
-              </tr>`).join('') || `<tr><td colspan="7" class="muted">${t('No cycle counts yet.')}</td></tr>`}
+              </tr>`).join('') || `<tr><td colspan="7">${UI.meaningfulEmptyState({ title: t('No cycle counts yet'), description: t('Open a new count against a batch to get started.') })}</td></tr>`}
           </tbody>
         </table></div>
       </div>

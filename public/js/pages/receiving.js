@@ -115,7 +115,7 @@ Pages.receiving = {
         <div class="details-list">
           <div class="item"><div class="k">Warehouse</div><div class="v">${UI.esc(warehouse_code || '')}</div></div>
           <div class="item"><div class="k">Bin Location</div><div class="v">${bin_location
-            ? `<strong>${UI.esc(bin_location)}</strong>`
+            ? `<span class="chip">${UI.esc(bin_location)}</span>`
             : '<span class="badge OUT">not assigned — use step 3 · Assign Bin</span>'}</div></div>
         </div>
         ${Pages.qrPrinting.qrCard(qr)}</div>`;
@@ -136,12 +136,12 @@ Pages.receiving = {
       <div class="table-wrap"><table>
         <thead><tr><th>Batch</th><th>Material</th><th>PO</th><th>WH</th><th class="text-right">Qty</th><th style="width:220px">GR Number</th></tr></thead>
         <tbody>${batches.map((b) => `
-          <tr><td><strong>${UI.esc(b.batch_number)}</strong></td><td>${UI.esc(b.material_code)}</td>
+          <tr><td><span class="chip accent">${UI.esc(b.batch_number)}</span></td><td>${UI.esc(b.material_code)}</td>
             <td>${UI.esc(b.po_number || '')}</td><td>${UI.esc(b.warehouse_code || '')}</td>
             <td class="text-right">${UI.fmtQty(b.received_quantity)}</td>
             <td><div style="display:flex;gap:6px"><input type="text" class="gr-num" data-id="${b.id}" placeholder="GR document #">
               <button class="btn sm" data-savegr="${b.id}">Save</button></div></td></tr>`).join('')
-          || '<tr><td colspan="6" class="muted">Nothing awaiting a GR number 🎉</td></tr>'}
+          || `<tr><td colspan="6">${UI.meaningfulEmptyState({ title: 'Nothing awaiting a GR number', description: 'Every received batch has an ERP goods-receipt document number assigned.' })}</td></tr>`}
         </tbody></table></div>`;
     box.querySelectorAll('[data-savegr]').forEach((btn) => btn.addEventListener('click', async () => {
       const inp = box.querySelector(`.gr-num[data-id="${btn.dataset.savegr}"]`);
@@ -168,7 +168,7 @@ Pages.receiving = {
       <div class="table-wrap"><table>
         <thead><tr><th>Batch</th><th>Material</th><th>WH</th><th class="text-right">Qty</th><th style="width:280px">Bin Location</th></tr></thead>
         <tbody>${batches.map((b) => `
-          <tr><td><strong>${UI.esc(b.batch_number)}</strong></td><td>${UI.esc(b.material_code)}</td>
+          <tr><td><span class="chip accent">${UI.esc(b.batch_number)}</span></td><td>${UI.esc(b.material_code)}</td>
             <td>${UI.esc(b.warehouse_code || '')}</td><td class="text-right">${UI.fmtQty(b.remaining_quantity)}</td>
             <td><div style="display:flex;gap:6px">
               <select class="bin-sel" data-id="${b.id}">
@@ -176,7 +176,7 @@ Pages.receiving = {
                 ${(binsByWh[b.warehouse_code] || []).map((x) => `<option value="${UI.esc(x.bin_code)}">${UI.esc(x.bin_code)}${x.zone ? ` · ${UI.esc(x.zone)}` : ''}</option>`).join('')}
               </select>
               <button class="btn sm" data-savebin="${b.id}">Save</button></div></td></tr>`).join('')
-          || '<tr><td colspan="5" class="muted">Nothing awaiting a bin 🎉</td></tr>'}
+          || `<tr><td colspan="5">${UI.meaningfulEmptyState({ title: 'Nothing awaiting a bin', description: 'Every received batch with stock has a bin location assigned.' })}</td></tr>`}
         </tbody></table></div>`;
     box.querySelectorAll('[data-savebin]').forEach((btn) => btn.addEventListener('click', async () => {
       const sel = box.querySelector(`.bin-sel[data-id="${btn.dataset.savebin}"]`);
@@ -208,7 +208,10 @@ Pages.qrPrinting = {
     const { qr_codes } = await Api.get(`/api/receiving/qr?search=${encodeURIComponent(q || '')}`);
     this.shownIds = qr_codes.map((x) => x.id);
     this.el.querySelector('#qr-list').innerHTML =
-      qr_codes.map((qr) => this.qrCard(qr)).join('') || '<p class="muted">No QR codes.</p>';
+      qr_codes.map((qr) => this.qrCard(qr)).join('') || UI.meaningfulEmptyState({
+        title: q ? 'No QR labels match your search' : 'No QR labels yet',
+        description: q ? 'Try a different material, batch, or QR value.' : 'QR labels are generated automatically when a goods receipt is recorded.',
+      });
     this.el.querySelectorAll('[data-print]').forEach((b) => b.addEventListener('click', () => this.print(b.dataset.print)));
     this.el.querySelectorAll('[data-pdf]').forEach((b) => b.addEventListener('click', () => this.pdf([Number(b.dataset.pdf)])));
   },
@@ -237,8 +240,8 @@ Pages.qrPrinting = {
           <strong>${UI.esc(qr.material_code)} — ${UI.esc(qr.material_description || '')}</strong>
           <div class="details-list" style="margin-top:8px">
             <div class="item"><div class="k">QR Value</div><div class="v" style="font-size:12px">${UI.esc(qr.qr_code_value)}</div></div>
-            <div class="item"><div class="k">Batch</div><div class="v">${UI.esc(qr.batch_number || '—')}</div></div>
-            <div class="item"><div class="k">Warehouse / Bin</div><div class="v">${UI.esc(qr.warehouse_code || '')} / ${UI.esc(qr.bin_location || '—')}</div></div>
+            <div class="item"><div class="k">Batch</div><div class="v">${qr.batch_number ? `<span class="chip accent">${UI.esc(qr.batch_number)}</span>` : '—'}</div></div>
+            <div class="item"><div class="k">Warehouse / Bin</div><div class="v">${UI.esc(qr.warehouse_code || '')} / ${qr.bin_location ? `<span class="chip">${UI.esc(qr.bin_location)}</span>` : '—'}</div></div>
             <div class="item"><div class="k">Qty</div><div class="v">${UI.fmtQty(qr.remaining_quantity)} ${UI.esc(qr.uom || '')}</div></div>
             <div class="item"><div class="k">PO / GR</div><div class="v">${UI.esc(qr.po_number || '—')} / ${UI.esc(qr.gr_number || '—')}</div></div>
             <div class="item"><div class="k">Expiry</div><div class="v">${qr.expiry_date || '—'}</div></div>

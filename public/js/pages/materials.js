@@ -25,6 +25,7 @@ Pages.materials = {
             <option value="out" ${this.state.stock === 'out' ? 'selected' : ''}>Out of stock</option>
             <option value="low" ${this.state.stock === 'low' ? 'selected' : ''}>Fully reserved</option>
           </select>
+          <span class="muted" id="mat-count" aria-live="polite"></span>
           <div class="spacer"></div>
           <span id="mat-export"></span>
           <button class="btn secondary" id="mat-upload">⬆ Mass Upload</button>
@@ -83,6 +84,8 @@ Pages.materials = {
     };
     try {
       const data = await Api.get(`/api/materials?limit=10&${this.query()}`);
+      const countEl = this.el.querySelector('#mat-count');
+      if (countEl) countEl.textContent = data.total != null ? `${UI.fmtQty(data.total)} material${data.total === 1 ? '' : 's'}` : '';
 
       // Populate the filter dropdowns once (values come from the server).
       const gSel = this.el.querySelector('#mat-f-group');
@@ -92,7 +95,7 @@ Pages.materials = {
         data.filters.types.forEach((v) => tSel.add(new Option(v, v, false, v === this.state.type)));
       }
 
-      tableEl.innerHTML = `
+      tableEl.innerHTML = data.materials.length ? `
         <table>
           <thead><tr>
             ${th('plant', 'Plant')}${th('item_code', 'Item Code')}${th('description', 'Description')}${th('unit', 'Unit')}
@@ -103,7 +106,7 @@ Pages.materials = {
             ${data.materials.map((m) => `
               <tr>
                 <td>${UI.esc(m.plant)}</td>
-                <td><strong>${UI.esc(m.item_code)}</strong>${m.is_stock_item === 0 ? ' <span class="badge OUT" title="Non-stock item — no reservations/allocations">non-stock</span>' : ''}</td>
+                <td><span class="chip">${UI.esc(m.item_code)}</span>${m.is_stock_item === 0 ? ' <span class="badge OUT" title="Non-stock item — no reservations/allocations">non-stock</span>' : ''}</td>
                 <td class="wrap">${UI.esc(m.description)}</td>
                 <td>${UI.esc(m.unit)}</td>
                 <td class="text-right">${Number(m.price).toFixed(2)}</td>
@@ -116,9 +119,14 @@ Pages.materials = {
                   <button class="btn secondary sm" data-edit="${m.id}">Edit</button>
                   <button class="btn danger sm" data-del="${m.id}" data-code="${UI.esc(m.item_code)}">Delete</button>
                 </td>
-              </tr>`).join('') || '<tr><td colspan="11" class="muted">No materials found</td></tr>'}
+              </tr>`).join('')}
           </tbody>
-        </table>`;
+        </table>` : UI.meaningfulEmptyState({
+        title: (this.state.search || this.state.group || this.state.type || this.state.stock) ? 'No materials match these filters' : 'No materials yet',
+        description: (this.state.search || this.state.group || this.state.type || this.state.stock) ? 'Try a different search term or clear a filter.' : 'Add a material or import a master-data file to get started.',
+        actionHtml: '<button class="btn secondary sm" id="mat-empty-add" style="margin-top:8px">+ Add Material</button>',
+      });
+      tableEl.querySelector('#mat-empty-add')?.addEventListener('click', () => this.openForm());
 
       // Header click / Enter toggles server-side sorting.
       tableEl.querySelectorAll('th.sortable').forEach((h) => {

@@ -100,22 +100,22 @@ Pages.picking = {
         </div>
         <div class="details-list" style="margin:10px 0">
           <div class="item"><div class="k">Approved</div><div class="v">${UI.fmtQty(approved)} ${UI.esc(l.uom || '')}</div></div>
-          <div class="item"><div class="k">Bin</div><div class="v">${UI.esc(l.bin_location || '—')}</div></div>
-          <div class="item"><div class="k">Batch</div><div class="v">${UI.esc(l.batch_number || '—')}</div></div>
+          <div class="item"><div class="k">Bin</div><div class="v">${l.bin_location ? `<span class="chip">${UI.esc(l.bin_location)}</span>` : '—'}</div></div>
+          <div class="item"><div class="k">Batch</div><div class="v">${l.batch_number ? `<span class="chip accent">${UI.esc(l.batch_number)}</span>` : '—'}</div></div>
           <div class="item"><div class="k">Batch-managed</div><div class="v">${l.is_batch_managed ? 'Yes' : 'No'}${l.is_expiry_managed ? ' · FEFO' : ''}</div></div>
         </div>
         <div class="table-wrap"><table>
           <thead><tr><th>Batch</th><th>Bin</th><th class="text-right">Qty</th><th>Method</th><th>Scan</th></tr></thead>
           <tbody>${allocs.map((a) => `
             <tr>
-              <td>${UI.esc(a.batch_number || '')}</td><td>${UI.esc(a.bin_location || '')}</td>
+              <td><span class="chip accent">${UI.esc(a.batch_number || '')}</span></td><td><span class="chip">${UI.esc(a.bin_location || '')}</span></td>
               <td class="text-right">${UI.fmtQty(a.proposed_quantity)}</td><td>${UI.esc(a.allocation_method || '')}</td>
               <td>${a.status === 'SCANNED' || a.status === 'PICKED' ? '<span class="badge active">✓ scanned</span>'
                 : inProgress ? `<button class="btn secondary sm" data-scan="${a.id}" data-qr="${UI.esc(this.qrHint(a))}">Scan QR</button>`
                   + (App.user && App.user.role === 'admin'
                     ? ` <button class="btn warn sm" data-skip="${a.id}" title="${t('Skip QR scan (admin only, audited)')}">${t('Skip')}</button>` : '')
                 : '—'}</td>
-            </tr>`).join('') || '<tr><td colspan="5" class="muted">No stock allocated (shortage)</td></tr>'}</tbody>
+            </tr>`).join('') || `<tr><td colspan="5">${UI.meaningfulEmptyState({ title: 'No stock allocated', description: 'This line is a full shortage — no batch/bin could be reserved for it.' })}</td></tr>`}</tbody>
         </table></div>
         ${inProgress ? `
           <div class="form-row" style="margin-top:12px;align-items:end">

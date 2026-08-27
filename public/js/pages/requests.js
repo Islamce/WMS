@@ -73,9 +73,10 @@ Pages.requests = {
     el.innerHTML = `
       <div class="card">
         <div class="toolbar">
-          <input type="text" class="search-input" id="rq-search" placeholder="Search request #, purpose, requester…" value="${UI.esc(this.state.search)}" />
-          <select id="rq-status" style="max-width:220px"><option value="">All statuses</option>
+          <input type="text" class="search-input" id="rq-search" placeholder="Search request #, purpose, requester…" value="${UI.esc(this.state.search)}" aria-label="Search requests" />
+          <select id="rq-status" style="max-width:220px" aria-label="Filter by status"><option value="">All statuses</option>
             ${statuses.map((s) => `<option ${s === this.state.status ? 'selected' : ''}>${UI.esc(s)}</option>`).join('')}</select>
+          <span class="muted" id="rq-count" aria-live="polite"></span>
           <div class="spacer"></div>
           ${App.can('create_request') ? '<a href="#/create-request" class="btn">+ New Request</a>' : ''}
         </div>
@@ -98,27 +99,32 @@ Pages.requests = {
     const tableEl = this.el.querySelector('#rq-table');
     try {
       const data = await Api.get(`/api/requests?page=${page}&limit=10&search=${encodeURIComponent(search)}&status=${encodeURIComponent(status)}`);
-      tableEl.innerHTML = `
+      const countEl = this.el.querySelector('#rq-count');
+      if (countEl) countEl.textContent = data.total != null ? `${UI.fmtQty(data.total)} request${data.total === 1 ? '' : 's'}` : '';
+      tableEl.innerHTML = data.requests.length ? `
         <table>
           <thead><tr><th>Request #</th><th>Requester</th><th>Priority</th><th>Status</th><th>Lines</th><th>Required</th><th>Created</th></tr></thead>
           <tbody>
             ${data.requests.map((r) => `
-              <tr style="cursor:pointer" data-id="${r.id}">
-                <td><strong>${UI.esc(r.request_number)}</strong></td>
+              <tr class="row-link" data-id="${r.id}" role="button" tabindex="0" aria-label="Open request ${UI.esc(r.request_number)}">
+                <td><span class="chip accent">${UI.esc(r.request_number)}</span></td>
                 <td>${UI.esc(r.requester_name || '')}</td>
                 <td><span class="badge ${r.priority === 'URGENT' || r.priority === 'HIGH' ? 'pending' : 'role'}">${UI.esc(r.priority)}</span></td>
                 <td><span class="badge ${statusClass(r.request_status)}">${UI.esc(r.request_status)}</span></td>
                 <td>${r.completed_lines || 0}/${r.total_lines}</td>
                 <td>${r.required_date || '—'}</td>
                 <td>${UI.fmtDate(r.created_at)}</td>
-              </tr>`).join('') || '<tr><td colspan="7" class="muted">No requests found</td></tr>'}
+              </tr>`).join('')}
           </tbody>
-        </table>`;
-      tableEl.querySelectorAll('tr[data-id]').forEach((tr) =>
-        tr.addEventListener('click', () => {
-          this.persistQueueContext({ includeScroll: true });
-          location.hash = `#/request-detail/${tr.dataset.id}`;
-        }));
+        </table>` : UI.meaningfulEmptyState({
+        title: (search || status) ? 'No requests match these filters' : 'No requests yet',
+        description: (search || status) ? 'Try a different search term or clear the status filter.' : 'Material requests created by any requester will appear here.',
+        actionHtml: App.can('create_request') ? '<a href="#/create-request" class="btn secondary sm" style="margin-top:8px">+ New Request</a>' : '',
+      });
+      UI.makeRowsActionable(tableEl.querySelectorAll('tr[data-id]'), (tr) => {
+        this.persistQueueContext({ includeScroll: true });
+        location.hash = `#/request-detail/${tr.dataset.id}`;
+      });
       UI.pagination(this.el.querySelector('#rq-pagination'), data, (p) => {
         this.state.page = p; this.persistQueueContext(); this.load();
       });

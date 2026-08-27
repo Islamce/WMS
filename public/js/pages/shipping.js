@@ -53,15 +53,15 @@ Pages.shipping = {
     const box = this.el.querySelector('#sh-table');
     const { page, status, search } = this.state;
     const data = await Api.get(`/api/shipping?page=${page}&status=${status}&search=${encodeURIComponent(search)}`);
-    box.innerHTML = `<table>
+    box.innerHTML = data.shipments.length ? `<table>
       <thead><tr><th>${t('Shipment')}</th><th>${t('Request')}</th><th>${t('Ship to')}</th><th>${t('Carrier')}</th>
         <th class="text-right">${t('Pkgs')}</th><th>${t('Status')}</th><th>${t('Created')}</th><th></th></tr></thead>
       <tbody>${data.shipments.map((s) => {
         const act = this.nextAction(s);
         return `
         <tr>
-          <td><strong>${UI.esc(s.shipment_number)}</strong></td>
-          <td>${UI.esc(s.request_number || '—')}</td><td>${UI.esc(s.ship_to || '')}</td>
+          <td><span class="chip accent">${UI.esc(s.shipment_number)}</span></td>
+          <td>${s.request_number ? `<span class="chip">${UI.esc(s.request_number)}</span>` : '—'}</td><td>${UI.esc(s.ship_to || '')}</td>
           <td>${UI.esc(s.carrier || '—')}</td><td class="text-right">${s.packages}</td>
           <td><span class="badge ${statusClass(s.status)}">${UI.esc(s.status)}</span></td>
           <td>${UI.fmtDate(s.created_at)}</td>
@@ -72,8 +72,11 @@ Pages.shipping = {
             ${!['DELIVERED', 'CANCELLED'].includes(s.status) ? `<button class="btn danger sm" data-cancel="${s.id}">✕</button>` : ''}
           </td>
         </tr>`;
-      }).join('') || `<tr><td colspan="8" class="muted">${t('No shipments yet')}</td></tr>`}
-      </tbody></table>`;
+      }).join('')}
+      </tbody></table>` : UI.meaningfulEmptyState({
+      title: t('No shipments yet'),
+      description: t('Create a delivery order from a GI-posted request, or a free shipment, using New delivery order above.'),
+    });
 
     box.querySelectorAll('[data-act]').forEach((b) => b.addEventListener('click', () => {
       if (b.dataset.act === 'deliver') return this.deliver(b.dataset.id);
@@ -134,7 +137,7 @@ Pages.shipping = {
           <tbody>${lines.map((l) => `<tr><td>${l.line_number}</td>
             <td>${UI.esc(l.material_code)} <span class="muted">${UI.esc(l.material_description || '')}</span></td>
             <td class="text-right">${UI.fmtQty(l.issued_quantity)} ${UI.esc(l.uom || '')}</td>
-            <td>${UI.esc(l.batch_number || '—')}</td><td>${UI.esc(l.bin_location || '—')}</td></tr>`).join('')}</tbody>
+            <td>${l.batch_number ? `<span class="chip accent">${UI.esc(l.batch_number)}</span>` : '—'}</td><td>${l.bin_location ? `<span class="chip">${UI.esc(l.bin_location)}</span>` : '—'}</td></tr>`).join('')}</tbody>
         </table></div>` : `<p class="muted">${t('No request lines linked to this shipment.')}</p>`}`,
       onSubmit: async (_ov, close) => close(),
     });

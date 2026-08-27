@@ -14,19 +14,18 @@ Pages.approvals = {
     const t = this.el.querySelector('#ap-table');
     try {
       const { requests } = await Api.get('/api/approvals');
-      t.innerHTML = `
+      t.innerHTML = requests.length ? `
         <table><thead><tr><th>Request #</th><th>Requester</th><th>Dept</th><th>Priority</th><th>Status</th><th>Lines</th><th>Submitted</th></tr></thead>
         <tbody>${requests.map((r) => `
-          <tr style="cursor:pointer" data-id="${r.id}">
-            <td><strong>${UI.esc(r.request_number)}</strong></td><td>${UI.esc(r.requester_name || '')}</td>
+          <tr class="row-link" data-id="${r.id}" role="button" tabindex="0" aria-label="Review request ${UI.esc(r.request_number)}">
+            <td><span class="chip accent">${UI.esc(r.request_number)}</span></td><td>${UI.esc(r.requester_name || '')}</td>
             <td>${UI.esc(r.department || '')}</td>
             <td><span class="badge ${r.priority === 'URGENT' || r.priority === 'HIGH' ? 'pending' : 'role'}">${r.priority}</span></td>
             <td><span class="badge ${statusClass(r.request_status)}">${UI.esc(r.request_status)}</span></td>
             <td>${r.total_lines}</td><td>${UI.fmtDate(r.submitted_at)}</td>
-          </tr>`).join('') || '<tr><td colspan="7" class="muted">No requests awaiting approval</td></tr>'}
-        </tbody></table>`;
-      t.querySelectorAll('tr[data-id]').forEach((tr) =>
-        tr.addEventListener('click', () => this.openDetail(tr.dataset.id)));
+          </tr>`).join('')}
+        </tbody></table>` : UI.meaningfulEmptyState({ title: 'No requests awaiting approval', description: 'Submitted requests that need your decision will appear here.' });
+      UI.makeRowsActionable(t.querySelectorAll('tr[data-id]'), (tr) => this.openDetail(tr.dataset.id));
     } catch (err) { t.innerHTML = `<div class="inline-alert error">${UI.esc(err.message)}</div>`; }
   },
 

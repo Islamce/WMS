@@ -13,17 +13,17 @@ Pages.giPosting = {
   async loadQueue() {
     const t = this.el.querySelector('#gi-table');
     const { requests } = await Api.get('/api/gi');
-    t.innerHTML = `<table><thead><tr><th>Request #</th><th>Requester</th><th>Department</th><th>Project</th><th>Warehouse</th><th>Movement</th><th>Reservation</th><th>Status</th><th></th></tr></thead>
+    t.innerHTML = requests.length ? `<table><thead><tr><th>Request #</th><th>Requester</th><th>Department</th><th>Project</th><th>Warehouse</th><th>Movement</th><th>Reservation</th><th>Status</th><th></th></tr></thead>
       <tbody>${requests.map((r) => `
         <tr data-id="${r.id}">
-          <td><strong>${UI.esc(r.request_number)}</strong></td>
+          <td><span class="chip accent">${UI.esc(r.request_number)}</span></td>
           <td>${UI.esc(r.requester_name || '')}</td><td>${UI.esc(r.department || '—')}</td><td>${UI.esc(r.project || '—')}</td>
           <td>${UI.esc(r.issue_warehouse_code || '')}<div class="muted sm">Plant ${UI.esc(r.plant || '—')} · SLoc ${UI.esc(r.storage_location || '—')}</div></td>
           <td>${UI.esc(r.movement_type || '')}</td><td>${UI.esc(r.erp_reservation_number || r.erp_reference_number || '')}</td>
           <td><span class="badge ${statusClass(r.request_status)}">${UI.esc(r.request_status)}</span></td>
           <td><button class="btn sm" data-open="${r.id}">Review</button></td>
-        </tr>`).join('') || '<tr><td colspan="9" class="muted">Queue is empty</td></tr>'}
-      </tbody></table>`;
+        </tr>`).join('')}
+      </tbody></table>` : UI.meaningfulEmptyState({ title: 'Queue is empty', description: 'Picked requests ready for Goods Issue posting will appear here.' });
     t.querySelectorAll('[data-open]').forEach((b) => b.addEventListener('click', () => this.openDetail(b.dataset.open)));
   },
 
@@ -44,7 +44,7 @@ Pages.giPosting = {
               <td class="text-right">${UI.fmtQty(l.approved_quantity != null ? l.approved_quantity : l.requested_quantity)}</td>
               <td class="text-right">${UI.fmtQty(l.picked_quantity)}</td>
               <td class="text-right">${UI.fmtQty(l.shortage_quantity)}</td>
-              <td>${UI.esc(l.batch_number || '—')}</td><td>${UI.esc(l.bin_location || '—')}</td>
+              <td>${l.batch_number ? `<span class="chip accent">${UI.esc(l.batch_number)}</span>` : '—'}</td><td>${l.bin_location ? `<span class="chip">${UI.esc(l.bin_location)}</span>` : '—'}</td>
               <td><span class="badge ${statusClass(l.line_status)}">${UI.esc(l.line_status)}</span></td></tr>`).join('')}</tbody>
         </table></div>
         <p class="muted" style="margin-top:8px">QR scans: ${qr_scans.filter((s) => s.action === 'QR_SCAN_PASS').length} passed, ${qr_scans.filter((s) => s.action === 'QR_SCAN_FAIL').length} failed.</p>
