@@ -503,6 +503,14 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    id: '019_warehouse_project_scope',
+    description: 'Group warehouses by project_name (site/project stores in particular) — no new table, just a column every warehouse-facing screen can filter and group on.',
+    up(database) {
+      addColumnIfMissing(database, 'warehouses', 'project_name', 'TEXT');
+      database.exec(`CREATE INDEX IF NOT EXISTS idx_warehouses_project ON warehouses(project_name);`);
+    },
+  },
 ];
 
 function ensureTable() {

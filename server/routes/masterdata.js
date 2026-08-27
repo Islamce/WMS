@@ -15,8 +15,19 @@ router.use(authenticate);
 
 // --- Warehouses -------------------------------------------------------------
 router.get('/warehouses', requirePermission(['warehouses_master', 'warehouse_dashboard']), (req, res) => {
-  res.json({ warehouses: db.prepare('SELECT * FROM warehouses ORDER BY warehouse_code').all() });
+  const filters = [];
+  const params = [];
+  if (req.query.project_name) { filters.push('project_name = ?'); params.push(req.query.project_name); }
+  const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+  res.json({ warehouses: db.prepare(`SELECT * FROM warehouses ${where} ORDER BY warehouse_code`).all(...params) });
 });
+
+/** GET /api/master/warehouses/projects — distinct project names, for grouping/filter dropdowns. */
+router.get('/warehouses/projects', requirePermission(['warehouses_master', 'warehouse_dashboard']), (req, res) => {
+  const projects = db.prepare(`SELECT DISTINCT project_name FROM warehouses WHERE project_name IS NOT NULL AND project_name != '' ORDER BY project_name`).all().map((r) => r.project_name);
+  res.json({ projects });
+});
+
 router.post('/warehouses', requirePermission('warehouses_master'), (req, res) => {
   const b = req.body || {};
   if (!isNonEmptyString(b.warehouse_code) || !isNonEmptyString(b.warehouse_name)) {
@@ -25,11 +36,23 @@ router.post('/warehouses', requirePermission('warehouses_master'), (req, res) =>
   if (db.prepare('SELECT 1 FROM warehouses WHERE warehouse_code=?').get(b.warehouse_code.trim())) {
     return res.status(409).json({ error: 'Warehouse code already exists.' });
   }
-  db.prepare(`INSERT INTO warehouses (warehouse_code, warehouse_name, company, business_unit, plant, storage_location, warehouse_type)
-    VALUES (?,?,?,?,?,?,?)`).run(b.warehouse_code.trim(), b.warehouse_name.trim(), b.company || null,
-    b.business_unit || null, b.plant || null, b.storage_location || null, b.warehouse_type || 'STANDARD');
+  db.prepare(`INSERT INTO warehouses (warehouse_code, warehouse_name, company, business_unit, plant, storage_location, warehouse_type, project_name)
+    VALUES (?,?,?,?,?,?,?,?)`).run(b.warehouse_code.trim(), b.warehouse_name.trim(), b.company || null,
+    b.business_unit || null, b.plant || null, b.storage_location || null, b.warehouse_type || 'STANDARD', b.project_name || null);
   audit.record({ entityType: 'Warehouse', action: 'CREATE', newValue: b.warehouse_code, user: req.user, sourceScreen: 'Warehouse Master' });
   res.status(201).json({ message: 'Warehouse created.' });
+});
+
+/** PATCH /api/master/warehouses/:code — edit project/type assignment without recreating the warehouse. */
+router.patch('/warehouses/:code', requirePermission('warehouses_master'), (req, res) => {
+  const wh = db.prepare('SELECT * FROM warehouses WHERE warehouse_code=?').get(req.params.code);
+  if (!wh) return res.status(404).json({ error: 'Warehouse not found.' });
+  const b = req.body || {};
+  db.prepare(`UPDATE warehouses SET warehouse_name=?, warehouse_type=?, project_name=?, updated_at=datetime('now') WHERE warehouse_code=?`)
+    .run(isNonEmptyString(b.warehouse_name) ? b.warehouse_name.trim() : wh.warehouse_name,
+      b.warehouse_type || wh.warehouse_type, b.project_name ?? wh.project_name, wh.warehouse_code);
+  audit.record({ entityType: 'Warehouse', action: 'UPDATE', oldValue: wh.project_name, newValue: b.project_name, user: req.user, sourceScreen: 'Warehouse Master' });
+  res.json({ message: 'Warehouse updated.' });
 });
 
 // --- Bin locations ----------------------------------------------------------

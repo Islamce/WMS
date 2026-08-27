@@ -18,7 +18,7 @@ router.get('/', (req, res) => {
     priorities: ['LOW', 'NORMAL', 'HIGH', 'URGENT'],
     requestTypes: ['COST_CENTER', 'WBS', 'ORDER', 'GENERAL'],
     movementTypes: db.prepare('SELECT code, description, direction, cost_object, requires_cost_center, requires_wbs, requires_order FROM movement_types WHERE is_active=1 ORDER BY code').all(),
-    warehouses: db.prepare('SELECT warehouse_code, warehouse_name, plant, storage_location FROM warehouses WHERE is_active=1 ORDER BY warehouse_code').all(),
+    warehouses: db.prepare('SELECT warehouse_code, warehouse_name, plant, storage_location, warehouse_type, project_name FROM warehouses WHERE is_active=1 ORDER BY project_name IS NULL, project_name, warehouse_code').all(),
     departments: db.prepare("SELECT code, label FROM reference_data WHERE category='DEPARTMENT' AND is_active=1 ORDER BY label").all(),
     plants: db.prepare("SELECT code, label FROM reference_data WHERE category='PLANT' AND is_active=1 ORDER BY code").all(),
     costCenters: db.prepare("SELECT code, label FROM reference_data WHERE category='COST_CENTER' AND is_active=1 ORDER BY code").all(),
