@@ -60,7 +60,9 @@ class _MaterialsScreenState extends State<MaterialsScreen> {
                 separatorBuilder: (_, __) => const Divider(height: 1),
                 itemBuilder: (context, i) {
                   final m = rows[i];
-                  final stock = m['total_available'] ?? m['current_stock'];
+                  final stock = m['available_stock'] ?? m['total_stock'];
+                  final canSeeLocations = session.can('batch_tracking') ||
+                      session.can('bin_batch_assignment') || session.can('quality');
                   return ListTile(
                     title: Text('${m['item_code']} · ${m['description'] ?? ''}',
                         style: const TextStyle(fontWeight: FontWeight.w600),
@@ -75,6 +77,9 @@ class _MaterialsScreenState extends State<MaterialsScreen> {
                         : Text('${fmtQty(stock)}\n${m['unit'] ?? ''}',
                             textAlign: TextAlign.right,
                             style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+                    onTap: canSeeLocations
+                        ? () => _showLocations(context, session, m)
+                        : null,
                   );
                 },
               );
@@ -82,6 +87,56 @@ class _MaterialsScreenState extends State<MaterialsScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Future<void> _showLocations(BuildContext context, dynamic session, Map<String, dynamic> m) async {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('${m['item_code']} — locations'),
+        content: SizedBox(
+          width: 360,
+          child: FutureBuilder<Map<String, dynamic>>(
+            future: session.api.get(
+                '/api/master/batches?search=${Uri.encodeQueryComponent(m['item_code'] ?? '')}&limit=100'),
+            builder: (context, snap) {
+              if (!snap.hasData) {
+                return const SizedBox(height: 80, child: Center(child: CircularProgressIndicator()));
+              }
+              final batches = List<Map<String, dynamic>>.from(
+                  (snap.data!['batches'] ?? []).map((e) => Map<String, dynamic>.from(e)))
+                .where((b) => (b['remaining_quantity'] ?? 0) > 0)
+                .toList();
+              if (batches.isEmpty) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  child: Text('No stock currently held in any bin.', style: TextStyle(color: Colors.grey)),
+                );
+              }
+              return SizedBox(
+                height: 300,
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: batches.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (context, i) {
+                    final b = batches[i];
+                    return ListTile(
+                      dense: true,
+                      title: Text('${b['bin_location'] ?? '—'} · ${b['warehouse_code'] ?? ''}'),
+                      subtitle: Text('Batch ${b['batch_number'] ?? '—'}'),
+                      trailing: Text(fmtQty(b['remaining_quantity']),
+                          style: const TextStyle(fontWeight: FontWeight.w600)),
+                    );
+                  },
+                ),
+              );
+            },
+          ),
+        ),
+        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))],
+      ),
     );
   }
 }
