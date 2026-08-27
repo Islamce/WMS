@@ -4,7 +4,7 @@
      flash of mismatched color/content when the Flutter engine takes over
      and the animated splash begins. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="#07111f" />
+    <item android:drawable="@color/kynox_splash_bg" />
     <item>
         <bitmap
             android:gravity="center"
