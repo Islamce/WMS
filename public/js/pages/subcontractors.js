@@ -259,13 +259,18 @@ Pages.subcontractorStock = {
   },
 
   async load(warehouseCode) {
+    this.warehouseCode = warehouseCode;
     const q = warehouseCode ? `?warehouse_code=${encodeURIComponent(warehouseCode)}` : '';
     const { stock } = await Api.get(`/api/subcontractor/stock${q}`);
+    this.stock = stock;
+    const canIssue = App.can('subcontractor_receiving');
     this.el.querySelector('#ss-table').innerHTML = stock.length ? `
-      <table><thead><tr><th>Warehouse</th><th>Description</th><th>Category</th><th class="text-right">On hand</th><th>Subcontractor(s)</th></tr></thead>
-      <tbody>${stock.map((s) => `<tr><td>${UI.esc(s.warehouse_code)}</td><td>${UI.esc(s.description)}</td><td>${UI.esc(s.category_name || '—')}</td>
-        <td class="text-right">${UI.fmtQty(s.quantity_on_hand)} ${UI.esc(s.uom)}</td><td class="muted">${UI.esc(s.subcontractors)}</td></tr>`).join('')}</tbody></table>`
+      <table><thead><tr><th>Warehouse</th><th>Description</th><th>Category</th><th class="text-right">On hand</th><th>Subcontractor(s)</th>${canIssue ? '<th></th>' : ''}</tr></thead>
+      <tbody>${stock.map((s, i) => `<tr><td>${UI.esc(s.warehouse_code)}</td><td>${UI.esc(s.description)}</td><td>${UI.esc(s.category_name || '—')}</td>
+        <td class="text-right">${UI.fmtQty(s.quantity_on_hand)} ${UI.esc(s.uom)}</td><td class="muted">${UI.esc(s.subcontractors)}</td>
+        ${canIssue ? `<td><button class="btn secondary sm" data-issue="${i}">Log Use</button></td>` : ''}</tr>`).join('')}</tbody></table>`
       : UI.meaningfulEmptyState({ title: 'No subcontractor stock on hand', description: 'Stock appears here once received quantities are logged against a delivery.' });
+    this.el.querySelectorAll('[data-issue]').forEach((btn) => btn.addEventListener('click', () => this.consumeForm(stock[Number(btn.dataset.issue)])));
     const slot = this.el.querySelector('#ss-export');
     slot.innerHTML = '';
     slot.appendChild(UI.exportControl({
@@ -276,5 +281,42 @@ Pages.subcontractorStock = {
         { key: 'uom', label: 'Unit' }, { key: 'subcontractors', label: 'Subcontractor(s)' },
       ],
     }));
+    if (canIssue) await this.loadHistory();
+  },
+
+  consumeForm(row) {
+    UI.modal({
+      title: `Log use — ${row.description}`, submitLabel: 'Log Use',
+      bodyHtml: `<p class="muted">${UI.esc(row.warehouse_code)} · ${UI.fmtQty(row.quantity_on_hand)} ${UI.esc(row.uom)} on hand</p>
+        <div class="form-group"><label>Quantity used *</label><input id="cn-qty" type="number" min="0.01" step="0.01" max="${row.quantity_on_hand}"></div>
+        <div class="form-group"><label>Reference</label><input id="cn-ref" placeholder="e.g. work order, location, task"></div>
+        <div class="form-group"><label>Notes</label><textarea id="cn-notes" rows="2"></textarea></div>`,
+      onSubmit: async (ov, close) => {
+        const qty = Number(ov.querySelector('#cn-qty').value);
+        if (!(qty > 0)) return UI.toast('Enter a quantity greater than zero.', 'error');
+        try {
+          await Api.post('/api/subcontractor/consumption', {
+            warehouse_code: row.warehouse_code, description: row.description, category_id: row.category_id,
+            uom: row.uom, quantity_issued: qty, reference: ov.querySelector('#cn-ref').value, notes: ov.querySelector('#cn-notes').value,
+          });
+          UI.toast('Consumption logged.'); close(); this.load(this.warehouseCode);
+        } catch (err) { UI.toast(err.message, 'error'); }
+      },
+    });
+  },
+
+  async loadHistory() {
+    let slot = this.el.querySelector('#ss-history');
+    if (!slot) {
+      this.el.querySelector('.card').insertAdjacentHTML('beforeend', '<h3 style="margin-top:24px">Recent consumption</h3><div class="table-wrap" id="ss-history"></div>');
+      slot = this.el.querySelector('#ss-history');
+    }
+    const q = this.warehouseCode ? `?warehouse_code=${encodeURIComponent(this.warehouseCode)}` : '';
+    const { consumption } = await Api.get(`/api/subcontractor/consumption${q}`);
+    slot.innerHTML = consumption.length ? `
+      <table><thead><tr><th>Date</th><th>Warehouse</th><th>Description</th><th class="text-right">Qty used</th><th>Reference</th><th>Issued by</th></tr></thead>
+      <tbody>${consumption.map((c) => `<tr><td>${UI.fmtDate(c.issued_at)}</td><td>${UI.esc(c.warehouse_code)}</td><td>${UI.esc(c.description)}</td>
+        <td class="text-right">${UI.fmtQty(c.quantity_issued)} ${UI.esc(c.uom)}</td><td>${UI.esc(c.reference || '—')}</td><td>${UI.esc(c.issued_by_name || '')}</td></tr>`).join('')}</tbody></table>`
+      : UI.meaningfulEmptyState({ title: 'No consumption logged yet', description: 'Use "Log Use" on a stock row when subcontractor material is issued or installed on site.' });
   },
 };

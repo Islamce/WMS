@@ -192,27 +192,92 @@ router.patch('/deliveries/:id/lines/:lineId', requirePermission('subcontractor_q
   res.json({ message: approvedQty > 0 ? `Line ${quality_status.toLowerCase()} and recorded as stock.` : 'Line rejected.' });
 });
 
-// --- Current stock (computed, not a maintained ledger) ------------------------
+// --- Current stock (computed: received minus consumed, no maintained ledger) --
 router.get('/stock', requirePermission(['subcontractor_receiving', 'subcontractor_quality_inspection', 'subcontractor_admin']), (req, res) => {
-  const filters = ["rl.quantity_received > 0"];
+  const filters = [];
   const params = [];
-  if (req.query.warehouse_code) { filters.push('r.warehouse_code = ?'); params.push(req.query.warehouse_code); }
-  const where = `WHERE ${filters.join(' AND ')}`;
+  if (req.query.warehouse_code) { filters.push('rec.warehouse_code = ?'); params.push(req.query.warehouse_code); }
+  const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+  // received and consumed are aggregated separately, then joined on the same
+  // (warehouse, description, category, uom) key the consumption log matches on —
+  // `IS` rather than `=` so two NULL category_ids still line up.
   const rows = db.prepare(`
-    SELECT r.warehouse_code, dl.description, c.name AS category_name, dl.uom,
-      SUM(rl.quantity_received) AS quantity_on_hand,
-      GROUP_CONCAT(DISTINCT s.name) AS subcontractors
-    FROM subcontractor_receipt_lines rl
-    JOIN subcontractor_receipts r ON r.id = rl.receipt_id
-    JOIN subcontractor_delivery_lines dl ON dl.id = rl.delivery_line_id
-    JOIN subcontractor_deliveries d ON d.id = dl.delivery_id
-    JOIN subcontractors s ON s.id = d.subcontractor_id
-    LEFT JOIN subcontractor_categories c ON c.id = dl.category_id
+    WITH received AS (
+      SELECT r.warehouse_code, dl.description, dl.category_id, dl.uom,
+        SUM(rl.quantity_received) AS qty, GROUP_CONCAT(DISTINCT s.name) AS subcontractors
+      FROM subcontractor_receipt_lines rl
+      JOIN subcontractor_receipts r ON r.id = rl.receipt_id
+      JOIN subcontractor_delivery_lines dl ON dl.id = rl.delivery_line_id
+      JOIN subcontractor_deliveries d ON d.id = dl.delivery_id
+      JOIN subcontractors s ON s.id = d.subcontractor_id
+      WHERE rl.quantity_received > 0
+      GROUP BY r.warehouse_code, dl.description, dl.category_id, dl.uom
+    ),
+    consumed AS (
+      SELECT warehouse_code, description, category_id, uom, SUM(quantity_issued) AS qty
+      FROM subcontractor_consumptions
+      GROUP BY warehouse_code, description, category_id, uom
+    )
+    SELECT rec.warehouse_code, rec.description, rec.category_id, c.name AS category_name, rec.uom,
+      rec.qty - COALESCE(con.qty, 0) AS quantity_on_hand, rec.subcontractors
+    FROM received rec
+    LEFT JOIN consumed con ON con.warehouse_code = rec.warehouse_code AND con.description = rec.description
+      AND con.category_id IS rec.category_id AND con.uom = rec.uom
+    LEFT JOIN subcontractor_categories c ON c.id = rec.category_id
     ${where}
-    GROUP BY r.warehouse_code, dl.description, c.name, dl.uom
-    ORDER BY r.warehouse_code, dl.description
+    ORDER BY rec.warehouse_code, rec.description
   `).all(...params);
-  res.json({ stock: rows });
+  res.json({ stock: rows.filter((r) => r.quantity_on_hand > 0) });
+});
+
+/**
+ * POST /api/subcontractor/consumption — Site Warehouse Supervisor logs
+ * material used/issued from subcontractor stock. No approval step (v2, per
+ * owner direction to keep this stream fast/seamless) — only guarded against
+ * issuing more than is actually on hand.
+ */
+router.post('/consumption', requirePermission('subcontractor_receiving'), (req, res) => {
+  const b = req.body || {};
+  if (!isNonEmptyString(b.warehouse_code)) return res.status(400).json({ error: 'Warehouse is required.' });
+  if (!isNonEmptyString(b.description)) return res.status(400).json({ error: 'Description is required.' });
+  if (!(Number(b.quantity_issued) > 0)) return res.status(400).json({ error: 'quantity_issued must be greater than zero.' });
+  const uom = b.uom || 'EA';
+  const categoryId = b.category_id || null;
+
+  const onHand = db.prepare(`
+    SELECT COALESCE((
+      SELECT SUM(rl.quantity_received) FROM subcontractor_receipt_lines rl
+      JOIN subcontractor_receipts r ON r.id = rl.receipt_id
+      JOIN subcontractor_delivery_lines dl ON dl.id = rl.delivery_line_id
+      WHERE r.warehouse_code = @wh AND dl.description = @desc AND dl.category_id IS @cat AND dl.uom = @uom
+    ), 0) - COALESCE((
+      SELECT SUM(quantity_issued) FROM subcontractor_consumptions
+      WHERE warehouse_code = @wh AND description = @desc AND category_id IS @cat AND uom = @uom
+    ), 0) AS available
+  `).get({ wh: b.warehouse_code, desc: b.description, cat: categoryId, uom });
+
+  if (Number(b.quantity_issued) > (onHand.available || 0)) {
+    return res.status(400).json({ error: `Only ${onHand.available || 0} ${uom} of "${b.description}" is on hand at ${b.warehouse_code}.` });
+  }
+
+  const info = db.prepare(`INSERT INTO subcontractor_consumptions
+      (warehouse_code, description, category_id, uom, quantity_issued, reference, notes, issued_by, issued_by_name)
+    VALUES (?,?,?,?,?,?,?,?,?)`).run(b.warehouse_code, b.description.trim(), categoryId, uom,
+    Number(b.quantity_issued), b.reference || null, b.notes || null, req.user.id, req.user.name);
+  audit.record({ entityType: 'SubcontractorConsumption', entityId: info.lastInsertRowid, action: 'CREATE',
+    newValue: `${b.quantity_issued} ${uom} of "${b.description}" issued at ${b.warehouse_code}`, reason: b.reference,
+    user: req.user, sourceScreen: 'Subcontractor Stock' });
+  res.status(201).json({ message: 'Consumption logged.', id: info.lastInsertRowid });
+});
+
+/** GET /api/subcontractor/consumption — consumption history for a warehouse. */
+router.get('/consumption', requirePermission(['subcontractor_receiving', 'subcontractor_quality_inspection', 'subcontractor_admin']), (req, res) => {
+  const filters = [];
+  const params = [];
+  if (req.query.warehouse_code) { filters.push('warehouse_code = ?'); params.push(req.query.warehouse_code); }
+  const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+  const rows = db.prepare(`SELECT * FROM subcontractor_consumptions ${where} ORDER BY id DESC LIMIT 100`).all(...params);
+  res.json({ consumption: rows });
 });
 
 module.exports = router;
