@@ -5,3 +5,4 @@ data/*.db-wal
 data/*.db-shm
 .env
 npm-debug.log*
+__pycache__/
