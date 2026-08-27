@@ -476,6 +476,33 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    id: '018_subcontractor_consumption',
+    description: 'Subcontractor stock consumption (issue) — depletes the same computed on-hand view that receiving builds up, logged by the Site Warehouse Supervisor, no approval step.',
+    up(database) {
+      database.exec(`
+        -- One row per consumption event, matched against the same
+        -- (warehouse_code, description, category_id, uom) grouping the stock
+        -- view aggregates on, since receipts are never tied to a single SKU.
+        CREATE TABLE IF NOT EXISTS subcontractor_consumptions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          warehouse_code TEXT NOT NULL REFERENCES warehouses(warehouse_code),
+          description TEXT NOT NULL,
+          category_id INTEGER REFERENCES subcontractor_categories(id),
+          uom TEXT NOT NULL DEFAULT 'EA',
+          quantity_issued REAL NOT NULL CHECK (quantity_issued > 0),
+          reference TEXT,
+          notes TEXT,
+          issued_by INTEGER REFERENCES users(id),
+          issued_by_name TEXT,
+          issued_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_subc_consumption_key
+          ON subcontractor_consumptions(warehouse_code, description, category_id, uom);
+      `);
+    },
+  },
 ];
 
 function ensureTable() {
