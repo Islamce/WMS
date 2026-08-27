@@ -11,14 +11,6 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  late TextEditingController _server;
-
-  @override
-  void initState() {
-    super.initState();
-    _server = TextEditingController(text: SessionScope.of(context).baseUrl);
-  }
-
   @override
   Widget build(BuildContext context) {
     final session = SessionScope.of(context);
@@ -61,46 +53,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
           SectionCard(
-            title: t('Server'),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                TextField(
-                  controller: _server,
-                  keyboardType: TextInputType.url,
-                  autocorrect: false,
-                  decoration: InputDecoration(
-                    labelText: t('Server URL'), border: const OutlineInputBorder()),
-                ),
-                const SizedBox(height: 10),
-                FilledButton(
-                  onPressed: () async {
-                    await session.setBaseUrl(_server.text);
-                    if (context.mounted) showSnack(context, t('Server URL saved.'));
-                  },
-                  child: Text(t('Save')),
-                ),
-              ],
-            ),
-          ),
-          SectionCard(
             title: t('Account'),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('${t('Name')}: ${session.userName}'),
                 Text('${t('Role')}: ${session.userRole}'),
-                const SizedBox(height: 6),
-                Text('${t('Permissions')} (${session.permissions.length}):',
-                    style: const TextStyle(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 4),
-                Wrap(
-                  spacing: 6, runSpacing: 6,
-                  children: session.permissions
-                      .map((p) => Chip(label: Text(p, style: const TextStyle(fontSize: 11)),
-                          visualDensity: VisualDensity.compact))
-                      .toList(),
-                ),
                 const SizedBox(height: 12),
                 OutlinedButton.icon(
                   icon: const Icon(Icons.logout),
@@ -113,6 +71,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ),
           ),
+          if (session.userRole == 'admin')
+            SectionCard(
+              title: t('Authority'),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('${t('Permissions')} (${session.permissions.length}):',
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 4),
+                  Wrap(
+                    spacing: 6, runSpacing: 6,
+                    children: session.permissions
+                        .map((p) => Chip(label: Text(p, style: const TextStyle(fontSize: 11)),
+                            visualDensity: VisualDensity.compact))
+                        .toList(),
+                  ),
+                ],
+              ),
+            ),
           const Padding(
             padding: EdgeInsets.all(16),
             child: Text('KYNOX WMS v1.0.0 · connects to the same REST API and database as the web app.',

@@ -10,14 +10,12 @@ import 'push.dart';
 /// and exposes them app-wide via [ChangeNotifier]. Persists to
 /// shared_preferences so a returning user stays signed in.
 class Session extends ChangeNotifier {
-  static const _kBaseUrl = 'wms_base_url';
   static const _kToken = 'wms_token';
   static const _kUser = 'wms_user_name';
   static const _kLang = 'wms_lang';
   static const _kTheme = 'wms_theme';
 
-  /// Production server — baked in so the app works out of the box; it can
-  /// still be changed under Settings (e.g. for a dev/test server).
+  /// The one production server this app talks to — embedded, not user-editable.
   static const defaultBaseUrl = 'https://wms.kynox.io';
 
   String baseUrl = defaultBaseUrl;
@@ -55,10 +53,9 @@ class Session extends ChangeNotifier {
 
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
-    baseUrl = prefs.getString(_kBaseUrl) ?? baseUrl;
-    // Older builds defaulted to the Android-emulator loopback; migrate those
-    // installs to the production server automatically.
-    if (baseUrl == 'http://10.0.2.2:3000') baseUrl = defaultBaseUrl;
+    // baseUrl is always the embedded production server — earlier builds let
+    // it be changed in Settings/at login, but any value stored by those is
+    // now ignored so every install talks to the same server.
     lang = prefs.getString(_kLang) ?? 'en';
     I18n.current = lang;
     final themeName = prefs.getString(_kTheme) ?? 'system';
@@ -78,13 +75,6 @@ class Session extends ChangeNotifier {
       }
     }
     loading = false;
-    notifyListeners();
-  }
-
-  Future<void> setBaseUrl(String url) async {
-    baseUrl = url.trim();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_kBaseUrl, baseUrl);
     notifyListeners();
   }
 

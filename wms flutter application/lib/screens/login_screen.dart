@@ -10,30 +10,15 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _email = TextEditingController(text: 'admin@example.com');
+  final _email = TextEditingController();
   final _password = TextEditingController();
-  late TextEditingController _server;
   bool _busy = false;
-  bool _showServer = false;
   bool _obscure = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _server = TextEditingController(text: SessionScope.of(context).baseUrl);
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _server.text = SessionScope.of(context).baseUrl;
-  }
 
   Future<void> _login() async {
     final session = SessionScope.of(context);
     setState(() => _busy = true);
     try {
-      await session.setBaseUrl(_server.text);
       await session.signIn(_email.text, _password.text);
       // _Root rebuilds via the notifier and shows HomeScreen.
     } catch (e) {
@@ -88,33 +73,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton.icon(
-                    icon: Icon(_showServer ? Icons.expand_less : Icons.dns_outlined, size: 18),
-                    label: const Text('Server settings'),
-                    onPressed: () => setState(() => _showServer = !_showServer),
-                  ),
-                ),
-                if (_showServer) ...[
-                  TextField(
-                    controller: _server,
-                    keyboardType: TextInputType.url,
-                    autocorrect: false,
-                    decoration: const InputDecoration(
-                      labelText: 'Server URL',
-                      helperText: 'e.g. https://<codespace>-3000.app.github.dev',
-                      prefixIcon: Icon(Icons.link),
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Android emulator → http://10.0.2.2:3000 · real device → your PC LAN IP or a public URL.',
-                    style: TextStyle(fontSize: 11, color: Colors.grey),
-                  ),
-                ],
                 const SizedBox(height: 20),
                 FilledButton(
                   onPressed: _busy ? null : _login,
@@ -125,10 +83,6 @@ class _LoginScreenState extends State<LoginScreen> {
                           child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                       : const Text('Sign in'),
                 ),
-                const SizedBox(height: 12),
-                const Text('Default admin: admin@example.com / Admin@123456',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 11, color: Colors.grey)),
               ],
             ),
           ),
