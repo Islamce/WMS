@@ -22,7 +22,8 @@ class _WarehousesScreenState extends State<WarehousesScreen> {
     return Column(
       children: [
         FutureBuilder<Map<String, dynamic>>(
-          future: session.api.get('/api/master/warehouses/projects'),
+          future: session.api.get('/api/master/warehouses/projects')
+              .then((r) => Map<String, dynamic>.from(r)),
           builder: (context, snap) {
             final projects = List<String>.from(snap.data?['projects'] ?? const []);
             if (projects.isEmpty) return const SizedBox.shrink();

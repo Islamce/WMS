@@ -99,7 +99,8 @@ class _MaterialsScreenState extends State<MaterialsScreen> {
           width: 360,
           child: FutureBuilder<Map<String, dynamic>>(
             future: session.api.get(
-                '/api/master/batches?search=${Uri.encodeQueryComponent(m['item_code'] ?? '')}&limit=100'),
+                '/api/master/batches?search=${Uri.encodeQueryComponent(m['item_code'] ?? '')}&limit=100')
+                .then((r) => Map<String, dynamic>.from(r)),
             builder: (context, snap) {
               if (!snap.hasData) {
                 return const SizedBox(height: 80, child: Center(child: CircularProgressIndicator()));
