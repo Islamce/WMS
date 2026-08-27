@@ -39,6 +39,20 @@ silently discarded.
 
 ---
 
+## DEC-015 — AI sessions decide directly; escalation is scoped to irreversible/costly/production/security calls
+
+**Status:** Accepted on 2026-08-27, folding in the working agreement first recorded as a session-log-only note on 2026-08-19.
+
+**Context:** The project owner is a non-technical portfolio owner. A prior session recorded, only in `WMS-SESSION-LOG.md`, that the owner wants AI sessions to make implementation and technical-approach decisions directly rather than present engineering options to choose between. That agreement was not in the durable instructions file (`CLAUDE.md`) itself, so it did not reliably carry forward. In this session the owner reiterated it explicitly after being asked to choose between two PR-merge decisions ("don't refer to me as technical decision, it's yours... check, analyze and do the correct thing").
+
+**Decision:**
+
+- AI sessions working on this repository decide technical approach, PR reconciliation, and PR merge/close outcomes directly, based on evidence (tests, CI, code review, alignment with already-recorded decisions) — not by presenting the owner a choice.
+- Escalate to the owner first only when a decision is irreversible, costly, touches production data, or carries real security exposure. Routine reconciliation, refactors, and PR merges are explicitly not that.
+- This is now recorded in `CLAUDE.md` itself (Working agreement section) so it survives independent of any one session's memory.
+
+**Consequences:** Sessions should stop asking "should I merge/close this PR?" for routine cases and instead report what was decided and why. A session still must ask before anything matching the escalation criteria above (e.g., pushing to `main` directly for an unscoped change, any production/database action, credential rotation, deleting a branch other sessions or the owner may still need).
+
 ## DEC-001 — Production data must survive application updates
 
 **Status:** Accepted.
