@@ -407,7 +407,7 @@ const MIGRATIONS = [
           delivery_note_ref TEXT,
           delivered_date TEXT NOT NULL DEFAULT (date('now')),
           status TEXT NOT NULL DEFAULT 'Pending Inspection'
-            CHECK (status IN ('Pending Inspection','Inspected','Received','Closed')),
+            CHECK (status IN ('Pending Inspection','Received','Closed')),
           logged_by INTEGER REFERENCES users(id),
           logged_by_name TEXT,
           created_at TEXT NOT NULL DEFAULT (datetime('now'))

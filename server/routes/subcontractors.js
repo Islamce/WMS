@@ -4,8 +4,10 @@
  * no material master, no ERP posting: just description/qty/category, a
  * quality inspection step, and a receipt into a local on-hand view.
  *
- * Flow: log a delivery (Quality) → inspect each line (Quality) →
- * receive the quality-approved lines into stock (Warehouse Supervisor).
+ * Flow: Site Warehouse Supervisor logs the delivery with its details →
+ * Site Quality Supervisor inspects each line → an Approved / Approved with
+ * Remarks decision posts that quantity into stock in the same step (no
+ * separate manual "receive" action — the quality decision *is* the receipt).
  */
 const express = require('express');
 const db = require('./../db/connection');
@@ -95,8 +97,8 @@ router.get('/deliveries/:id', requirePermission(['subcontractor_quality_inspecti
   res.json({ delivery, lines });
 });
 
-/** POST /api/subcontractor/deliveries — log a new delivery with its lines. */
-router.post('/deliveries', requirePermission('subcontractor_quality_inspection'), (req, res) => {
+/** POST /api/subcontractor/deliveries — Site Warehouse Supervisor logs a new delivery with its lines. */
+router.post('/deliveries', requirePermission('subcontractor_receiving'), (req, res) => {
   const b = req.body || {};
   if (!isNonEmptyString(b.warehouse_code)) return res.status(400).json({ error: 'Warehouse is required.' });
   if (!db.prepare('SELECT 1 FROM warehouses WHERE warehouse_code=?').get(b.warehouse_code)) {
@@ -124,14 +126,20 @@ router.post('/deliveries', requirePermission('subcontractor_quality_inspection')
   });
   const deliveryId = run();
   audit.record({ entityType: 'SubcontractorDelivery', entityId: deliveryId, action: 'CREATE',
-    newValue: `${lines.length} line(s)`, user: req.user, sourceScreen: 'Subcontractor Quality' });
-  res.status(201).json({ message: 'Delivery logged.', id: deliveryId });
+    newValue: `${lines.length} line(s)`, user: req.user, sourceScreen: 'Subcontractor Receiving' });
+  res.status(201).json({ message: 'Delivery logged and forwarded for quality inspection.', id: deliveryId });
 });
 
-/** PATCH .../subcontractor-deliveries/:id/lines/:lineId — quality decision on one line. */
+/**
+ * PATCH .../deliveries/:id/lines/:lineId — Site Quality Supervisor's decision
+ * on one line. Approved / Approved with Remarks posts the approved quantity
+ * into stock immediately (one receipt line per decision) — there is no
+ * separate manual receiving step in this flow.
+ */
 router.patch('/deliveries/:id/lines/:lineId', requirePermission('subcontractor_quality_inspection'), (req, res) => {
   const line = db.prepare(`SELECT * FROM subcontractor_delivery_lines WHERE id=? AND delivery_id=?`).get(req.params.lineId, req.params.id);
   if (!line) return res.status(404).json({ error: 'Delivery line not found.' });
+  if (line.quality_status !== 'Pending') return res.status(409).json({ error: 'This line has already been inspected.' });
   const { quality_status, quantity_approved, quality_notes } = req.body || {};
   if (!QUALITY_STATUSES.includes(quality_status) || quality_status === 'Pending') {
     return res.status(400).json({ error: `quality_status must be one of ${QUALITY_STATUSES.filter((s) => s !== 'Pending').join(', ')}.` });
@@ -145,68 +153,43 @@ router.patch('/deliveries/:id/lines/:lineId', requirePermission('subcontractor_q
   if (quality_status !== 'Approved' && !isNonEmptyString(quality_notes)) {
     return res.status(400).json({ error: 'A note is required for rejection or a remark.' });
   }
-
-  db.prepare(`UPDATE subcontractor_delivery_lines
-    SET quality_status=?, quantity_approved=?, quality_notes=?, inspected_by=?, inspected_by_name=?, inspected_at=datetime('now')
-    WHERE id=?`).run(quality_status, quality_status === 'Rejected' ? 0 : Number(quantity_approved),
-    quality_notes || null, req.user.id, req.user.name, line.id);
-  audit.record({ entityType: 'SubcontractorDeliveryLine', entityId: line.id, action: 'QUALITY_DECISION',
-    oldValue: line.quality_status, newValue: quality_status, reason: quality_notes, user: req.user, sourceScreen: 'Subcontractor Quality' });
-
-  // Roll the header status up from its lines.
   const delivery = db.prepare('SELECT * FROM subcontractor_deliveries WHERE id=?').get(req.params.id);
-  const remaining = db.prepare(`SELECT COUNT(*) AS n FROM subcontractor_delivery_lines WHERE delivery_id=? AND quality_status='Pending'`).get(delivery.id).n;
-  if (remaining === 0 && delivery.status === 'Pending Inspection') {
-    db.prepare(`UPDATE subcontractor_deliveries SET status='Inspected' WHERE id=?`).run(delivery.id);
-  }
-  res.json({ message: `Line set to ${quality_status}.` });
-});
-
-/** POST .../subcontractor-deliveries/:id/receive — receive quality-approved lines into stock. */
-router.post('/deliveries/:id/receive', requirePermission('subcontractor_receiving'), (req, res) => {
-  const delivery = db.prepare('SELECT * FROM subcontractor_deliveries WHERE id=?').get(req.params.id);
-  if (!delivery) return res.status(404).json({ error: 'Delivery not found.' });
-  const b = req.body || {};
-  const requestedLines = Array.isArray(b.lines) ? b.lines : [];
-  if (!requestedLines.length) return res.status(400).json({ error: 'Select at least one line to receive.' });
-
-  const eligible = db.prepare(`
-    SELECT * FROM subcontractor_delivery_lines
-    WHERE delivery_id = ? AND quality_status IN ('Approved','Approved with Remarks')
-  `).all(delivery.id);
-  const eligibleById = new Map(eligible.map((l) => [l.id, l]));
-
-  for (const rl of requestedLines) {
-    const line = eligibleById.get(Number(rl.delivery_line_id));
-    if (!line) return res.status(400).json({ error: `Line ${rl.delivery_line_id} is not eligible for receiving.` });
-    const already = line.quantity_received || 0;
-    const remaining = line.quantity_approved - already;
-    if (!(Number(rl.quantity_received) > 0) || Number(rl.quantity_received) > remaining) {
-      return res.status(400).json({ error: `Line ${rl.delivery_line_id}: quantity received must be between 0 and ${remaining} (already received: ${already}).` });
-    }
-  }
+  const approvedQty = quality_status === 'Rejected' ? 0 : Number(quantity_approved);
 
   const run = db.transaction(() => {
-    const receiptInfo = db.prepare(`INSERT INTO subcontractor_receipts (warehouse_code, received_by, received_by_name, notes)
-      VALUES (?,?,?,?)`).run(delivery.warehouse_code, req.user.id, req.user.name, b.notes || null);
-    const receiptId = receiptInfo.lastInsertRowid;
-    const insLine = db.prepare('INSERT INTO subcontractor_receipt_lines (receipt_id, delivery_line_id, quantity_received) VALUES (?,?,?)');
-    const bumpLine = db.prepare('UPDATE subcontractor_delivery_lines SET quantity_received = quantity_received + ? WHERE id=?');
-    requestedLines.forEach((rl) => {
-      insLine.run(receiptId, rl.delivery_line_id, Number(rl.quantity_received));
-      bumpLine.run(Number(rl.quantity_received), rl.delivery_line_id);
-    });
-    const stillOpen = db.prepare(`
-      SELECT COUNT(*) AS n FROM subcontractor_delivery_lines
-      WHERE delivery_id = ? AND quality_status IN ('Approved','Approved with Remarks') AND quantity_received < quantity_approved
-    `).get(delivery.id).n;
-    if (stillOpen === 0) db.prepare(`UPDATE subcontractor_deliveries SET status='Received' WHERE id=?`).run(delivery.id);
+    db.prepare(`UPDATE subcontractor_delivery_lines
+      SET quality_status=?, quantity_approved=?, quality_notes=?, inspected_by=?, inspected_by_name=?, inspected_at=datetime('now')
+      WHERE id=?`).run(quality_status, approvedQty, quality_notes || null, req.user.id, req.user.name, line.id);
+
+    let receiptId = null;
+    if (approvedQty > 0) {
+      const receiptInfo = db.prepare(`INSERT INTO subcontractor_receipts (warehouse_code, received_by, received_by_name, notes)
+        VALUES (?,?,?,?)`).run(delivery.warehouse_code, req.user.id, req.user.name,
+        `Auto-recorded on ${quality_status.toLowerCase()} quality decision`);
+      receiptId = receiptInfo.lastInsertRowid;
+      db.prepare('INSERT INTO subcontractor_receipt_lines (receipt_id, delivery_line_id, quantity_received) VALUES (?,?,?)')
+        .run(receiptId, line.id, approvedQty);
+      db.prepare('UPDATE subcontractor_delivery_lines SET quantity_received=? WHERE id=?').run(approvedQty, line.id);
+    }
+
+    // Roll the header status up from its lines: Received once every line has a
+    // decision and at least one was approved, Closed if every line was rejected.
+    const remaining = db.prepare(`SELECT COUNT(*) AS n FROM subcontractor_delivery_lines WHERE delivery_id=? AND quality_status='Pending'`).get(delivery.id).n;
+    if (remaining === 0) {
+      const anyApproved = db.prepare(`SELECT COUNT(*) AS n FROM subcontractor_delivery_lines WHERE delivery_id=? AND quantity_received > 0`).get(delivery.id).n;
+      db.prepare('UPDATE subcontractor_deliveries SET status=? WHERE id=?').run(anyApproved > 0 ? 'Received' : 'Closed', delivery.id);
+    }
     return receiptId;
   });
   const receiptId = run();
-  audit.record({ entityType: 'SubcontractorReceipt', entityId: receiptId, action: 'CREATE',
-    newValue: `${requestedLines.length} line(s) from delivery #${delivery.id}`, user: req.user, sourceScreen: 'Subcontractor Receiving' });
-  res.status(201).json({ message: 'Materials received into stock.', id: receiptId });
+
+  audit.record({ entityType: 'SubcontractorDeliveryLine', entityId: line.id, action: 'QUALITY_DECISION',
+    oldValue: line.quality_status, newValue: quality_status, reason: quality_notes, user: req.user, sourceScreen: 'Subcontractor Quality' });
+  if (receiptId) {
+    audit.record({ entityType: 'SubcontractorReceipt', entityId: receiptId, action: 'CREATE',
+      newValue: `${approvedQty} recorded as stock from delivery #${delivery.id} line ${line.line_number}`, user: req.user, sourceScreen: 'Subcontractor Quality' });
+  }
+  res.json({ message: approvedQty > 0 ? `Line ${quality_status.toLowerCase()} and recorded as stock.` : 'Line rejected.' });
 });
 
 // --- Current stock (computed, not a maintained ledger) ------------------------

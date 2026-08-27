@@ -88,12 +88,16 @@ Pages.subcontractors = {
   },
 };
 
-// --- Quality: log deliveries + inspect lines --------------------------------
-Pages.subcontractorQuality = {
+// --- Shared delivery queue: Site Warehouse Supervisor logs the delivery,
+// Site Quality Supervisor inspects it. Approval records stock in the same
+// step, so both roles look at the same queue — only the "+ Log Delivery"
+// action and the per-line decision buttons are permission-gated.
+const SubcontractorDeliveries = {
   state: { warehouse_code: '', status: '' },
 
   async render(el) {
     this.el = el;
+    const canLog = App.can('subcontractor_receiving');
     const [{ subcontractors }, meta] = await Promise.all([
       Api.get('/api/subcontractor/subcontractors'), Api.get('/api/meta'),
     ]);
@@ -106,20 +110,21 @@ Pages.subcontractorQuality = {
           <select id="dq-warehouse" style="max-width:200px"><option value="">All warehouses</option>
             ${this.warehouses.map((w) => `<option value="${UI.esc(w.warehouse_code)}">${UI.esc(w.warehouse_code)} — ${UI.esc(w.warehouse_name)}</option>`).join('')}</select>
           <select id="dq-status" style="max-width:200px"><option value="">All statuses</option>
-            ${['Pending Inspection', 'Inspected', 'Received', 'Closed'].map((s) => `<option>${s}</option>`).join('')}</select>
+            ${['Pending Inspection', 'Received', 'Closed'].map((s) => `<option>${s}</option>`).join('')}</select>
           <div class="spacer"></div>
-          <button class="btn" id="dq-log">+ Log Delivery</button>
+          ${canLog ? '<button class="btn" id="dq-log">+ Log Delivery</button>' : ''}
         </div>
         <div class="table-wrap" id="dq-table"><div class="loading">Loading…</div></div>
         <div class="pagination" id="dq-pagination"></div>
       </div>`;
     el.querySelector('#dq-warehouse').addEventListener('change', (e) => { this.state.warehouse_code = e.target.value; this.load(1); });
     el.querySelector('#dq-status').addEventListener('change', (e) => { this.state.status = e.target.value; this.load(1); });
-    el.querySelector('#dq-log').addEventListener('click', () => this.logForm());
+    el.querySelector('#dq-log')?.addEventListener('click', () => this.logForm());
     await this.load(1);
   },
 
   async load(page = 1) {
+    const canLog = App.can('subcontractor_receiving');
     const q = new URLSearchParams({ page, ...(this.state.warehouse_code ? { warehouse_code: this.state.warehouse_code } : {}), ...(this.state.status ? { status: this.state.status } : {}) });
     const data = await Api.get(`/api/subcontractor/deliveries?${q}`);
     this.el.querySelector('#dq-table').innerHTML = data.deliveries.length ? `
@@ -129,10 +134,11 @@ Pages.subcontractorQuality = {
           <td><span class="chip accent">DEL-${d.id}</span></td><td>${UI.esc(d.warehouse_code)}</td>
           <td>${UI.esc(d.subcontractor_name)}</td><td>${UI.esc(d.delivered_date)}</td>
           <td>${d.line_count}${d.pending_lines ? ` <span class="muted">(${d.pending_lines} pending)</span>` : ''}</td>
-          <td><span class="badge ${d.status === 'Pending Inspection' ? 'pending' : d.status === 'Received' ? 'active' : 'role'}">${UI.esc(d.status)}</span></td>
+          <td><span class="badge ${d.status === 'Pending Inspection' ? 'pending' : d.status === 'Received' ? 'active' : 'OUT'}">${UI.esc(d.status)}</span></td>
         </tr>`).join('')}</tbody></table>` : UI.meaningfulEmptyState({
-      title: 'No deliveries logged yet', description: 'Log what a subcontractor dropped off on site to start the quality-inspection queue.',
-      actionHtml: '<button class="btn secondary sm" id="dq-empty-log" style="margin-top:8px">+ Log Delivery</button>',
+      title: 'No deliveries logged yet',
+      description: canLog ? 'Log what a subcontractor dropped off on site to start the quality-inspection queue.' : 'Deliveries the Site Warehouse Supervisor logs will appear here for quality inspection.',
+      actionHtml: canLog ? '<button class="btn secondary sm" id="dq-empty-log" style="margin-top:8px">+ Log Delivery</button>' : '',
     });
     this.el.querySelector('#dq-empty-log')?.addEventListener('click', () => this.logForm());
     UI.makeRowsActionable(this.el.querySelectorAll('tr[data-id]'), (tr) => this.detail(tr.dataset.id));
@@ -228,55 +234,9 @@ Pages.subcontractorQuality = {
   },
 };
 
-// --- Warehouse Supervisor: receive quality-approved lines -------------------
-Pages.subcontractorReceiving = {
-  async render(el) {
-    this.el = el;
-    el.innerHTML = `<div class="card"><h3 class="mb-0">Ready to Receive</h3>
-      <p class="muted">Deliveries with quality-approved lines not yet fully received into stock.</p>
-      <div class="table-wrap" id="rc-table"><div class="loading">Loading…</div></div></div>`;
-    await this.load();
-  },
-
-  async load() {
-    const { deliveries } = await Api.get('/api/subcontractor/deliveries?status=Inspected');
-    const pendingReceived = (await Api.get('/api/subcontractor/deliveries?status=Pending Inspection')).deliveries;
-    const list = [...deliveries, ...pendingReceived.filter((d) => d.line_count > d.pending_lines)];
-    this.el.querySelector('#rc-table').innerHTML = list.length ? `
-      <table><thead><tr><th>Delivery</th><th>Warehouse</th><th>Subcontractor</th><th>Lines ready</th><th></th></tr></thead>
-      <tbody>${list.map((d) => `
-        <tr><td><span class="chip accent">DEL-${d.id}</span></td><td>${UI.esc(d.warehouse_code)}</td><td>${UI.esc(d.subcontractor_name)}</td>
-          <td>${d.line_count - d.pending_lines} of ${d.line_count}</td>
-          <td><button class="btn sm" data-receive="${d.id}">Receive</button></td></tr>`).join('')}</tbody></table>`
-      : UI.meaningfulEmptyState({ title: 'Nothing waiting to be received', description: 'Once quality approves delivery lines, they will appear here to receive into stock.' });
-    this.el.querySelectorAll('[data-receive]').forEach((btn) => btn.addEventListener('click', () => this.receiveForm(btn.dataset.receive)));
-  },
-
-  async receiveForm(deliveryId) {
-    const { delivery, lines } = await Api.get(`/api/subcontractor/deliveries/${deliveryId}`);
-    const eligible = lines.filter((l) => ['Approved', 'Approved with Remarks'].includes(l.quality_status) && l.quantity_received < l.quantity_approved);
-    if (!eligible.length) return UI.toast('No quality-approved lines remain to receive.', 'error');
-    UI.modal({
-      title: `Receive DEL-${delivery.id} — ${delivery.subcontractor_name}`, wide: true, submitLabel: 'Receive into Stock',
-      bodyHtml: `<div class="table-wrap"><table><thead><tr><th>Description</th><th class="text-right">Approved</th><th class="text-right">Already received</th><th class="text-right">Receive now</th></tr></thead>
-        <tbody>${eligible.map((l) => `
-          <tr data-line="${l.id}"><td>${UI.esc(l.description)}</td><td class="text-right">${UI.fmtQty(l.quantity_approved)} ${UI.esc(l.uom)}</td>
-            <td class="text-right">${UI.fmtQty(l.quantity_received)}</td>
-            <td class="text-right"><input class="rc-qty" type="number" min="0" step="0.01" max="${l.quantity_approved - l.quantity_received}" value="${l.quantity_approved - l.quantity_received}" style="width:100px;text-align:right"></td></tr>`).join('')}</tbody></table></div>
-        <div class="form-group" style="margin-top:10px"><label>Notes</label><input id="rc-notes"></div>`,
-      onSubmit: async (ov, close) => {
-        const receiveLines = [...ov.querySelectorAll('[data-line]')].map((row) => ({
-          delivery_line_id: Number(row.dataset.line), quantity_received: Number(row.querySelector('.rc-qty').value),
-        })).filter((l) => l.quantity_received > 0);
-        if (!receiveLines.length) return UI.toast('Enter a quantity to receive for at least one line.', 'error');
-        try {
-          await Api.post(`/api/subcontractor/deliveries/${deliveryId}/receive`, { lines: receiveLines, notes: ov.querySelector('#rc-notes').value });
-          UI.toast('Materials received into stock.'); close(); this.load();
-        } catch (err) { UI.toast(err.message, 'error'); }
-      },
-    });
-  },
-};
+// Both roles share the same delivery queue; only the Log Delivery action and
+// the per-line quality decision buttons are permission-gated (see above).
+Pages.subcontractorQuality = SubcontractorDeliveries;
 
 // --- Current stock (computed, read-only) ------------------------------------
 Pages.subcontractorStock = {
