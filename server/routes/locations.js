@@ -2,6 +2,7 @@ const express = require('express');
 const db = require('../db/connection');
 const { authenticate, requirePermission } = require('../middleware/auth');
 const { isNonEmptyString, isId, parsePagination } = require('../utils/validate');
+const audit = require('../services/audit');
 
 const router = express.Router();
 
@@ -118,6 +119,8 @@ router.post('/', requirePermission('locations'), (req, res) => {
   if (exists) return res.status(409).json({ error: 'A location with this code already exists.' });
 
   const result = db.prepare('INSERT INTO locations (code) VALUES (?)').run(code.trim());
+  audit.record({ entityType: 'Location', entityId: result.lastInsertRowid, action: 'CREATE',
+    newValue: code.trim(), user: req.user, sourceScreen: 'Locations' });
   res.status(201).json({ message: 'Location created.', id: result.lastInsertRowid });
 });
 
@@ -131,11 +134,14 @@ router.put('/:id', requirePermission('locations'), (req, res) => {
   const duplicate = db.prepare('SELECT id FROM locations WHERE code = ? AND id != ?').get(code.trim(), id);
   if (duplicate) return res.status(409).json({ error: 'Another location already uses this code.' });
 
+  const before = db.prepare('SELECT code FROM locations WHERE id=?').get(id);
   const result = db.prepare(
     "UPDATE locations SET code = ?, updated_at = datetime('now') WHERE id = ?"
   ).run(code.trim(), id);
   if (result.changes === 0) return res.status(404).json({ error: 'Location not found.' });
 
+  audit.record({ entityType: 'Location', entityId: Number(id), action: 'UPDATE',
+    oldValue: before?.code, newValue: code.trim(), user: req.user, sourceScreen: 'Locations' });
   res.json({ message: 'Location updated.' });
 });
 
@@ -158,6 +164,7 @@ router.delete('/:id', requirePermission('locations'), (req, res) => {
     return res.status(409).json({ error: 'This location has stock transactions and cannot be deleted.' });
   }
 
+  const before = db.prepare('SELECT code FROM locations WHERE id=?').get(id);
   const remove = db.transaction(() => {
     db.prepare('DELETE FROM material_location_stock WHERE location_id = ?').run(id);
     return db.prepare('DELETE FROM locations WHERE id = ?').run(id);
@@ -165,6 +172,8 @@ router.delete('/:id', requirePermission('locations'), (req, res) => {
   const result = remove();
   if (result.changes === 0) return res.status(404).json({ error: 'Location not found.' });
 
+  audit.record({ entityType: 'Location', entityId: Number(id), action: 'DELETE',
+    oldValue: before?.code, user: req.user, sourceScreen: 'Locations' });
   res.json({ message: 'Location deleted.' });
 });
 

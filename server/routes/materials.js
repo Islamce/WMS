@@ -2,6 +2,7 @@ const express = require('express');
 const db = require('../db/connection');
 const { authenticate, requirePermission } = require('../middleware/auth');
 const { isNonEmptyString, isNonNegativeNumber, isId, parsePagination } = require('../utils/validate');
+const audit = require('../services/audit');
 
 const router = express.Router();
 
@@ -130,6 +131,8 @@ router.post('/bulk', requirePermission('materials'), (req, res) => {
     });
   });
   run();
+  audit.record({ entityType: 'Material', action: 'BULK_CREATE',
+    newValue: { created, skipped, errors, rows: rows.length }, user: req.user, sourceScreen: 'Materials' });
   res.status(201).json({ message: `Mass upload: ${created} created, ${skipped} skipped, ${errors} errors.`, created, skipped, errors, results });
 });
 
@@ -157,6 +160,9 @@ router.post('/', requirePermission('materials'), (req, res) => {
     body.is_stock_item === 0 || body.is_stock_item === false ? 0 : 1
   );
 
+  audit.record({ entityType: 'Material', entityId: result.lastInsertRowid, action: 'CREATE',
+    newValue: { item_code: body.item_code.trim(), description: body.description.trim(), price: Number(body.price) || 0 },
+    user: req.user, sourceScreen: 'Materials' });
   res.status(201).json({ message: 'Material created.', id: result.lastInsertRowid });
 });
 
@@ -172,6 +178,7 @@ router.put('/:id', requirePermission('materials'), (req, res) => {
     .get(body.item_code.trim(), id);
   if (duplicate) return res.status(409).json({ error: 'Another material already uses this item code.' });
 
+  const before = db.prepare('SELECT item_code, description, price, unit, material_type, material_group FROM materials WHERE id=?').get(id);
   const result = db.prepare(`
     UPDATE materials SET plant = ?, item_code = ?, description = ?, unit = ?,
       price = ?, currency = ?, material_type = ?, material_group = ?, is_stock_item = ?, updated_at = datetime('now')
@@ -190,6 +197,11 @@ router.put('/:id', requirePermission('materials'), (req, res) => {
   );
   if (result.changes === 0) return res.status(404).json({ error: 'Material not found.' });
 
+  audit.record({ entityType: 'Material', entityId: Number(id), action: 'UPDATE',
+    oldValue: before,
+    newValue: { item_code: body.item_code.trim(), description: body.description.trim(), price: Number(body.price) || 0,
+      unit: body.unit.trim(), material_type: (body.material_type || '').trim(), material_group: (body.material_group || '').trim() },
+    user: req.user, sourceScreen: 'Materials' });
   res.json({ message: 'Material updated.' });
 });
 
@@ -213,6 +225,7 @@ router.delete('/:id', requirePermission('materials'), (req, res) => {
     return res.status(409).json({ error: 'This material still has stock and cannot be deleted.' });
   }
 
+  const before = db.prepare('SELECT item_code, description FROM materials WHERE id=?').get(id);
   const remove = db.transaction(() => {
     db.prepare('DELETE FROM material_location_stock WHERE material_id = ?').run(id);
     return db.prepare('DELETE FROM materials WHERE id = ?').run(id);
@@ -220,6 +233,8 @@ router.delete('/:id', requirePermission('materials'), (req, res) => {
   const result = remove();
   if (result.changes === 0) return res.status(404).json({ error: 'Material not found.' });
 
+  audit.record({ entityType: 'Material', entityId: Number(id), action: 'DELETE',
+    oldValue: before, user: req.user, sourceScreen: 'Materials' });
   res.json({ message: 'Material deleted.' });
 });
 

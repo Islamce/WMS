@@ -161,6 +161,70 @@ big = {'rows': [{'code': f'X{i:05d}', 'name': 'row ' + 'y' * 40} for i in range(
 c, _ = call('POST', '/api/master/bins/bulk', admin, big)
 check('P1-4 large body not rejected by size limit (no 413)', c != 413, c)
 
+# ===== 5. Audit-trail completeness (master-data governance) =====
+# Every entity type below previously mutated state with zero audit_trail
+# record — a real governance gap for master-data create/update/delete and
+# for request-attachment upload/delete (supporting-document evidence on a
+# heavily-audited workflow that itself left no trace).
+def latest_audit(entity_type, entity_id):
+    _, r = call('GET', f'/api/master/audit?limit=50&entity_type={entity_type}', admin)
+    rows = [a for a in r.get('audit', []) if a.get('entity_id') == entity_id]
+    return rows[0] if rows else None
+
+c, r = call('POST', '/api/materials', admin, {
+    'item_code': 'AUDIT-TEST-001', 'description': 'Audit trail test material', 'unit': 'EA', 'price': 1,
+})
+check('P5-1 material create succeeds', c == 201, (c, r))
+mat_id = r.get('id')
+a = latest_audit('Material', mat_id)
+check('P5-1 material create is audited', a is not None and a.get('action') == 'CREATE', a)
+
+c, r = call('PUT', f'/api/materials/{mat_id}', admin, {
+    'item_code': 'AUDIT-TEST-001', 'description': 'Audit trail test material (updated)', 'unit': 'EA', 'price': 2,
+})
+check('P5-1 material update succeeds', c == 200, (c, r))
+a = latest_audit('Material', mat_id)
+check('P5-1 material update is audited', a is not None and a.get('action') == 'UPDATE', a)
+
+c, r = call('DELETE', f'/api/materials/{mat_id}', admin)
+check('P5-1 material delete succeeds', c == 200, (c, r))
+a = latest_audit('Material', mat_id)
+check('P5-1 material delete is audited', a is not None and a.get('action') == 'DELETE', a)
+
+c, r = call('POST', '/api/locations', admin, {'code': 'AUDIT-LOC-001'})
+check('P5-2 location create succeeds', c == 201, (c, r))
+loc_id = r.get('id')
+a = latest_audit('Location', loc_id)
+check('P5-2 location create is audited', a is not None and a.get('action') == 'CREATE', a)
+
+c, r = call('DELETE', f'/api/locations/{loc_id}', admin)
+check('P5-2 location delete succeeds', c == 200, (c, r))
+a = latest_audit('Location', loc_id)
+check('P5-2 location delete is audited', a is not None and a.get('action') == 'DELETE', a)
+
+# A request attachment needs a real request; the requester already has one from
+# earlier in this suite's setup pattern — create a fresh minimal draft instead
+# of depending on prior test-file state.
+_, mats = call('GET', '/api/materials/search?q=MAT-0001', admin)
+_, created = call('POST', '/api/requests', requester, {
+    'purpose': 'Audit trail attachment test', 'cost_center': 'CC-AUDIT', 'plant': 'P100',
+    'lines': [{'material_id': mats['materials'][0]['id'], 'requested_quantity': 1}],
+})
+req_id = created['id']
+c, r = call('POST', f'/api/requests/{req_id}/attachments', requester, {
+    'file_name': 'evidence.txt', 'content_type': 'text/plain',
+    'data_base64': 'aGVsbG8gYXVkaXQgdHJhaWw=',
+})
+check('P5-3 attachment upload succeeds', c == 201, (c, r))
+att_id = r.get('id')
+a = latest_audit('RequestAttachment', att_id)
+check('P5-3 attachment upload is audited', a is not None and a.get('action') == 'ATTACHMENT_UPLOADED', a)
+
+c, r = call('DELETE', f'/api/attachments/{att_id}', requester)
+check('P5-3 attachment delete succeeds', c == 200, (c, r))
+a = latest_audit('RequestAttachment', att_id)
+check('P5-3 attachment delete is audited', a is not None and a.get('action') == 'ATTACHMENT_DELETED', a)
+
 print(f"\n===== RESULT: {passed} passed, {failed} failed =====")
 if fails: print("Failed:", fails)
 sys.exit(1 if failed else 0)

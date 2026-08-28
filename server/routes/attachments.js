@@ -12,6 +12,7 @@ const crypto = require('crypto');
 const db = require('./../db/connection');
 const { authenticate, requirePermission } = require('./../middleware/auth');
 const { isId, isNonEmptyString } = require('./../utils/validate');
+const audit = require('./../services/audit');
 
 const router = express.Router();
 router.use(authenticate);
@@ -71,6 +72,9 @@ router.post('/requests/:id/attachments', CAN_ATTACH, (req, res) => {
   `).run(header.id, header.request_number, safeName, content_type || 'application/octet-stream',
     buf.length, path.relative(path.join(__dirname, '..', '..'), storagePath), req.user.id, req.user.name);
 
+  audit.record({ entityType: 'RequestAttachment', entityId: info.lastInsertRowid, requestNumber: header.request_number,
+    action: 'ATTACHMENT_UPLOADED', newValue: { file_name: safeName, byte_size: buf.length },
+    user: req.user, sourceScreen: 'Request Detail' });
   res.status(201).json({ message: 'Attachment uploaded.', id: info.lastInsertRowid, file_name: safeName, byte_size: buf.length });
 });
 
@@ -99,6 +103,9 @@ router.delete('/attachments/:aid', CAN_ATTACH, (req, res) => {
   const abs = path.join(__dirname, '..', '..', a.storage_path);
   try { if (abs.startsWith(STORE_ROOT) && fs.existsSync(abs)) fs.unlinkSync(abs); } catch { /* file already gone */ }
   db.prepare('DELETE FROM request_attachments WHERE id=?').run(a.id);
+  audit.record({ entityType: 'RequestAttachment', entityId: a.id, requestNumber: a.request_number,
+    action: 'ATTACHMENT_DELETED', oldValue: { file_name: a.file_name, uploaded_by_name: a.uploaded_by_name },
+    user: req.user, sourceScreen: 'Request Detail' });
   res.json({ message: 'Attachment deleted.' });
 });
 
