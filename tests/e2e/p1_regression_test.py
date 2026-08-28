@@ -225,6 +225,58 @@ check('P5-3 attachment delete succeeds', c == 200, (c, r))
 a = latest_audit('RequestAttachment', att_id)
 check('P5-3 attachment delete is audited', a is not None and a.get('action') == 'ATTACHMENT_DELETED', a)
 
+# ===== 6. Audit-trail completeness (identity/access governance) =====
+# User status, role, and permission changes are the highest-blast-radius
+# actions in the app (account approval/disable, privilege escalation) and
+# previously left zero audit_trail record. A throwaway signup is used here
+# so nothing shared with later tests in this phase is mutated.
+import time
+gov_email = f'gov-audit-{int(time.time())}@example.com'
+c, r = call('POST', '/api/auth/signup', body={'name': 'Gov Audit Test', 'email': gov_email, 'password': 'Passw0rd!'})
+check('P6-0 governance test user signup succeeds', c == 201, (c, r))
+_, pending = call('GET', '/api/users?status=pending', admin)
+gov_user = next((u for u in pending['users'] if u['email'] == gov_email), None)
+check('P6-0 governance test user visible as pending', gov_user is not None, pending)
+gov_id = gov_user['id']
+
+c, r = call('PATCH', f'/api/users/{gov_id}/status', admin, {'status': 'active'})
+check('P6-1 status change (approve) succeeds', c == 200, (c, r))
+a = latest_audit('User', gov_id)
+check('P6-1 status change is audited', a is not None and a.get('action') == 'STATUS_CHANGED', a)
+
+c, r = call('PATCH', f'/api/users/{gov_id}/status', admin, {'status': 'disabled'})
+check('P6-1 status change (disable) succeeds', c == 200, (c, r))
+a = latest_audit('User', gov_id)
+check('P6-1 second status change is audited', a is not None and a.get('action') == 'STATUS_CHANGED', a)
+
+_, roles = call('GET', '/api/users/roles', admin)
+non_admin_roles = [r for r in roles['roles'] if r['name'] != 'admin']
+target_role = non_admin_roles[0]
+c, r = call('PATCH', f'/api/users/{gov_id}/role', admin, {'role_id': target_role['id']})
+check('P6-2 role change succeeds', c == 200, (c, r))
+a = latest_audit('User', gov_id)
+check('P6-2 role change is audited', a is not None and a.get('action') == 'ROLE_CHANGED', a)
+
+_, perms = call('GET', '/api/permissions', admin)
+some_perm_id = perms['permissions'][0]['id']
+c, r = call('PUT', f'/api/users/{gov_id}/permissions', admin, {'permission_ids': [some_perm_id]})
+check('P6-3 user permission grant succeeds', c == 200, (c, r))
+a = latest_audit('User', gov_id)
+check('P6-3 user permission grant is audited', a is not None and a.get('action') == 'PERMISSIONS_CHANGED', a)
+
+# Role default-permission edits affect every user holding that role, so the
+# original set is captured and restored rather than touched permanently.
+_, role_perms = call('GET', '/api/permissions/roles', admin)
+edited_role = next(r for r in role_perms['roles'] if r['id'] == target_role['id'])
+original_perm_ids = edited_role['permission_ids']
+new_perm_ids = [p for p in original_perm_ids if p != some_perm_id] or [some_perm_id]
+c, r = call('PUT', f"/api/permissions/roles/{target_role['id']}", admin, {'permission_ids': new_perm_ids})
+check('P6-4 role permissions change succeeds', c == 200, (c, r))
+a = latest_audit('Role', target_role['id'])
+check('P6-4 role permissions change is audited', a is not None and a.get('action') == 'ROLE_PERMISSIONS_CHANGED', a)
+c, r = call('PUT', f"/api/permissions/roles/{target_role['id']}", admin, {'permission_ids': original_perm_ids})
+check('P6-4 role permissions restored', c == 200, (c, r))
+
 print(f"\n===== RESULT: {passed} passed, {failed} failed =====")
 if fails: print("Failed:", fails)
 sys.exit(1 if failed else 0)
