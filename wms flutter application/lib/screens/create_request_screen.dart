@@ -32,6 +32,11 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
   final List<_Line> _lines = [];
   bool _busy = false;
   bool _loadingMeta = true;
+  // Generated once per logical submission attempt and reused across a
+  // manual retry after a timeout, so a request that actually landed on the
+  // server but whose response was lost can't be created a second time by
+  // re-tapping Submit — see server/middleware/idempotency.js.
+  String? _idemKey;
 
   @override
   void initState() {
@@ -108,6 +113,7 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
       return;
     }
     setState(() => _busy = true);
+    _idemKey ??= 'mobile-req-${DateTime.now().microsecondsSinceEpoch}';
     try {
       final body = {
         'department': _department,
@@ -125,10 +131,12 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
               'material_id': l.materialId,
               'requested_quantity': l.qty,
             }).toList(),
+        'idempotency_key': _idemKey,
       };
       final res = await SessionScope.of(context).api.post('/api/requests', body);
       final id = res['id'];
       // Auto-submit so it lands in the approval queue immediately.
+      // (idempotent server-side by request status, so no key needed here.)
       await SessionScope.of(context).api.post('/api/requests/$id/submit');
       if (mounted) {
         showSnack(context, 'Request ${res['request_number'] ?? ''} created and submitted.');
@@ -138,6 +146,7 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
           _wbs.clear();
           _costCenter = null;
           _requiredDate = null;
+          _idemKey = null;
         });
       }
     } on ApiException catch (e) {

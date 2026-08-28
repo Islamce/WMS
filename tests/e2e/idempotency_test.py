@@ -62,6 +62,24 @@ admin = login('admin@example.com', 'Admin@123456')
 materials = must('material search', 'GET', '/api/materials/search?q=MAT-0001', admin)
 material_id = materials['materials'][0]['id']
 
+# ===== 0. Create-request idempotency_key (mobile offline-queue replay) =====
+req_key = 'mobile-req-idemp-test'
+req_body = {
+    'purpose': 'Idempotency key regression', 'priority': 'NORMAL', 'cost_center': 'CC-IDEMPKEY',
+    'plant': 'P100', 'lines': [{'material_id': material_id, 'requested_quantity': 2}],
+    'idempotency_key': req_key,
+}
+first_create = must('first create request (with idempotency_key)', 'POST', '/api/requests', requester, req_body, expected=201)
+replay_create = must('replay create request (same idempotency_key)', 'POST', '/api/requests', requester, req_body, expected=201)
+check('create-request replay returns the same request, not a new one',
+      replay_create.get('id') == first_create.get('id')
+      and replay_create.get('request_number') == first_create.get('request_number'),
+      {'first': first_create, 'replay': replay_create})
+different_key_create = must('create request with a different idempotency_key creates a new one', 'POST', '/api/requests', requester,
+                             {**req_body, 'idempotency_key': req_key + '-2'}, expected=201)
+check('different idempotency_key is not deduplicated against the first',
+      different_key_create.get('id') != first_create.get('id'), different_key_create)
+
 created = must('create request', 'POST', '/api/requests', requester, {
     'purpose': 'Idempotency regression',
     'priority': 'NORMAL',
