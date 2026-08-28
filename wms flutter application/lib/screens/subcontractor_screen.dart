@@ -123,6 +123,9 @@ class _LogDeliveryScreenState extends State<_LogDeliveryScreen> {
   final List<_LineDraft> _lines = [_LineDraft()];
   bool _loading = true;
   bool _saving = false;
+  // Reused across a manual retry after a timeout so the delivery can't be
+  // logged twice — see server/middleware/idempotency.js.
+  final String _idemKey = 'mobile-subc-delivery-${DateTime.now().microsecondsSinceEpoch}';
 
   @override
   void initState() {
@@ -166,6 +169,7 @@ class _LogDeliveryScreenState extends State<_LogDeliveryScreen> {
         'subcontractor_id': _subcontractorId,
         'delivery_note_ref': _refCtrl.text.trim(),
         'lines': lines,
+        'idempotency_key': _idemKey,
       });
       if (mounted) {
         showSnack(context, 'Delivery logged and forwarded for quality inspection.');
@@ -434,6 +438,16 @@ class _StockTabState extends State<_StockTab> {
     }
     try {
       final session = SessionScope.of(context);
+      // Deterministic (content-derived, not random) key: a manual retry after
+      // a timeout re-opens this dialog with the same values, so the key must
+      // match across that retry to be deduped — see
+      // server/middleware/idempotency.js. A 5-minute time bucket is folded
+      // in so a *legitimate* later re-use of the exact same values (a
+      // different day, the same recurring reference) still gets its own key
+      // instead of being silently swallowed by a stale cache entry.
+      final bucket = DateTime.now().millisecondsSinceEpoch ~/ (5 * 60 * 1000);
+      final idemKey = 'mobile-subc-consumption-${row['warehouse_code']}-${row['description']}-'
+          '${row['category_id']}-${row['uom']}-$qty-${refCtrl.text.trim()}-$bucket';
       await session.api.post('/api/subcontractor/consumption', {
         'warehouse_code': row['warehouse_code'],
         'description': row['description'],
@@ -441,6 +455,7 @@ class _StockTabState extends State<_StockTab> {
         'uom': row['uom'],
         'quantity_issued': qty,
         'reference': refCtrl.text.trim(),
+        'idempotency_key': idemKey,
       });
       if (mounted) {
         showSnack(context, 'Consumption logged.');

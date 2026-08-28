@@ -14,6 +14,7 @@ const db = require('./../db/connection');
 const { authenticate, requirePermission } = require('./../middleware/auth');
 const { isNonEmptyString, isId, parsePagination } = require('./../utils/validate');
 const audit = require('./../services/audit');
+const { withIdempotency } = require('./../middleware/idempotency');
 
 const router = express.Router();
 router.use(authenticate);
@@ -98,7 +99,7 @@ router.get('/deliveries/:id', requirePermission(['subcontractor_quality_inspecti
 });
 
 /** POST /api/subcontractor/deliveries — Site Warehouse Supervisor logs a new delivery with its lines. */
-router.post('/deliveries', requirePermission('subcontractor_receiving'), (req, res) => {
+router.post('/deliveries', requirePermission('subcontractor_receiving'), withIdempotency('POST /api/subcontractor/deliveries', (req, res) => {
   const b = req.body || {};
   if (!isNonEmptyString(b.warehouse_code)) return res.status(400).json({ error: 'Warehouse is required.' });
   if (!db.prepare('SELECT 1 FROM warehouses WHERE warehouse_code=?').get(b.warehouse_code)) {
@@ -128,7 +129,7 @@ router.post('/deliveries', requirePermission('subcontractor_receiving'), (req, r
   audit.record({ entityType: 'SubcontractorDelivery', entityId: deliveryId, action: 'CREATE',
     newValue: `${lines.length} line(s)`, user: req.user, sourceScreen: 'Subcontractor Receiving' });
   res.status(201).json({ message: 'Delivery logged and forwarded for quality inspection.', id: deliveryId });
-});
+}));
 
 /**
  * PATCH .../deliveries/:id/lines/:lineId — Site Quality Supervisor's decision
@@ -236,7 +237,7 @@ router.get('/stock', requirePermission(['subcontractor_receiving', 'subcontracto
  * owner direction to keep this stream fast/seamless) — only guarded against
  * issuing more than is actually on hand.
  */
-router.post('/consumption', requirePermission('subcontractor_receiving'), (req, res) => {
+router.post('/consumption', requirePermission('subcontractor_receiving'), withIdempotency('POST /api/subcontractor/consumption', (req, res) => {
   const b = req.body || {};
   if (!isNonEmptyString(b.warehouse_code)) return res.status(400).json({ error: 'Warehouse is required.' });
   if (!isNonEmptyString(b.description)) return res.status(400).json({ error: 'Description is required.' });
@@ -268,7 +269,7 @@ router.post('/consumption', requirePermission('subcontractor_receiving'), (req, 
     newValue: `${b.quantity_issued} ${uom} of "${b.description}" issued at ${b.warehouse_code}`, reason: b.reference,
     user: req.user, sourceScreen: 'Subcontractor Stock' });
   res.status(201).json({ message: 'Consumption logged.', id: info.lastInsertRowid });
-});
+}));
 
 /** GET /api/subcontractor/consumption — consumption history for a warehouse. */
 router.get('/consumption', requirePermission(['subcontractor_receiving', 'subcontractor_quality_inspection', 'subcontractor_admin']), (req, res) => {
