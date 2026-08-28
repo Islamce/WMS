@@ -145,11 +145,23 @@ router.get('/transactions', requirePermission(['stock_in', 'stock_out', 'dashboa
   const { page, limit, offset } = parsePagination(req.query);
   const q = (req.query.search || '').trim();
   const like = `%${q}%`;
-  const where = q
-    ? `WHERE m.item_code LIKE ? OR m.description LIKE ? OR l.code LIKE ?
-       OR st.reservation_number LIKE ? OR u.name LIKE ?`
-    : '';
-  const params = q ? [like, like, like, like, like] : [];
+  const clauses = [];
+  const params = [];
+  if (q) {
+    clauses.push(`(m.item_code LIKE ? OR m.description LIKE ? OR l.code LIKE ?
+       OR st.reservation_number LIKE ? OR u.name LIKE ?)`);
+    params.push(like, like, like, like, like);
+  }
+  // Lets the mobile dashboard's "Stock In/Out (today)" tiles drill into the
+  // exact rows behind that count, instead of a generic unfiltered list.
+  if (req.query.type === 'IN' || req.query.type === 'OUT') {
+    clauses.push('st.transaction_type = ?');
+    params.push(req.query.type);
+  }
+  if (req.query.today === '1' || req.query.today === 'true') {
+    clauses.push("date(st.transaction_date) = date('now')");
+  }
+  const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
 
   const { total } = db.prepare(`
     SELECT COUNT(*) AS total
