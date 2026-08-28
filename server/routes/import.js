@@ -493,6 +493,18 @@ router.post('/stock/reconcile-dates', (req, res) => {
         if (updateTx) updateTx.run(proposal.proposed_date, `Opening stock import — batch ${proposal.batch_number}%`);
       }
     })();
+
+    audit.record({
+      entityType: 'StockDateReconciliation', action: 'APPLIED',
+      newValue: {
+        batches_updated: proposals.length,
+        changes: proposals.slice(0, 1000).map((p) => ({
+          batch_id: p.batch_id, batch_number: p.batch_number,
+          from: p.current_date, to: p.proposed_date, source: p.date_source,
+        })),
+      },
+      user: req.user, sourceScreen: 'Import Center — Stock Date Reconciliation',
+    });
   }
 
   res.json({
@@ -648,6 +660,6 @@ function applyRows(rows, handler) {
 }
 
 router.get('/meta', (req, res) => { const entities = Object.entries(ENTITIES).filter(([, d]) => req.user.role === 'admin' || req.user.permissions.includes(d.permission)).map(([key, d]) => ({ key, columns: d.columns })); res.json({ entities }); });
-router.post('/:entity', (req, res) => { const def = ENTITIES[req.params.entity]; if (!def) return res.status(404).json({ error: 'Unknown import type.' }); if (req.user.role !== 'admin' && !req.user.permissions.includes(def.permission)) return res.status(403).json({ error: 'You do not have permission to import this data.' }); const rows = Array.isArray(req.body.rows) ? req.body.rows : []; if (!rows.length) return res.status(400).json({ error: 'No rows to import.' }); if (rows.length > MAX_ROWS) return res.status(400).json({ error: `Maximum ${MAX_ROWS} rows per import.` }); try { const result = def.run(rows, req.user); res.json({ message: `${result.created} created, ${result.updated} updated, ${result.skipped} skipped, ${result.errors} errors.`, ...result }); } catch (err) { res.status(500).json({ error: err.message }); } });
+router.post('/:entity', (req, res) => { const def = ENTITIES[req.params.entity]; if (!def) return res.status(404).json({ error: 'Unknown import type.' }); if (req.user.role !== 'admin' && !req.user.permissions.includes(def.permission)) return res.status(403).json({ error: 'You do not have permission to import this data.' }); const rows = Array.isArray(req.body.rows) ? req.body.rows : []; if (!rows.length) return res.status(400).json({ error: 'No rows to import.' }); if (rows.length > MAX_ROWS) return res.status(400).json({ error: `Maximum ${MAX_ROWS} rows per import.` }); try { const result = def.run(rows, req.user); audit.record({ entityType: 'Import', action: `IMPORT_${req.params.entity.toUpperCase()}`, newValue: { created: result.created, updated: result.updated, skipped: result.skipped, errors: result.errors, rows: rows.length }, user: req.user, sourceScreen: 'Import Center' }); res.json({ message: `${result.created} created, ${result.updated} updated, ${result.skipped} skipped, ${result.errors} errors.`, ...result }); } catch (err) { res.status(500).json({ error: err.message }); } });
 
 module.exports = router;
