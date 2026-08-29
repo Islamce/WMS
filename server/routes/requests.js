@@ -10,6 +10,7 @@ const { nextRequestNumber, setHeaderStatus, refreshRollups, getHeaderOr404, rele
 const { reverseOneStep } = require('./../services/reverseWorkflow');
 const { withExecutionContext, withExecutionContexts } = require('./../services/workflowContext');
 const { HEADER_STATUS, LINE_STATUS } = require('./../workflow/states');
+const { withIdempotency } = require('./../middleware/idempotency');
 
 const router = express.Router();
 router.use(authenticate);
@@ -60,7 +61,7 @@ router.get('/:id', requirePermission(['material_requests', 'warehouse_dashboard'
   res.json({ request: withExecutionContext(header), lines, task });
 });
 
-router.post('/', requirePermission('create_request'), (req, res) => {
+router.post('/', requirePermission('create_request'), withIdempotency('POST /api/requests', (req, res) => {
   const b = req.body || {};
   if (!Array.isArray(b.lines) || b.lines.length === 0) {
     return res.status(400).json({ error: 'At least one material line is required.' });
@@ -122,7 +123,7 @@ router.post('/', requirePermission('create_request'), (req, res) => {
   let id;
   try { id = create(); } catch (err) { return sendError(res, err, 'Failed to create request.'); }
   res.status(201).json({ message: 'Request created as draft.', id, request_number: requestNumber });
-});
+}));
 
 router.post('/:id/submit', requirePermission('create_request'), (req, res) => {
   const header = getHeaderOr404(res, req.params.id);

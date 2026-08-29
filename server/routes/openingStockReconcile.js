@@ -1,6 +1,7 @@
 const express = require('express');
 const db = require('../db/connection');
 const { authenticate } = require('../middleware/auth');
+const audit = require('../services/audit');
 
 const router = express.Router();
 router.use(authenticate);
@@ -118,6 +119,21 @@ router.post('/', (req, res) => {
         }
       }
     })();
+
+    // A production-data mutation with no prior state to diff meaningfully
+    // (up to 1000 batches touched per run) — record the batch identifiers
+    // and their old->new dates so this run is traceable, not just its count.
+    audit.record({
+      entityType: 'OpeningStockReconciliation', action: 'APPLIED',
+      newValue: {
+        batches_updated: proposals.length,
+        changes: proposals.slice(0, 1000).map((p) => ({
+          batch_id: p.batch_id, batch_number: p.batch_number,
+          from: p.current_date, to: p.proposed_date, source: p.date_source,
+        })),
+      },
+      user: req.user, sourceScreen: 'Opening Stock Reconciliation',
+    });
   }
 
   return res.json({

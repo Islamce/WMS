@@ -6,6 +6,7 @@ const express = require('express');
 const db = require('../db/connection');
 const { authenticate, requirePermission } = require('../middleware/auth');
 const { isId } = require('../utils/validate');
+const audit = require('../services/audit');
 
 const router = express.Router();
 
@@ -45,6 +46,10 @@ router.put('/roles/:id', (req, res) => {
     return res.status(400).json({ error: 'The admin role always has full access and cannot be edited.' });
   }
 
+  const before = db.prepare(`
+    SELECT p.key FROM role_permissions rp JOIN permissions p ON p.id = rp.permission_id WHERE rp.role_id = ?
+  `).all(id).map((r) => r.key);
+
   const update = db.transaction(() => {
     db.prepare('DELETE FROM role_permissions WHERE role_id = ?').run(id);
     const insert = db.prepare(
@@ -54,6 +59,11 @@ router.put('/roles/:id', (req, res) => {
   });
   update();
 
+  const after = db.prepare(`
+    SELECT p.key FROM role_permissions rp JOIN permissions p ON p.id = rp.permission_id WHERE rp.role_id = ?
+  `).all(id).map((r) => r.key);
+  audit.record({ entityType: 'Role', entityId: Number(id), action: 'ROLE_PERMISSIONS_CHANGED',
+    oldValue: before, newValue: after, user: req.user, sourceScreen: 'permissions' });
   res.json({ message: `Permissions updated for role '${role.name}'.` });
 });
 

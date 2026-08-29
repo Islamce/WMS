@@ -118,19 +118,7 @@ class AnalyticsScreen extends StatelessWidget {
               child: belowReorder.isEmpty
                   ? const Text('All materials above their reorder point.',
                       style: TextStyle(color: Colors.grey))
-                  : Column(
-                      children: belowReorder.take(20).map((m) => ListTile(
-                            dense: true,
-                            contentPadding: EdgeInsets.zero,
-                            title: Text('${m['item_code']} · ${m['description'] ?? ''}',
-                                maxLines: 1, overflow: TextOverflow.ellipsis),
-                            subtitle: Text('On hand ${fmtQty(m['current_stock'])} · '
-                                'reorder ${fmtQty(m['reorder_point'])} · '
-                                'safety ${fmtQty(m['safety_stock'])}'),
-                            trailing: Text('${m['classification'] ?? ''}',
-                                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
-                          )).toList(),
-                    ),
+                  : _ReorderTable(rows: belowReorder.take(30).toList()),
             ),
             const SizedBox(height: 20),
           ],
@@ -145,4 +133,79 @@ class AnalyticsScreen extends StatelessWidget {
           Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey)),
         ],
       );
+}
+
+/// Modern, scannable replacement for the old stacked-text rows: a real
+/// column-aligned table (horizontally scrollable on narrow phones), with the
+/// stock deficit and classification both shown as color-coded chips instead
+/// of buried in a sentence.
+class _ReorderTable extends StatelessWidget {
+  const _ReorderTable({required this.rows});
+  final List<Map<String, dynamic>> rows;
+
+  Color _classColor(String cls) {
+    switch (cls.toUpperCase()) {
+      case 'FAST':
+        return const Color(0xFF1baf7a);
+      case 'SLOW':
+        return const Color(0xFFeda100);
+      case 'DEAD':
+        return const Color(0xFFe34948);
+      default:
+        return const Color(0xFF31c3c9);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: DataTable(
+        headingRowHeight: 36,
+        dataRowMinHeight: 44,
+        dataRowMaxHeight: 56,
+        columnSpacing: 20,
+        headingTextStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey),
+        dataTextStyle: const TextStyle(fontSize: 12.5),
+        columns: const [
+          DataColumn(label: Text('MATERIAL')),
+          DataColumn(label: Text('ON HAND'), numeric: true),
+          DataColumn(label: Text('REORDER'), numeric: true),
+          DataColumn(label: Text('SAFETY'), numeric: true),
+          DataColumn(label: Text('DEFICIT'), numeric: true),
+          DataColumn(label: Text('CLASS')),
+        ],
+        rows: rows.map((m) {
+          final onHand = (m['current_stock'] as num?)?.toDouble() ?? 0;
+          final reorder = (m['reorder_point'] as num?)?.toDouble() ?? 0;
+          final deficit = reorder - onHand;
+          final cls = '${m['classification'] ?? ''}';
+          final classColor = _classColor(cls);
+          return DataRow(cells: [
+            DataCell(SizedBox(
+              width: 160,
+              child: Text('${m['item_code']} · ${m['description'] ?? ''}',
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
+            )),
+            DataCell(Text(fmtQty(onHand),
+                style: const TextStyle(color: Color(0xFFe34948), fontWeight: FontWeight.w600))),
+            DataCell(Text(fmtQty(reorder))),
+            DataCell(Text(fmtQty(m['safety_stock']))),
+            DataCell(Text(deficit > 0 ? fmtQty(deficit) : '—',
+                style: TextStyle(color: deficit > 0 ? const Color(0xFFe34948) : Colors.grey,
+                    fontWeight: FontWeight.w600))),
+            DataCell(Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: classColor.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(cls,
+                  style: TextStyle(color: classColor, fontSize: 11, fontWeight: FontWeight.w600)),
+            )),
+          ]);
+        }).toList(),
+      ),
+    );
+  }
 }

@@ -53,11 +53,14 @@ router.patch('/:id/status', (req, res) => {
     return res.status(400).json({ error: 'You cannot change your own status.' });
   }
 
+  const before = db.prepare('SELECT status FROM users WHERE id=?').get(id);
   const result = db.prepare(
     "UPDATE users SET status = ?, updated_at = datetime('now') WHERE id = ?"
   ).run(status, id);
   if (result.changes === 0) return res.status(404).json({ error: 'User not found.' });
 
+  audit.record({ entityType: 'User', entityId: Number(id), action: 'STATUS_CHANGED',
+    oldValue: before?.status, newValue: status, user: req.user, sourceScreen: 'users' });
   res.json({ message: `User status updated to ${status}.` });
 });
 
@@ -70,14 +73,19 @@ router.patch('/:id/role', (req, res) => {
     return res.status(400).json({ error: 'You cannot change your own role.' });
   }
 
-  const role = db.prepare('SELECT id FROM roles WHERE id = ?').get(role_id);
+  const role = db.prepare('SELECT id, name FROM roles WHERE id = ?').get(role_id);
   if (!role) return res.status(404).json({ error: 'Role not found.' });
 
+  const before = db.prepare(`
+    SELECT u.role_id, r.name AS role_name FROM users u JOIN roles r ON r.id = u.role_id WHERE u.id = ?
+  `).get(id);
   const result = db.prepare(
     "UPDATE users SET role_id = ?, updated_at = datetime('now') WHERE id = ?"
   ).run(role_id, id);
   if (result.changes === 0) return res.status(404).json({ error: 'User not found.' });
 
+  audit.record({ entityType: 'User', entityId: Number(id), action: 'ROLE_CHANGED',
+    oldValue: before?.role_name, newValue: role.name, user: req.user, sourceScreen: 'users' });
   res.json({ message: 'User role updated.' });
 });
 
@@ -149,6 +157,10 @@ router.put('/:id/permissions', (req, res) => {
   const user = db.prepare('SELECT id FROM users WHERE id = ?').get(id);
   if (!user) return res.status(404).json({ error: 'User not found.' });
 
+  const before = db.prepare(`
+    SELECT p.key FROM user_permissions up JOIN permissions p ON p.id = up.permission_id WHERE up.user_id = ?
+  `).all(id).map((r) => r.key);
+
   const update = db.transaction(() => {
     db.prepare('DELETE FROM user_permissions WHERE user_id = ?').run(id);
     const insert = db.prepare(
@@ -158,6 +170,11 @@ router.put('/:id/permissions', (req, res) => {
   });
   update();
 
+  const after = db.prepare(`
+    SELECT p.key FROM user_permissions up JOIN permissions p ON p.id = up.permission_id WHERE up.user_id = ?
+  `).all(id).map((r) => r.key);
+  audit.record({ entityType: 'User', entityId: Number(id), action: 'PERMISSIONS_CHANGED',
+    oldValue: before, newValue: after, user: req.user, sourceScreen: 'users' });
   res.json({ message: 'User permissions updated.' });
 });
 

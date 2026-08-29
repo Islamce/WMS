@@ -62,6 +62,24 @@ admin = login('admin@example.com', 'Admin@123456')
 materials = must('material search', 'GET', '/api/materials/search?q=MAT-0001', admin)
 material_id = materials['materials'][0]['id']
 
+# ===== 0. Create-request idempotency_key (mobile offline-queue replay) =====
+req_key = 'mobile-req-idemp-test'
+req_body = {
+    'purpose': 'Idempotency key regression', 'priority': 'NORMAL', 'cost_center': 'CC-IDEMPKEY',
+    'plant': 'P100', 'lines': [{'material_id': material_id, 'requested_quantity': 2}],
+    'idempotency_key': req_key,
+}
+first_create = must('first create request (with idempotency_key)', 'POST', '/api/requests', requester, req_body, expected=201)
+replay_create = must('replay create request (same idempotency_key)', 'POST', '/api/requests', requester, req_body, expected=201)
+check('create-request replay returns the same request, not a new one',
+      replay_create.get('id') == first_create.get('id')
+      and replay_create.get('request_number') == first_create.get('request_number'),
+      {'first': first_create, 'replay': replay_create})
+different_key_create = must('create request with a different idempotency_key creates a new one', 'POST', '/api/requests', requester,
+                             {**req_body, 'idempotency_key': req_key + '-2'}, expected=201)
+check('different idempotency_key is not deduplicated against the first',
+      different_key_create.get('id') != first_create.get('id'), different_key_create)
+
 created = must('create request', 'POST', '/api/requests', requester, {
     'purpose': 'Idempotency regression',
     'priority': 'NORMAL',
@@ -142,6 +160,54 @@ different_key_gr = must('goods receipt with a different idempotency_key creates 
                          {**gr_body, 'idempotency_key': f'{gr_key}-2'}, expected=201)
 check('different idempotency_key is not deduplicated against the first',
       different_key_gr.get('batch_id') != first_gr.get('batch_id'), different_key_gr)
+
+# ===== Subcontractor delivery + consumption idempotency_key =====
+subc = must('create subcontractor', 'POST', '/api/subcontractor/subcontractors', supervisor,
+            {'name': f'Idemp Sub {rid}', 'trade_category': 'Electrical'}, expected=201)
+subc_id = subc['id']
+
+deliv_key = f'mobile-subc-delivery-idemp-{rid}'
+deliv_body = {
+    'warehouse_code': 'WH01', 'subcontractor_id': subc_id,
+    'lines': [{'description': 'Idempotency test cable', 'quantity_delivered': 10, 'uom': 'M'}],
+    'idempotency_key': deliv_key,
+}
+first_deliv = must('first subcontractor delivery (with idempotency_key)', 'POST', '/api/subcontractor/deliveries',
+                    supervisor, deliv_body, expected=201)
+replay_deliv = must('replay subcontractor delivery (same idempotency_key)', 'POST', '/api/subcontractor/deliveries',
+                     supervisor, deliv_body, expected=201)
+check('subcontractor delivery replay returns the same delivery, not a new one',
+      replay_deliv.get('id') == first_deliv.get('id'), {'first': first_deliv, 'replay': replay_deliv})
+different_deliv = must('subcontractor delivery with a different idempotency_key creates a new one',
+                        'POST', '/api/subcontractor/deliveries', supervisor,
+                        {**deliv_body, 'idempotency_key': deliv_key + '-2'}, expected=201)
+check('different idempotency_key is not deduplicated against the first (delivery)',
+      different_deliv.get('id') != first_deliv.get('id'), different_deliv)
+
+# Consumption needs on-hand stock: an Approved quality decision on the
+# delivery line *is* the receipt (no separate manual receive step).
+deliv_detail = must('load delivery for approval', 'GET', f"/api/subcontractor/deliveries/{first_deliv['id']}", supervisor)
+line_id = deliv_detail['lines'][0]['id']
+must('approve delivery line quality (auto-receives into stock)', 'PATCH',
+     f"/api/subcontractor/deliveries/{first_deliv['id']}/lines/{line_id}", admin,
+     {'quality_status': 'Approved', 'quantity_approved': 10})
+
+cons_key = f'mobile-subc-consumption-WH01-Idempotency test cable-None-M-3.0-{rid}'
+cons_body = {
+    'warehouse_code': 'WH01', 'description': 'Idempotency test cable', 'uom': 'M',
+    'quantity_issued': 3, 'reference': f'idemp-{rid}', 'idempotency_key': cons_key,
+}
+first_cons = must('first subcontractor consumption (with idempotency_key)', 'POST', '/api/subcontractor/consumption',
+                   supervisor, cons_body, expected=201)
+replay_cons = must('replay subcontractor consumption (same idempotency_key)', 'POST', '/api/subcontractor/consumption',
+                    supervisor, cons_body, expected=201)
+check('subcontractor consumption replay returns the same record, not a new one',
+      replay_cons.get('id') == first_cons.get('id'), {'first': first_cons, 'replay': replay_cons})
+different_cons = must('subcontractor consumption with a different idempotency_key creates a new one',
+                       'POST', '/api/subcontractor/consumption', supervisor,
+                       {**cons_body, 'quantity_issued': 1, 'idempotency_key': cons_key + '-2'}, expected=201)
+check('different idempotency_key is not deduplicated against the first (consumption)',
+      different_cons.get('id') != first_cons.get('id'), different_cons)
 
 print(f"\nIdempotency regression: {passed} passed, {failed} failed")
 sys.exit(1 if failed else 0)
