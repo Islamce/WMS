@@ -60,7 +60,7 @@ Pages.giPosting = {
         </div>
       </div>`;
 
-    box.querySelector('#gi-post').addEventListener('click', async () => {
+    box.querySelector('#gi-post').addEventListener('click', (e) => UI.withBusy(e.currentTarget, async () => {
       try {
         const r2 = await Api.post(`/api/gi/${id}/post`, {
           gi_document_number: box.querySelector('#gi-doc').value,
@@ -68,11 +68,11 @@ Pages.giPosting = {
           simulate_error: box.querySelector('#gi-sim').checked });
         UI.toast(r2.message); box.innerHTML = ''; this.loadQueue();
       } catch (err) { UI.toast(err.message, 'error'); this.loadQueue(); }
-    });
-    box.querySelector('#gi-return').addEventListener('click', async () => {
+    }));
+    box.querySelector('#gi-return').addEventListener('click', (e) => UI.withBusy(e.currentTarget, async () => {
       try { await Api.post(`/api/gi/${id}/return-to-picker`, { reason: 'Recount required' }); UI.toast('Returned to picker.'); box.innerHTML = ''; this.loadQueue(); }
       catch (err) { UI.toast(err.message, 'error'); }
-    });
+    }));
   },
 };
 

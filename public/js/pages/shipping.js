@@ -78,9 +78,9 @@ Pages.shipping = {
       description: t('Create a delivery order from a GI-posted request, or a free shipment, using New delivery order above.'),
     });
 
-    box.querySelectorAll('[data-act]').forEach((b) => b.addEventListener('click', () => {
+    box.querySelectorAll('[data-act]').forEach((b) => b.addEventListener('click', (e) => {
       if (b.dataset.act === 'deliver') return this.deliver(b.dataset.id);
-      this.step(b.dataset.id, b.dataset.act);
+      this.step(b.dataset.id, b.dataset.act, e.currentTarget);
     }));
     box.querySelectorAll('[data-label]').forEach((b) => b.addEventListener('click', async () => {
       try {
@@ -97,9 +97,11 @@ Pages.shipping = {
     UI.pagination(this.el.querySelector('#sh-pagination'), data, (p) => { this.state.page = p; this.load(); });
   },
 
-  async step(id, action) {
-    try { const r = await Api.post(`/api/shipping/${id}/${action}`); UI.toast(r.message); this.load(); }
-    catch (err) { UI.toast(err.message, 'error'); }
+  async step(id, action, btn) {
+    await UI.withBusy(btn, async () => {
+      try { const r = await Api.post(`/api/shipping/${id}/${action}`); UI.toast(r.message); this.load(); }
+      catch (err) { UI.toast(err.message, 'error'); }
+    });
   },
 
   deliver(id) {

@@ -11,14 +11,33 @@ const Api = {
     else localStorage.removeItem('wms_token');
   },
 
+  /**
+   * Generate a client-side idempotency key. Uses crypto.randomUUID when
+   * available (all supported browsers) with a fallback so a missing API
+   * never blocks a submit.
+   */
+  newIdempotencyKey() {
+    if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
+    return `idem-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  },
+
   async request(method, url, body) {
     const headers = { 'Content-Type': 'application/json' };
     if (this.token) headers.Authorization = `Bearer ${this.token}`;
 
+    // Auto-attach an idempotency key to POST bodies that don't already carry
+    // one, so the server's withIdempotency middleware (which only activates
+    // when idempotency_key is present) actually protects against a
+    // double-click or a retried request creating a duplicate record.
+    let sendBody = body;
+    if (method === 'POST' && body && typeof body === 'object' && !Array.isArray(body) && body.idempotency_key === undefined) {
+      sendBody = { ...body, idempotency_key: this.newIdempotencyKey() };
+    }
+
     const res = await fetch(url, {
       method,
       headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      body: sendBody !== undefined ? JSON.stringify(sendBody) : undefined,
     });
 
     let data = null;

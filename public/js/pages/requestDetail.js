@@ -108,10 +108,10 @@ Pages.requestDetail = {
     this.loadAttachments(el, id);
 
     const submitBtn = el.querySelector('#rd-submit');
-    if (submitBtn) submitBtn.addEventListener('click', async () => {
+    if (submitBtn) submitBtn.addEventListener('click', (e) => UI.withBusy(e.currentTarget, async () => {
       try { await Api.post(`/api/requests/${id}/submit`); UI.toast('Submitted for approval.'); this.render(el, id); }
       catch (err) { UI.toast(err.message, 'error'); }
-    });
+    }));
     const cancelBtn = el.querySelector('#rd-cancel');
     if (cancelBtn) cancelBtn.addEventListener('click', () => {
       UI.modal({ title: 'Cancel request', submitLabel: 'Cancel Request',

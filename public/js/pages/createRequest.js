@@ -79,8 +79,11 @@ Pages.createRequest = {
     el.querySelector('#cr-material').addEventListener('input', () => { this.selected = null; availEl.innerHTML = ''; });
     el.querySelector('#cr-qty').addEventListener('input', () => this.checkQty());
     el.querySelector('#cr-add-line').addEventListener('click', () => this.addLine());
-    el.querySelector('#cr-save-draft').addEventListener('click', () => this.submit(false));
-    el.querySelector('#cr-form').addEventListener('submit', (e) => { e.preventDefault(); this.submit(true); });
+    el.querySelector('#cr-save-draft').addEventListener('click', (e) => this.submit(false, e.currentTarget));
+    el.querySelector('#cr-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      this.submit(true, e.currentTarget.querySelector('button[type=submit]'));
+    });
   },
 
   /** Live "stock not enough" note under the quantity field. */
@@ -134,7 +137,7 @@ Pages.createRequest = {
     }));
   },
 
-  async submit(thenSubmit) {
+  async submit(thenSubmit, btn) {
     if (!this.lines.length) return UI.toast('Add at least one material line.', 'error');
 
     const payload = {
@@ -149,15 +152,17 @@ Pages.createRequest = {
       purpose: document.getElementById('cr-purpose').value,
       lines: this.lines.map((l) => ({ material_id: l.material_id, requested_quantity: l.requested_quantity })),
     };
-    try {
-      const { id, request_number } = await Api.post('/api/requests', payload);
-      if (thenSubmit) {
-        await Api.post(`/api/requests/${id}/submit`);
-        UI.toast(`Request ${request_number} submitted for approval.`);
-      } else {
-        UI.toast(`Draft ${request_number} saved.`);
-      }
-      location.hash = `#/request-detail/${id}`;
-    } catch (err) { UI.toast(err.message, 'error'); }
+    await UI.withBusy(btn, async () => {
+      try {
+        const { id, request_number } = await Api.post('/api/requests', payload);
+        if (thenSubmit) {
+          await Api.post(`/api/requests/${id}/submit`);
+          UI.toast(`Request ${request_number} submitted for approval.`);
+        } else {
+          UI.toast(`Draft ${request_number} saved.`);
+        }
+        location.hash = `#/request-detail/${id}`;
+      } catch (err) { UI.toast(err.message, 'error'); }
+    });
   },
 };

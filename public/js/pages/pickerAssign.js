@@ -14,10 +14,10 @@ Pages.pickerAssign = {
       </div>
       <div id="pa-list"><div class="loading">Loading picker assignments…</div></div>`;
     try { ({ pickers: this.pickers } = await Api.get('/api/warehouse/pickers')); } catch { this.pickers = []; }
-    el.querySelector('#pa-sweep').addEventListener('click', async () => {
+    el.querySelector('#pa-sweep').addEventListener('click', (e) => UI.withBusy(e.currentTarget, async () => {
       try { const { message } = await Api.post('/api/picking/sweep', {}); UI.toast(message); this.load(); }
       catch (err) { UI.toast(err.message, 'error'); }
-    });
+    }));
     await this.load();
   },
 
@@ -70,7 +70,7 @@ Pages.pickerAssign = {
         title: 'No picker assignments need attention',
         description: 'There are no requests currently awaiting picker assignment or supervisor reassignment. Assigned tasks remain visible here while they await a picker response.',
       });
-    list.querySelectorAll('[data-assign]').forEach((button) => button.addEventListener('click', async () => {
+    list.querySelectorAll('[data-assign]').forEach((button) => button.addEventListener('click', (e) => UI.withBusy(e.currentTarget, async () => {
       const select = list.querySelector(`.pa-picker[data-id="${button.dataset.assign}"]`);
       if (!select.value) return UI.toast('Select a picker.', 'error');
       try {
@@ -78,6 +78,6 @@ Pages.pickerAssign = {
         UI.toast(message);
         this.load();
       } catch (err) { UI.toast(err.message, 'error'); }
-    }));
+    })));
   },
 };
