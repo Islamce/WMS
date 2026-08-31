@@ -76,9 +76,9 @@ Pages.reallocation = {
         if ((e.key === 'Enter' || e.key === ' ') && !e.target.closest('button')) { e.preventDefault(); this.openDetail(Number(row.dataset.detail)); }
       });
     });
-    box.querySelectorAll('[data-approve]').forEach((btn) => btn.addEventListener('click', () => this.approve(Number(btn.dataset.approve))));
+    box.querySelectorAll('[data-approve]').forEach((btn) => btn.addEventListener('click', (e) => this.approve(Number(btn.dataset.approve), e.currentTarget)));
     box.querySelectorAll('[data-reject]').forEach((btn) => btn.addEventListener('click', () => this.reject(Number(btn.dataset.reject))));
-    box.querySelectorAll('[data-execute]').forEach((btn) => btn.addEventListener('click', () => this.execute(Number(btn.dataset.execute))));
+    box.querySelectorAll('[data-execute]').forEach((btn) => btn.addEventListener('click', (e) => this.execute(Number(btn.dataset.execute), e.currentTarget)));
   },
 
   async openDetail(id) {
@@ -100,14 +100,16 @@ Pages.reallocation = {
     } catch (err) { UI.toast(err.message, 'error'); }
   },
 
-  async approve(id) {
-    try {
-      const r = await Api.post(`/api/reallocation/${id}/approve`, {});
-      UI.toast(r.message); await this.load();
-    } catch (err) {
-      UI.toast(err.message, 'error');
-      if (err.status === 409 || err.statusCode === 409) await this.load();
-    }
+  async approve(id, btn) {
+    await UI.withBusy(btn, async () => {
+      try {
+        const r = await Api.post(`/api/reallocation/${id}/approve`, {});
+        UI.toast(r.message); await this.load();
+      } catch (err) {
+        UI.toast(err.message, 'error');
+        if (err.status === 409 || err.statusCode === 409) await this.load();
+      }
+    });
   },
 
   reject(id) {
@@ -129,14 +131,16 @@ Pages.reallocation = {
     });
   },
 
-  async execute(id) {
-    try {
-      const r = await Api.post(`/api/reallocation/${id}/execute`, {});
-      UI.toast(r.message); await this.load();
-    } catch (err) {
-      UI.toast(err.message, 'error');
-      if (err.status === 409 || err.statusCode === 409) await this.load();
-    }
+  async execute(id, btn) {
+    await UI.withBusy(btn, async () => {
+      try {
+        const r = await Api.post(`/api/reallocation/${id}/execute`, {});
+        UI.toast(r.message); await this.load();
+      } catch (err) {
+        UI.toast(err.message, 'error');
+        if (err.status === 409 || err.statusCode === 409) await this.load();
+      }
+    });
   },
 
   openForm() {

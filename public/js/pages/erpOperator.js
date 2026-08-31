@@ -96,17 +96,17 @@ Pages.erpOperator = {
       plant: box.querySelector('#eo-plant').value,
       storage_location: box.querySelector('#eo-sloc').value,
     });
-    box.querySelector('#eo-save').addEventListener('click', async () => {
+    box.querySelector('#eo-save').addEventListener('click', (e) => UI.withBusy(e.currentTarget, async () => {
       try { await Api.patch(`/api/erp-operator/${id}`, collect()); UI.toast('ERP details saved.'); this.openDetail(id); this.loadQueue(); }
       catch (err) { UI.toast(err.message, 'error'); }
-    });
-    box.querySelector('#eo-send').addEventListener('click', async () => {
+    }));
+    box.querySelector('#eo-send').addEventListener('click', (e) => UI.withBusy(e.currentTarget, async () => {
       try {
         await Api.patch(`/api/erp-operator/${id}`, collect());
         await Api.post(`/api/erp-operator/${id}/send-to-warehouse`);
         UI.toast('Sent to warehouse.'); box.innerHTML = ''; this.loadQueue();
       } catch (err) { UI.toast(err.message, 'error'); }
-    });
+    }));
     box.querySelector('#eo-reverse').addEventListener('click', () => {
       UI.modal({ title: t('Reverse one step'), submitLabel: t('Reverse'),
         bodyHtml: `<p class="hint">${t('Sends this request back to the previous stage, undoing what the current stage did (releases any reservation, allocation or picking task it holds).')}</p>`

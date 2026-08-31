@@ -104,6 +104,26 @@ const UI = {
     return overlay;
   },
 
+  /**
+   * Disable `btn` for the duration of `fn()`, so a fast double-click (or a
+   * slow network round-trip) can't fire the handler twice. Use on any plain
+   * submit-style button that isn't already inside UI.modal (which disables
+   * its submit button the same way). Restores the button's original label
+   * if `busyLabel` is given.
+   */
+  async withBusy(btn, fn, busyLabel) {
+    if (!btn || btn.disabled) return; // already in flight — swallow the second click
+    const original = btn.textContent;
+    btn.disabled = true;
+    if (busyLabel) btn.textContent = busyLabel;
+    try {
+      return await fn();
+    } finally {
+      btn.disabled = false;
+      if (busyLabel) btn.textContent = original;
+    }
+  },
+
   /** Confirmation dialog; runs onConfirm when accepted. */
   confirm(message, onConfirm) {
     UI.modal({
