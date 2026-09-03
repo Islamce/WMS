@@ -160,6 +160,26 @@ c, r = call('GET', '/api/dashboard/bins?status=occupied', admin)
 occupied = {b['full_bin_location'] for b in r.get('bins',[])}
 check('occupied bins include both imported bins', {'WH-IMP-A-01','WH-IMP-A-02'}.issubset(occupied), occupied)
 
+# Bin-scan lookup (mobile "Scan Bin" feature): resolve a scanned bin code/label
+# to that bin's live contents, matching by bin_code or full_bin_location.
+c, r = call('GET', '/api/dashboard/bins/lookup?code=WH-IMP-A-01', admin)
+check('bin lookup by full_bin_location returns 200', c == 200, r)
+check('bin lookup resolves the expected bin', r.get('bin', {}).get('full_bin_location') == 'WH-IMP-A-01', r)
+check('bin lookup reports occupied with materials', c == 200 and r['bin']['occupancy_status'] == 'occupied' and len(r['bin']['materials']) > 0, r.get('bin'))
+lookup_qty = r.get('bin', {}).get('available_quantity')
+overview_qty = next((b['available_quantity'] for b in call('GET', '/api/dashboard/bins?status=all', admin)[1]['bins'] if b['full_bin_location'] == 'WH-IMP-A-01'), None)
+check('bin lookup quantity matches bin overview', lookup_qty == overview_qty, (lookup_qty, overview_qty))
+
+bin_code_only = r['bin']['bin_code']
+c, r2 = call('GET', f'/api/dashboard/bins/lookup?code={bin_code_only}&warehouse=WH-IMP', admin)
+check('bin lookup by bare bin_code + warehouse also resolves', c == 200 and r2['bin']['full_bin_location'] == 'WH-IMP-A-01', r2)
+
+c, r = call('GET', '/api/dashboard/bins/lookup?code=NO-SUCH-BIN-XYZ', admin)
+check('bin lookup 404s for an unknown code', c == 404 and 'error' in r, (c, r))
+
+c, r = call('GET', '/api/dashboard/bins/lookup', admin)
+check('bin lookup 400s with no code', c == 400, (c, r))
+
 # Force a DB failure at the final ledger insert; all preceding writes must roll back.
 before_batch = scalar("SELECT COUNT(*) FROM batches WHERE batch_number='ROLLBACK-BATCH'")
 before_stock = scalar("SELECT COALESCE(SUM(mls.quantity),0) FROM material_location_stock mls JOIN materials m ON m.id=mls.material_id WHERE m.item_code='IMP-002'")
