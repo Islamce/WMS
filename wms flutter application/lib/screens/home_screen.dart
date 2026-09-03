@@ -13,6 +13,7 @@ import 'create_request_screen.dart';
 import 'approvals_screen.dart';
 import 'erp_operator_screen.dart';
 import 'warehouse_screen.dart';
+import 'bin_scan_screen.dart';
 import 'picking_screen.dart';
 import 'gi_screen.dart';
 import 'receiving_screen.dart';
@@ -68,6 +69,7 @@ const List<Object> _menu = [
   NavDest('Approvals', Icons.fact_check_outlined, 'approvals', ApprovalsScreen.new),
   NavDest('ERP Operator', Icons.hub_outlined, 'erp_operator', _erpOperator),
   'Warehouse Execution',
+  NavDest('Scan Bin', Icons.center_focus_strong_outlined, 'dashboard', BinScanScreen.new),
   NavDest('Bin & Batch Assign', Icons.auto_awesome_motion_outlined, 'bin_batch_assignment', _allocation),
   NavDest('Picker Assignment', Icons.person_add_alt_1_outlined, 'picker_assignment', _pickerAssign),
   NavDest('My Picking Tasks', Icons.qr_code_scanner, 'picking', PickingScreen.new),
