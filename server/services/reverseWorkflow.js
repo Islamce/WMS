@@ -82,6 +82,20 @@ function reverseOneStep(header, { user, reason }) {
   }
 
   const run = db.transaction(() => {
+    // Shared by the picker-assignment and allocation-stage branches below:
+    // both undo whatever allocation exists and drop the lines back to
+    // Reserved, then move the header to its (branch-specific) `to` status.
+    const undoAllocationAndReserve = () => {
+      releaseOpenAllocations(header.id);
+      db.prepare(`
+        UPDATE material_request_lines
+        SET bin_location=NULL, batch_number=NULL, batch_id=NULL, qr_code_id=NULL,
+            fifo_sequence=NULL, fefo_sequence=NULL, line_status=?, updated_at=datetime('now')
+        WHERE request_id=?
+      `).run(LINE_STATUS.RESERVED, header.id);
+      setHeaderStatus(header, to, { user, reason, sourceScreen: 'Reverse Workflow' });
+    };
+
     // --- Picking stages: undo the picker assignment/task only. Blocked if any
     // line has already been physically picked — that stock movement can only
     // be undone via GI's "Return to Picker" / "Reverse GI", not this action.
@@ -117,27 +131,13 @@ function reverseOneStep(header, { user, reason }) {
 
     // --- Picker-assignment queue: undo the FIFO/FEFO allocation.
     } else if (from === HEADER_STATUS.PENDING_PICKER_ASSIGNMENT) {
-      releaseOpenAllocations(header.id);
-      db.prepare(`
-        UPDATE material_request_lines
-        SET bin_location=NULL, batch_number=NULL, batch_id=NULL, qr_code_id=NULL,
-            fifo_sequence=NULL, fefo_sequence=NULL, line_status=?, updated_at=datetime('now')
-        WHERE request_id=?
-      `).run(LINE_STATUS.RESERVED, header.id);
-      setHeaderStatus(header, to, { user, reason, sourceScreen: 'Reverse Workflow' });
+      undoAllocationAndReserve();
 
     // --- Allocation stage (before or during the allocate step): undo any
     // allocation made so far and go back to the ERP operator's last status.
     } else if ([HEADER_STATUS.WAREHOUSE_ASSIGNED, HEADER_STATUS.PENDING_WAREHOUSE_ACTION,
       HEADER_STATUS.PENDING_BIN_ASSIGNMENT, HEADER_STATUS.LOCATION_ASSIGNED, HEADER_STATUS.BATCH_ASSIGNED].includes(from)) {
-      releaseOpenAllocations(header.id);
-      db.prepare(`
-        UPDATE material_request_lines
-        SET bin_location=NULL, batch_number=NULL, batch_id=NULL, qr_code_id=NULL,
-            fifo_sequence=NULL, fefo_sequence=NULL, line_status=?, updated_at=datetime('now')
-        WHERE request_id=?
-      `).run(LINE_STATUS.RESERVED, header.id);
-      setHeaderStatus(header, to, { user, reason, sourceScreen: 'Reverse Workflow' });
+      undoAllocationAndReserve();
 
     // --- ERP stage: cancel the reservation (if one was made) and clear the
     // ERP-entered fields so the operator starts clean if resubmitted.

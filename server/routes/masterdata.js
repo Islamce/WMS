@@ -5,7 +5,7 @@
 const express = require('express');
 const db = require('./../db/connection');
 const { authenticate, requirePermission } = require('./../middleware/auth');
-const { isNonEmptyString, isId, parsePagination } = require('./../utils/validate');
+const { isNonEmptyString, parsePagination } = require('./../utils/validate');
 const audit = require('./../services/audit');
 const { alertLevel, daysUntil } = require('./../services/expiry');
 const { compactBin, expandedBin } = require('./../db/seed2');

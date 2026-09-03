@@ -6,6 +6,15 @@
 const PDFDocument = require('pdfkit');
 const QRCode = require('qrcode');
 
+/** Draw one "Label: value" row on `doc` at its current y, advancing it. Shared
+ * by both label layouts below so the two-column key/value styling stays in sync. */
+function drawRow(doc, k, v) {
+  const y = doc.y;
+  doc.font('Helvetica-Bold').fontSize(8).fillColor('#444').text(k, 18, y, { width: 90 });
+  doc.font('Helvetica').fontSize(8).fillColor('#000').text(v ?? '—', 112, y, { width: 158 });
+  doc.y = Math.max(doc.y, y + 11);
+}
+
 /** Stream a PDF of one or more QR labels into `res`. */
 async function streamLabelsPdf(res, qrs) {
   const doc = new PDFDocument({ size: [288, 432], margin: 18 }); // 4x6in @72dpi
@@ -29,12 +38,7 @@ async function streamLabelsPdf(res, qrs) {
     doc.moveTo(18, doc.y + 6).lineTo(270, doc.y + 6).strokeColor('#999').stroke();
     doc.y += 12;
 
-    const row = (k, v) => {
-      const y = doc.y;
-      doc.font('Helvetica-Bold').fontSize(8).fillColor('#444').text(k, 18, y, { width: 90 });
-      doc.font('Helvetica').fontSize(8).fillColor('#000').text(v ?? '—', 112, y, { width: 158 });
-      doc.y = Math.max(doc.y, y + 11);
-    };
+    const row = (k, v) => drawRow(doc, k, v);
     row('Batch', qr.batch_number);
     row('Quantity', `${qr.remaining_quantity ?? qr.received_quantity ?? ''} ${qr.uom || ''}`);
     row('PO / GR', `${qr.po_number || '—'} / ${qr.gr_number || '—'}`);
@@ -67,12 +71,7 @@ async function streamShipmentLabelPdf(res, s) {
   doc.moveTo(18, doc.y + 6).lineTo(270, doc.y + 6).strokeColor('#999').stroke();
   doc.y += 12;
 
-  const row = (k, v) => {
-    const y = doc.y;
-    doc.font('Helvetica-Bold').fontSize(8).fillColor('#444').text(k, 18, y, { width: 90 });
-    doc.font('Helvetica').fontSize(8).fillColor('#000').text(v ?? '—', 112, y, { width: 158 });
-    doc.y = Math.max(doc.y, y + 11);
-  };
+  const row = (k, v) => drawRow(doc, k, v);
   row('Ship to', s.ship_to);
   row('Request', s.request_number);
   row('Delivery order', s.delivery_order_number);
