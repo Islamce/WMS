@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/format.dart';
 import '../main.dart';
 import '../widgets/common.dart';
+import 'bin_scan_screen.dart';
 
 class BinLocationsScreen extends StatelessWidget {
   const BinLocationsScreen({super.key, required this.status});
@@ -24,7 +25,17 @@ class BinLocationsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final session = SessionScope.of(context);
     return Scaffold(
-      appBar: AppBar(title: Text(_title)),
+      appBar: AppBar(
+        title: Text(_title),
+        actions: [
+          IconButton(
+            tooltip: 'Scan a bin',
+            icon: const Icon(Icons.qr_code_scanner),
+            onPressed: () => Navigator.of(context)
+                .push(MaterialPageRoute(builder: (_) => const BinScanScreen())),
+          ),
+        ],
+      ),
       body: AsyncView<List<Map<String, dynamic>>>(
         load: () async {
           final res = await session.api.get('/api/dashboard/bins?status=$status');
