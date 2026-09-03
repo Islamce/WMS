@@ -75,6 +75,71 @@ router.get('/bins', (req, res) => {
   return res.json({ status, count: bins.length, bins });
 });
 
+/**
+ * GET /api/dashboard/bins/lookup?code=<value>&warehouse=<code>
+ * Resolves a scanned bin QR/barcode value (bin_code or full_bin_location —
+ * bin labels encode the plain bin location text, same as the picking QR
+ * scan already accepts) to that bin's live contents. This is the read path
+ * behind the mobile "Scan Bin" screen: point the camera at a bin label and
+ * see what's stored there right now, without opening the full bin list.
+ * `warehouse` disambiguates if the same short bin_code exists in more than
+ * one warehouse; without it the first active match wins.
+ */
+router.get('/bins/lookup', (req, res) => {
+  const code = String(req.query.code || '').trim();
+  if (!code) return res.status(400).json({ error: 'code is required.' });
+  const warehouse = req.query.warehouse ? String(req.query.warehouse).trim() : null;
+
+  const bin = warehouse
+    ? db.prepare(`
+        SELECT * FROM bin_locations
+        WHERE is_active = 1 AND warehouse_code = ? AND (bin_code = ? OR full_bin_location = ?)
+      `).get(warehouse, code, code)
+    : db.prepare(`
+        SELECT * FROM bin_locations
+        WHERE is_active = 1 AND (bin_code = ? OR full_bin_location = ?)
+        ORDER BY warehouse_code LIMIT 1
+      `).get(code, code);
+
+  if (!bin) return res.status(404).json({ error: `No active bin matches "${code}".` });
+
+  const batches = db.prepare(`
+    SELECT b.material_id, b.material_code, b.material_description, b.batch_number,
+           b.remaining_quantity, COALESCE(m.unit, '') AS unit, b.expiry_date,
+           b.manufacturing_date, b.receiving_date, b.quality_status,
+           b.supplier_code, b.supplier_name
+    FROM batches b LEFT JOIN materials m ON m.id = b.material_id
+    WHERE b.remaining_quantity > 0 AND b.warehouse_code = ? AND b.bin_location IN (?, ?)
+    ORDER BY b.expiry_date IS NULL, b.expiry_date, b.material_code
+  `).all(bin.warehouse_code, bin.bin_code, bin.full_bin_location);
+
+  const byMaterial = {};
+  batches.forEach((b) => {
+    const existing = byMaterial[b.material_id];
+    if (existing) { existing.quantity += b.remaining_quantity; return; }
+    byMaterial[b.material_id] = {
+      material_id: b.material_id, material_code: b.material_code,
+      material_description: b.material_description, unit: b.unit, quantity: b.remaining_quantity,
+    };
+  });
+  const availableQuantity = batches.reduce((sum, b) => sum + b.remaining_quantity, 0);
+
+  return res.json({
+    bin: {
+      id: bin.id, warehouse_code: bin.warehouse_code, zone: bin.zone, rack: bin.rack,
+      line_or_aisle: bin.line_or_aisle, level: bin.level, column_number: bin.column_number,
+      bin_code: bin.bin_code, full_bin_location: bin.full_bin_location, capacity: bin.capacity,
+      hazard_flag: bin.hazard_flag, temperature_controlled_flag: bin.temperature_controlled_flag,
+      quality_restricted_flag: bin.quality_restricted_flag,
+      batch_count: batches.length, material_count: Object.keys(byMaterial).length,
+      available_quantity: availableQuantity,
+      occupancy_status: availableQuantity > 0 ? 'occupied' : 'empty',
+      materials: Object.values(byMaterial),
+      batches,
+    },
+  });
+});
+
 router.get('/', (req, res) => {
   const one = (sql, ...params) => db.prepare(sql).get(...params);
   const all = (sql, ...params) => db.prepare(sql).all(...params);
