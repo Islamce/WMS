@@ -66,7 +66,7 @@ class I18n {
       // R4: reverse workflow / dashboard drill-through
       'Reverse one step': 'الرجوع خطوة للوراء',
       'Reason (releases any reservation, allocation or picking task this stage holds)':
-          'السبب(ɏفرج عن أي حجز أو تخصيص أو مهمة التقاط تحتفظ بها هذه المرحلة)',
+          'السبب (يُفرج عن أي حجز أو تخصيص أو مهمة التقاط تحتفظ بها هذه المرحلة)',
       'Request reversed.': 'تم إرجاع الطلب.',
     },
     'fr': {
