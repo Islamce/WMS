@@ -11,7 +11,7 @@ const { isId, isPositiveNumber, isNonEmptyString } = require('./../utils/validat
 const audit = require('./../services/audit');
 const notify = require('./../services/notify');
 const approvalMatrix = require('./../services/approvalMatrix');
-const { setHeaderStatus, refreshRollups, getHeaderOr404 } = require('./../services/requests');
+const { setHeaderStatus, refreshRollups } = require('./../services/requests');
 const { HEADER_STATUS, LINE_STATUS } = require('./../workflow/states');
 
 const router = express.Router();
