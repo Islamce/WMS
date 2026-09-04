@@ -262,6 +262,33 @@ jobs:
           confirm "backup-summary.json"
           if [ -n "$ATT" ]; then confirm "${ATT}.tar.gz"; fi
 
+      - name: Notify heartbeat monitor (dead man's switch)
+        # Pings an external heartbeat URL (e.g. an UptimeRobot Heartbeat
+        # monitor with an expected interval) once this run has verified the
+        # offsite copy end-to-end. If a scheduled run fails, is skipped, or
+        # never fires (as happened silently on every run from 2026-08-29
+        # through 2026-09-03 during the Hostinger process-cap incident — see
+        # WMS-CURRENT-STATUS.md item 13), no ping arrives within the expected
+        # window and the monitor alerts on its own, the same way it already
+        # alerts on the website being down. Closes the gap where a failing
+        # backup workflow went unnoticed for days because nothing was
+        # watching GitHub Actions itself, without adding a second monitoring
+        # tool. A no-op until BACKUP_HEARTBEAT_URL is set as a repo secret.
+        if: success()
+        env:
+          HEARTBEAT_URL: ${{ secrets.BACKUP_HEARTBEAT_URL }}
+        run: |
+          set -uo pipefail
+          if [ -n "$HEARTBEAT_URL" ]; then
+            if curl -fsS -m 10 --retry 3 "$HEARTBEAT_URL" >/dev/null; then
+              echo "heartbeat pinged"
+            else
+              echo "::warning::heartbeat ping failed (the backup itself succeeded)"
+            fi
+          else
+            echo "BACKUP_HEARTBEAT_URL not configured; skipping heartbeat ping."
+          fi
+
       - name: Prune old LOCAL sets (only after verified upload)
         if: success()
         env:
