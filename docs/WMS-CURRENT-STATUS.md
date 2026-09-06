@@ -4,10 +4,10 @@ Last updated: 2026-09-06
 
 ## Executive status
 
-- **⚠ PUBLIC URL STILL OFFLINE; VPS APP READY FOR CUTOVER (2026-09-06).** The Hostinger shared "Cloud Startup" plan was cancelled during the VPS migration. WMS has now been restored from the verified 2026-09-05 SQLite backup and is healthy in Docker on the new VPS (`82.29.175.206`); local direct and Caddy-proxied checks pass. Public DNS still points at the cancelled setup and TLS has not been activated because the operator has not yet approved the DNS cutover. The remaining historical Passenger facts below describe the now-defunct shared-hosting deployment; see `docs/HOSTINGER-VPS-MIGRATION-2026-09-06.md` for current VPS evidence.
+- **PRODUCTION RESTORED ON VPS (2026-09-06).** WMS was restored from the verified 2026-09-05 SQLite backup and is healthy in Docker on the new Hostinger VPS (`82.29.175.206`). After explicit operator approval, DNS was cut over and Caddy automatic HTTPS enabled. Authoritative, Cloudflare, and Google DNS all resolve the hostname to the VPS; public `/healthz` and `/` return HTTP 200 with successful TLS verification. The remaining historical Passenger facts below describe the now-defunct shared-hosting deployment; see `docs/HOSTINGER-VPS-MIGRATION-2026-09-06.md` for current VPS evidence.
 - Repository: `Islamce/WMS`
-- Production URL: `https://wms.kynox.io` (publicly offline pending DNS/TLS cutover approval)
-- Production platform (current candidate): Hostinger VPS / Docker Compose / central Caddy; historical pre-2026-09-06 platform was Hostinger managed Node.js / Passenger
+- Production URL: `https://wms.kynox.io` (publicly live on the VPS)
+- Production platform: Hostinger VPS / Docker Compose / central Caddy; historical pre-2026-09-06 platform was Hostinger managed Node.js / Passenger
 - Production app path: `~/domains/wms.kynox.io/nodejs`
 - Production database: SQLite at `data/wms.db` using WAL mode
 - Production runtime: Node `v20.19.4`, npm `10.8.2`
