@@ -5,7 +5,7 @@ Last updated: 2026-09-06
 ## Executive status
 
 - **PRODUCTION RESTORED ON VPS (2026-09-06).** WMS was restored from the verified 2026-09-05 SQLite backup and is healthy in Docker on the new Hostinger VPS (`82.29.175.206`). After explicit operator approval, DNS was cut over and Caddy automatic HTTPS enabled. Authoritative, Cloudflare, and Google DNS all resolve the hostname to the VPS; public `/healthz` and `/` return HTTP 200 with successful TLS verification. The remaining historical Passenger facts below describe the now-defunct shared-hosting deployment; see `docs/HOSTINGER-VPS-MIGRATION-2026-09-06.md` for current VPS evidence.
-- **Account migration update:** R4C PR #88 received the required independent approval and merged as `57f7ac8`. `r4c.kynox.io` and `r4c-api.kynox.io` are now deployed and healthy on the same VPS with all 12 migrations applied and one protected administrator seeded, but remain private behind HTTP-only staging routes until the operator explicitly approves their DNS/TLS cutover. `kynox.io` remains offline.
+- **Account migration update:** R4C PR #88 received the required independent approval and merged as `57f7ac8`. `r4c.kynox.io` and `r4c-api.kynox.io` are deployed on the same VPS, publicly live over valid HTTPS, and verified through an authenticated `islam@kynox.io` login/session smoke test. All 12 migrations applied; Postgres/Redis/MinIO and both application containers are healthy. `kynox.io` remains offline and is the final website migration.
 - Repository: `Islamce/WMS`
 - Production URL: `https://wms.kynox.io` (publicly live on the VPS)
 - Production platform: Hostinger VPS / Docker Compose / central Caddy; historical pre-2026-09-06 platform was Hostinger managed Node.js / Passenger
