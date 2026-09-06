@@ -4,10 +4,10 @@ Last updated: 2026-09-06
 
 ## Executive status
 
-- **⚠ PRODUCTION IS CURRENTLY OFFLINE (2026-09-06).** The Hostinger shared "Cloud Startup" plan hosting `wms.kynox.io` (and `kynox.io`, `r4c.kynox.io`, `r4c-api.kynox.io`) was cancelled as the direct consequence of a refund obtained while migrating the account to a Hostinger VPS — see `docs/HOSTINGER-VPS-MIGRATION-2026-09-06.md` for the full record, the new VPS's details, and the next-steps list. Nothing has been redeployed to the new VPS yet. The rest of this "Executive status" section and the "Production deploy mechanism"/"Passenger runtime environment" facts below describe the **now-defunct** shared-hosting setup as it stood through 2026-09-04 — kept for historical/reference value (e.g. the confirmed data counts, migration history, deploy path), but do not treat them as current platform facts until a fresh verification is done against the VPS deployment.
+- **⚠ PUBLIC URL STILL OFFLINE; VPS APP READY FOR CUTOVER (2026-09-06).** The Hostinger shared "Cloud Startup" plan was cancelled during the VPS migration. WMS has now been restored from the verified 2026-09-05 SQLite backup and is healthy in Docker on the new VPS (`82.29.175.206`); local direct and Caddy-proxied checks pass. Public DNS still points at the cancelled setup and TLS has not been activated because the operator has not yet approved the DNS cutover. The remaining historical Passenger facts below describe the now-defunct shared-hosting deployment; see `docs/HOSTINGER-VPS-MIGRATION-2026-09-06.md` for current VPS evidence.
 - Repository: `Islamce/WMS`
-- Production URL: `https://wms.kynox.io` (offline as of 2026-09-06, see above)
-- Production platform (historical, pre-2026-09-06): Hostinger managed Node.js / Passenger
+- Production URL: `https://wms.kynox.io` (publicly offline pending DNS/TLS cutover approval)
+- Production platform (current candidate): Hostinger VPS / Docker Compose / central Caddy; historical pre-2026-09-06 platform was Hostinger managed Node.js / Passenger
 - Production app path: `~/domains/wms.kynox.io/nodejs`
 - Production database: SQLite at `data/wms.db` using WAL mode
 - Production runtime: Node `v20.19.4`, npm `10.8.2`
