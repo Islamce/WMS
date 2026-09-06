@@ -22,6 +22,9 @@ services:
       # Keep SQLite on a stable host path so restores and verified backups do
       # not depend on Docker's opaque named-volume location.
       - ./data:/app/data
+      # The offsite workflow runs the tested backup scripts inside this
+      # container, while SSH/SCP accesses the resulting sets on the host.
+      - ./backups:/app/backups
     networks:
       - web
     healthcheck:

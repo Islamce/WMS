@@ -1,9 +1,9 @@
 name: Production Offsite Backup
 
 # Scheduled offsite backup for the WMS production database, used because the
-# Hostinger Managed Node.js (Passenger/lsnode) plan exposes no working cron.
-# It runs the ALREADY-TESTED backup + restore-verification scripts remotely
-# over SSH, downloads only the newly verified backup set, verifies it again
+# VPS deployment. It runs the ALREADY-TESTED backup + restore-verification
+# scripts inside the production Docker container over SSH, downloads only the
+# newly verified backup set, verifies it again
 # independently on the runner, uploads it to S3-compatible offsite storage,
 # verifies the uploaded objects, and only then prunes old LOCAL sets.
 #
@@ -44,22 +44,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      # Follows the atomically-swapped release symlink Passenger actually
-      # serves from (see DEC-013 / HOSTINGER-NATIVE-RECOVERY.md). Do NOT point
-      # this at the legacy persistent .../nodejs directory: that path predates
-      # the 2026-08-01 release-based layout and still holds the old,
-      # GLIBC_2.29-requiring better-sqlite3 build, which is why the backup
-      # step failed with "GLIBC_2.29 not found" even though production itself
-      # runs the fixed, GLIBC-2.28-compatible addon. See INC-2026-08-06-01.
-      REMOTE_APP_DIR: /home/u716763642/domains/wms.kynox.io/.builds/current/nodejs
-      REMOTE_NODE: /opt/alt/alt-nodejs20/root/usr/bin/node
-      REMOTE_BACKUP_DIR: /home/u716763642/secure/wms-backups
-      # The live database lives outside the release tree (see
-      # docs/WMS-PRODUCTION-RUNBOOK.md); scripts/backup.js falls back to a
-      # path relative to REMOTE_APP_DIR when DB_PATH is unset, which no
-      # longer exists now that REMOTE_APP_DIR points at the release symlink.
-      # Must match the DB_PATH Passenger itself uses. See INC-2026-08-06-01.
-      REMOTE_DB_PATH: /home/u716763642/domains/wms.kynox.io/nodejs/data/wms.db
+      REMOTE_APP_DIR: /opt/apps/wms
+      REMOTE_BACKUP_DIR: /opt/apps/wms/backups
+      CONTAINER_BACKUP_DIR: /app/backups
+      REMOTE_DB_PATH: /app/data/wms.db
       KEEP_SETS: "7"
     steps:
       # Official GitHub actions only. Floating major tags (@v4) are accepted for
@@ -117,14 +105,15 @@ jobs:
             | sort > before_manifests.txt
           echo "Existing manifests: $(wc -l < before_manifests.txt)"
 
-      - name: Remote backup + restore verification (tested scripts, node 20)
+      - name: Remote backup + restore verification (tested scripts, container Node 20)
         run: |
           set -euo pipefail
           # Exactly the commands verified manually in production. set -e on the
-          # remote makes any failure abort the job. No npm/migrate/restart/git.
+          # remote makes any failure abort the job. The running image supplies
+          # the matching Node 20/better-sqlite3 ABI. No npm/migrate/restart/git.
           ssh hostinger "set -e; cd '$REMOTE_APP_DIR'; \
-            BACKUP_DIR='$REMOTE_BACKUP_DIR' DB_PATH='$REMOTE_DB_PATH' '$REMOTE_NODE' scripts/backup.js; \
-            BACKUP_DIR='$REMOTE_BACKUP_DIR' '$REMOTE_NODE' scripts/verify-backup.js"
+            docker compose exec -T -e BACKUP_DIR='$CONTAINER_BACKUP_DIR' -e DB_PATH='$REMOTE_DB_PATH' wms node scripts/backup.js; \
+            docker compose exec -T -e BACKUP_DIR='$CONTAINER_BACKUP_DIR' wms node scripts/verify-backup.js"
 
       - name: Identify + validate the NEW backup set (manifest diff)
         id: newset
@@ -147,7 +136,7 @@ jobs:
           # referenced names must be plain basenames matching the fixed WMS
           # patterns (no '..', no path separators, no absolute paths), and must
           # exist. A malicious/corrupt manifest is rejected here.
-          info=$(ssh hostinger "cd '$REMOTE_BACKUP_DIR'; MAN='$manifest' '$REMOTE_NODE' -e '
+          info=$(ssh hostinger "cd '$REMOTE_APP_DIR'; MAN='$manifest' docker compose exec -T -e MAN -w '$CONTAINER_BACKUP_DIR' wms node -e '
             const fs=require(\"fs\");
             const ok=(s,re)=>typeof s===\"string\"&&re.test(s);
             const m=JSON.parse(fs.readFileSync(process.env.MAN,\"utf8\"));
@@ -307,11 +296,12 @@ jobs:
           # Copy the tested retention script to a TEMP path OUTSIDE the deployed
           # checkout, run it with node 20, then remove it. The deployed tree is
           # never modified.
-          tmp="/home/u716763642/.logs/wms/backup-retention.$$.js"
+          tmp="$REMOTE_BACKUP_DIR/.backup-retention.$$.js"
+          container_tmp="$CONTAINER_BACKUP_DIR/$(basename "$tmp")"
           dry=""; [ "$DRY" = "true" ] && dry="--dry-run"
-          ssh hostinger "mkdir -p '$(dirname "$tmp")'" \
+          ssh hostinger "mkdir -p '$REMOTE_BACKUP_DIR'" \
             && scp scripts/backup-retention.js "hostinger:$tmp" \
-            && ssh hostinger "'$REMOTE_NODE' '$tmp' '$REMOTE_BACKUP_DIR' --keep '$KEEP_SETS' $dry; rc=\$?; rm -f '$tmp'; exit \$rc" \
+            && ssh hostinger "cd '$REMOTE_APP_DIR'; docker compose exec -T wms node '$container_tmp' '$CONTAINER_BACKUP_DIR' --keep '$KEEP_SETS' $dry; rc=\$?; rm -f '$tmp'; exit \$rc" \
             || echo "::warning::Local retention reported a problem; offsite backup is still valid. Inspect $REMOTE_BACKUP_DIR."
 
       - name: Job summary (metadata only)
