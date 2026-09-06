@@ -1484,3 +1484,14 @@ Every future AI or human session that changes understanding, code, data, configu
 **Exact next step:** Check the hpanel Agent chat thread for a human reply on the `islam@kynox.io` reactivation request before anything else. Separately, still waiting on the operator to add the two GitHub deploy keys before `r4c`/`r4c-api`/`wms` can actually be cloned and deployed to the VPS.
 
 **Unrelated, still open:** this session's git-proxy access does not include `Islamce/WMS` in its authorized repository set, so 3 local commits from this session (this one plus the two preceding docs commits) remain unpushed to `origin/main` as of this entry — needs the operator (or a session with proper access) to push, or to add the repo to a future session's authorized sources.
+
+## 2026-09-06 (cont'd 2) — Deploy keys added and 3 pending commits pushed (via Codex)
+
+This session's git-proxy access excludes `Islamce/WMS` (push attempts returned `403 access denied by the git proxy`), and this session also cannot reach GitHub's web UI to add SSH deploy keys. Both blockers were resolved by handing off to Codex, at the operator's direction ("generate prompt for 1 & 2 I will let codex solve it"):
+
+- Wrote a self-contained prompt (`codex_prompt_wms.md`, private scratchpad) covering: (1) add `vps-deploy-r4c` → `Islamce/R4C` and `vps-deploy-wms` → `Islamce/WMS` as read-only GitHub Deploy keys; (2) apply a `git format-patch` of the 3 unpushed docs-only commits (base `d3a45c0`) via `git am` in a clean clone (preserving original authorship/messages/trailers) and `git push origin main`, with explicit instruction to stop and report rather than guess-resolve any conflict.
+- Sent the prompt and the patch file (`wms_unpushed_v2.patch`, 3 commits) to the operator via file delivery.
+- Operator ran it through Codex and reported back: both deploy keys added, verified read-only, and tested working (`ssh -T git@github-r4c` / `git@github-wms` authenticate from the VPS). The 3 commits were recreated with matching file content (blob IDs match the patch) and pushed. New `origin/main` HEAD: `1ad86ccb314fef61b8e90796a0fc0b913bb369e6`.
+- This session then fetched and confirmed: `git diff HEAD origin/main` was empty (content matched exactly, only commit hashes differ since `git am` re-creates commits), and reset the local checkout to `origin/main` (`git reset --hard origin/main`) to avoid future divergence.
+
+Net effect: `r4c`, `r4c-api`, and `wms` deploy keys are both confirmed working on the VPS — nothing now blocks cloning those repos there. Updated `docs/HOSTINGER-VPS-MIGRATION-2026-09-06.md` (§4, §6) to remove the "blocked" language. Still open and unrelated to this: the `islam@kynox.io` email-cancellation escalation (§7 of that doc, no human reply yet as of the last check), and all actual application deployment/DNS/TLS work, which has not started.
