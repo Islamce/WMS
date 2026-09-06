@@ -19,8 +19,9 @@ services:
       ALLOW_AUTO_SEED: "0"
       PRODUCTION_INITIALIZATION_ENABLED: "false"
     volumes:
-      # Persist the SQLite database across rebuilds/restarts.
-      - wms-data:/app/data
+      # Keep SQLite on a stable host path so restores and verified backups do
+      # not depend on Docker's opaque named-volume location.
+      - ./data:/app/data
     networks:
       - web
     healthcheck:
@@ -28,9 +29,6 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-
-volumes:
-  wms-data:
 
 networks:
   web:
