@@ -7,8 +7,8 @@ services:
     build: .
     restart: unless-stopped
     ports:
-      # host:container — put Hostinger's reverse proxy / a public port in front.
-      - "3000:3000"
+      # Local diagnostic access only. Caddy reaches the service over `web`.
+      - "127.0.0.1:3000:3000"
     environment:
       NODE_ENV: production
       # REQUIRED: replace with a real secret (see .env.example for how to make one).
@@ -21,6 +21,8 @@ services:
     volumes:
       # Persist the SQLite database across rebuilds/restarts.
       - wms-data:/app/data
+    networks:
+      - web
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3000/healthz',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
       interval: 30s
@@ -29,3 +31,7 @@ services:
 
 volumes:
   wms-data:
+
+networks:
+  web:
+    external: true
