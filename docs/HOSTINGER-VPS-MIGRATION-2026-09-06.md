@@ -1,6 +1,6 @@
 # Hostinger Shared Hosting → VPS Migration (2026-09-06)
 
-**Status: IN PROGRESS. VPS purchased, provisioned, and base-configured (updates, firewall, Docker confirmed present, a placeholder Caddy reverse proxy running); both GitHub deploy keys added and verified working, so `r4c`/`r4c-api`/`wms` can now be cloned to the VPS; no application has been deployed to it yet; all four sites previously on the shared plan are currently OFFLINE. Additionally, an unrelated-looking but likely-connected issue surfaced 2026-09-06: the operator's real business email (`islam@kynox.io`) also appears to have been cancelled — see §7, currently escalated to Hostinger support and unresolved.**
+**Status: IN PROGRESS. VPS purchased, provisioned, and base-configured (updates, firewall, Docker confirmed present, a placeholder Caddy reverse proxy running); both GitHub deploy keys added and verified working, so `r4c`/`r4c-api`/`wms` can now be cloned to the VPS; no application has been deployed to it yet; all four sites previously on the shared plan are currently OFFLINE. Hostinger confirmed the operator's real business email (`islam@kynox.io`) was removed because it was connected to the cancelled hosting plan; mailbox recovery now requires a replacement email-plan purchase and human-assisted restoration — see §7.**
 
 This document is the authoritative record of the account-level migration off Hostinger's shared "Cloud Startup" plan onto a Hostinger VPS. It exists separately from `WMS-CURRENT-STATUS.md` because it is an account/infrastructure-level change spanning four sites (`kynox.io`, `r4c.kynox.io`, `r4c-api.kynox.io`, `wms.kynox.io`), not a WMS-application-only change — but item 13 of `WMS-CURRENT-STATUS.md`'s "Known remaining work" (the Max Processes saga) is the direct origin of this migration and should be read alongside this doc for full context. A pointer has been added there and to `WMS-SESSION-LOG.md`.
 
@@ -83,11 +83,11 @@ Purchased and paid 2026-09-06, immediately after the refund was confirmed, per t
 - Reverse proxy: a Caddy container is running on the VPS (`/opt/proxy`, external Docker network `web`) but only serving a placeholder response — no per-site config or TLS certificates yet (§4, §6).
 - No database has been provisioned or migrated on the VPS.
 - No decision has been made on whether/when to delete the now-cancelled Cloud Startup subscription's remaining artifacts (domain, `Reach 100` email-marketing trial, etc.).
-- **Correction to an earlier statement in this doc:** an earlier version of this section said the `Starter Business Email` subscription was "a separate line item, not touched by this migration." That turned out to be wrong — see §7. It was found cancelled too, cause not yet confirmed.
+- **Correction to an earlier statement in this doc:** an earlier version of this section said the `Starter Business Email` subscription was "a separate line item, not touched by this migration." Hostinger has now confirmed it was connected to the Cloud Startup subscription and was removed when that hosting plan was cancelled — see §7.
 
 ## 6. Next steps
 
-0. **URGENT — check on the `islam@kynox.io` email reactivation request (§7).** Higher priority than anything below; check the hpanel Agent chat thread for a human reply before doing other work, if it's been a while since the last check.
+0. **URGENT — recover `islam@kynox.io` (§7).** Hostinger requires purchasing an active Business Email plan, recreating the exact mailbox address, then requesting human-assisted restoration of the previous mailbox data. The purchase is pending explicit operator approval.
 1. ~~Verify SSH/console access to `82.29.175.206`~~ — **done**, via Hostinger Web Console (§4).
 2. ~~Resolve the wms.kynox.io "test-only" question~~ — **done**, see §3.
 3. ~~Set up the VPS base~~ — **done**: firewall (`ufw`, 22/80/443 only), Docker + Docker Compose confirmed present, placeholder Caddy reverse proxy running (§4). Not done: unattended-upgrades/patch policy, a non-root deploy user (currently all work is as root via Web Console — acceptable for a single-operator VPS at this stage, revisit if that changes).
@@ -100,18 +100,18 @@ Purchased and paid 2026-09-06, immediately after the refund was confirmed, per t
 9. **Re-point/re-create the offsite backup workflow** (`.github/workflows/production-backup.yml`) for the new VPS target once `wms.kynox.io` is redeployed — its current design assumes the old shared-hosting SSH path (`REMOTE_APP_DIR`, Node 20 ABI constraint for `better-sqlite3`, etc., per `HOSTINGER-SCHEDULED-BACKUP.md`) and needs review against whatever the VPS/Docker deployment actually looks like.
 10. Once all four sites are confirmed healthy on the VPS, decide what (if anything) to do with the remaining Cloud Startup-adjacent subscriptions on the Hostinger account (§5) — not urgent, no cost/risk currently attached to leaving them as-is.
 
-## 7. URGENT / UNRESOLVED — `islam@kynox.io` business email also cancelled (discovered 2026-09-06)
+## 7. URGENT / ACTION REQUIRED — `islam@kynox.io` business email removed with hosting (discovered and confirmed 2026-09-06)
 
 Not part of the original migration plan and **not yet resolved.** While the operator was checking his phone mail app (Gmail, IMAP re-sync prompt against `imap.hostinger.com`), he asked whether his email still worked. Checked directly in hPanel:
 
 - `Billing > Subscriptions` shows **`Starter Business Email` (kynox.io) — status `Cancelled`**, renewal price `$38.16`, "Expires 2027-07-13" (i.e. prepaid term run through mid-2027, but marked cancelled today anyway).
 - `hpanel.hostinger.com/emails` shows **no active mailbox management UI at all** — only the generic "buy an email plan" storefront page, which normally would not appear if `islam@kynox.io` were still an active, provisioned mailbox.
 
-**This directly contradicts an earlier version of this document** (§5), which assumed — incorrectly — that only the Cloud Startup hosting plan was touched by the refund/cancellation and that email was a separate, untouched line item. It was not: `Starter Business Email` shows cancelled too, on the same account, on the same day as the Cloud Startup cancellation. Root cause not yet confirmed — most likely some linked/bundled cancellation behavior on Hostinger's side when the Cloud Startup goodwill-exception refund was processed (§2), but this is a hypothesis, not a confirmed fact.
+**This directly contradicts an earlier version of this document** (§5), which assumed — incorrectly — that only the Cloud Startup hosting plan was touched by the refund/cancellation and that email was a separate, untouched line item. Hostinger support has now confirmed the cause: the mailbox was connected to the Cloud Startup hosting subscription, so cancelling that hosting plan also removed the connected email service from hPanel.
 
-**Action taken:** Continued in the *same* hpanel "Agent" chat thread as the refund negotiation (ticket, initially showed "Resolved" for the Cloud Startup matter), describing the email cancellation as a likely side-effect and requesting: (1) why it was cancelled, (2) confirmation the mailbox and its existing emails still exist, (3) reactivation ASAP. As of this writing the request has been escalated straight to a **human-agent queue** ("You are in queue. A colleague will join soon.") — **no human response yet.**
+**Hostinger response (Aisha, 2026-09-06 11:47 UTC):** To recover the mailbox, purchase an active Hostinger Business Email plan, recreate the mailbox with the exact address `islam@kynox.io`, then request human support to restore the previous mailbox data into it. The address must match character-for-character. This response indicates restoration remains possible, but Hostinger requires the replacement plan/mailbox to exist first.
 
-**This is now the single most time-sensitive open item in this whole migration** — it affects the operator's real, daily-use email, unlike the four websites which were already confirmed test/non-urgent-in-the-same-way. Whoever picks this up next should check the same hpanel Agent chat thread for a reply before doing anything else, and should not assume email is fine just because the four sites' downtime was pre-accepted — that acceptance never covered email.
+**This remains the single most time-sensitive open item in this whole migration** — it affects the operator's real, daily-use email, unlike the four websites whose downtime was pre-accepted. Next action requires the operator's explicit approval for the new email-plan purchase; after purchase, recreate `islam@kynox.io` exactly and immediately continue the same support thread to request restoration.
 
 ## 8. Secrets — explicitly not in this repository
 
