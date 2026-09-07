@@ -88,6 +88,21 @@ function check(name, cond, detail) {
     page.on('pageerror', (e) => consoleErrors.push(String(e)));
 
     await page.goto(BASE_URL, { waitUntil: 'networkidle' });
+    check('public landing page renders', await page.locator('#wms-landing').count() === 1);
+    check('landing page offers English and Arabic', await page.locator('[data-landing-language]').count() === 1);
+    await page.locator('[data-landing-language]').click();
+    check('landing language switch updates copy and RTL direction',
+      await page.locator('html').getAttribute('dir') === 'rtl' &&
+      (await page.locator('.wl-hero h1').innerText()).includes('مساحة واحدة'));
+    await page.locator('[data-landing-language]').click();
+    await page.locator('[data-scroll="demo"]').first().click();
+    check('landing section navigation does not collide with the SPA hash router',
+      await page.locator('#wms-landing').count() === 1 && !page.url().includes('#/login'));
+    await page.getByRole('tab', { name: 'Mobile execution' }).click();
+    check('landing demo tabs update the selected product view',
+      await page.getByRole('tab', { name: 'Mobile execution' }).getAttribute('aria-selected') === 'true' &&
+      (await page.locator('.wl-demo-frame img').getAttribute('src')).includes('mobile'));
+    await page.locator('a[href="#/login"]').first().click();
     check('login form renders', await page.locator('#login-form').count() > 0);
     check('login email field present', await page.locator('#li-email').count() > 0);
 

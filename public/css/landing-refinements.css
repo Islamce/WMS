@@ -1,0 +1,20 @@
+.wl-header nav button {
+  border: 0;
+  padding: .35rem;
+  background: transparent;
+  color: var(--wl-navy);
+  font: inherit;
+  font-size: .86rem;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.wl-header nav button:hover {
+  color: var(--wl-cyan);
+}
+
+.wl-actions button,
+.wl-final button {
+  font: inherit;
+  cursor: pointer;
+}
