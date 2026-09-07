@@ -15,20 +15,27 @@ Pages.landing = {
       proofEyebrow: 'Screens from the working product',
       proofTitle: 'Operational control from request to warehouse execution',
       proofBody: 'Move between real WMS demonstration views and see how priorities, warehouse work, and traceability connect in one system.',
-      tabs: { control: 'Operations control', mobile: 'Mobile execution', trace: 'Material network' },
-      alts: { control: 'WMS operations control workspace', mobile: 'WMS mobile warehouse picking workflow', trace: 'Connected warehouse and logistics network' },
+      tabs: { control: 'Operations control', inbound: 'Inbound & quality', outbound: 'Outbound & issue', mobile: 'Mobile execution', trace: 'Material network' },
+      alts: { control: 'WMS operations control workspace', inbound: 'WMS inbound quality inspection workspace', outbound: 'WMS outbound goods issue posting queue', mobile: 'WMS mobile warehouse picking workflow', trace: 'Connected warehouse and logistics network' },
       notes: {
         control: ['Prioritized work in one queue', 'Clear ownership and service level', 'Decision history beside the task'],
+        inbound: ['Receive and identify every batch', 'Quality status before allocation', 'Expiry and release controls in one view'],
+        outbound: ['Review ready requests by reservation', 'Post goods issue with full context', 'Keep request, movement, and warehouse linked'],
         mobile: ['Task guidance for warehouse teams', 'Scan-driven location confirmation', 'Shortage handling inside the workflow'],
         trace: ['Connected warehouse movements', 'One source for material status', 'Traceability from receipt to issue'],
       },
       journeyEyebrow: 'A controlled warehouse journey',
-      journeyTitle: 'From material need to traceable completion',
+      journeyTitle: 'Eight connected controls from demand to dispatch',
+      phases: ['Demand', 'Inbound', 'Execution', 'Outbound & control'],
       journey: [
-        ['Request and approve', 'Capture the requirement, validate quantities, and route the decision to the right approver.'],
-        ['Allocate and assign', 'Reserve stock by warehouse, bin, and batch, then assign accountable operators.'],
-        ['Pick, scan, and post', 'Guide physical execution with QR confirmation and controlled goods movement posting.'],
-        ['Receive, count, and audit', 'Close the loop with receiving, cycle counts, exceptions, and a durable audit trail.'],
+        ['Request materials', 'Capture project, cost object, required date, priority, and line quantities.'],
+        ['Approve and reserve', 'Route the decision, validate availability, and create the ERP reservation.'],
+        ['Receive and identify', 'Record the receipt, batch, warehouse, dates, and QR identity.'],
+        ['Inspect and release', 'Hold new stock for quality, then release, block, or reject it visibly.'],
+        ['Allocate and assign', 'Apply FIFO or FEFO by bin and batch, then assign accountable operators.'],
+        ['Pick and scan', 'Guide physical execution with QR, location confirmation, and shortage handling.'],
+        ['Issue and dispatch', 'Post goods issue, pack the delivery, and confirm dispatch against the request.'],
+        ['Count and audit', 'Reconcile stock, investigate exceptions, and retain the complete decision trail.'],
       ],
       designed: 'Designed for every warehouse decision-maker',
       audiences: [
@@ -51,20 +58,27 @@ Pages.landing = {
       proofEyebrow: 'شاشات من المنتج الفعلي',
       proofTitle: 'تحكم تشغيلي من الطلب حتى التنفيذ داخل المستودع',
       proofBody: 'تنقّل بين عروض توضيحية حقيقية من WMS وشاهد كيف تتصل الأولويات والتنفيذ والتتبع في نظام واحد.',
-      tabs: { control: 'التحكم التشغيلي', mobile: 'التنفيذ الميداني', trace: 'شبكة المواد' },
-      alts: { control: 'مساحة التحكم في عمليات WMS', mobile: 'رحلة الالتقاط الميدانية عبر WMS', trace: 'شبكة المستودعات والخدمات اللوجستية المترابطة' },
+      tabs: { control: 'التحكم التشغيلي', inbound: 'الاستلام والجودة', outbound: 'الصرف والشحن', mobile: 'التنفيذ الميداني', trace: 'شبكة المواد' },
+      alts: { control: 'مساحة التحكم في عمليات WMS', inbound: 'مساحة فحص الجودة لعمليات الاستلام في WMS', outbound: 'قائمة ترحيل الصرف للعمليات الصادرة في WMS', mobile: 'رحلة الالتقاط الميدانية عبر WMS', trace: 'شبكة المستودعات والخدمات اللوجستية المترابطة' },
       notes: {
         control: ['أولوية العمل في قائمة واحدة', 'ملكية واضحة ومستوى خدمة محدد', 'سجل القرار بجوار المهمة'],
+        inbound: ['استلام وتعريف كل دفعة', 'قرار الجودة قبل التخصيص', 'الصلاحية والإفراج في عرض واحد'],
+        outbound: ['مراجعة الطلبات الجاهزة حسب الحجز', 'ترحيل الصرف بالسياق الكامل', 'ربط الطلب والحركة والمستودع'],
         mobile: ['توجيه واضح لفريق المستودع', 'تأكيد الموقع والمسح بالرمز', 'معالجة النقص داخل رحلة العمل'],
         trace: ['حركات مستودعات مترابطة', 'مصدر واحد لحالة المواد', 'تتبع من الاستلام حتى الصرف'],
       },
       journeyEyebrow: 'رحلة مستودع منضبطة',
-      journeyTitle: 'من احتياج المواد حتى الإكمال القابل للتتبع',
+      journeyTitle: 'ثماني نقاط تحكم مترابطة من الاحتياج حتى الشحن',
+      phases: ['الطلب', 'الاستلام', 'التنفيذ', 'الصرف والرقابة'],
       journey: [
-        ['الطلب والاعتماد', 'تسجيل الاحتياج والتحقق من الكميات وتوجيه القرار إلى صاحب الصلاحية.'],
-        ['الحجز والتكليف', 'حجز المخزون حسب المستودع والموقع والدفعة ثم تعيين المسؤول عن التنفيذ.'],
-        ['الالتقاط والمسح والترحيل', 'توجيه التنفيذ الفعلي عبر QR وتأكيد المواقع وترحيل حركة المواد بضوابط واضحة.'],
-        ['الاستلام والجرد والتدقيق', 'إغلاق الدورة بالاستلام والجرد الدوري والاستثناءات وسجل تدقيق موثوق.'],
+        ['طلب المواد', 'تسجيل المشروع والتكلفة والتاريخ المطلوب والأولوية وكميات البنود.'],
+        ['الاعتماد والحجز', 'توجيه القرار والتحقق من التوفر وإنشاء حجز نظام ERP.'],
+        ['الاستلام والتعريف', 'تسجيل الاستلام والدفعة والمستودع والتواريخ وهوية QR.'],
+        ['الفحص والإفراج', 'حجز المخزون الجديد للجودة ثم الإفراج عنه أو حجبه أو رفضه بوضوح.'],
+        ['التخصيص والتكليف', 'تطبيق FIFO أو FEFO حسب الموقع والدفعة وتعيين المنفذ المسؤول.'],
+        ['الالتقاط والمسح', 'توجيه التنفيذ عبر QR وتأكيد الموقع ومعالجة النقص داخل المهمة.'],
+        ['الصرف والشحن', 'ترحيل الصرف وتعبئة التسليم وتأكيد الشحن مقابل الطلب.'],
+        ['الجرد والتدقيق', 'مطابقة المخزون والتحقيق في الاستثناءات وحفظ سجل القرار الكامل.'],
       ],
       designed: 'مصمم لكل صاحب قرار في المستودع',
       audiences: [
@@ -81,6 +95,8 @@ Pages.landing = {
 
   demos: {
     control: '/design-preview/kynox-redesign-preview-desktop.png',
+    inbound: '/img/landing/wms-inbound-operation.png',
+    outbound: '/img/landing/wms-outbound-operation.png',
     mobile: '/design-preview/kynox-redesign-preview-mobile.png',
     trace: '/img/hero-network.jpg',
   },
@@ -89,7 +105,7 @@ Pages.landing = {
     const locale = Lang.current === 'ar' ? 'ar' : 'en';
     const c = this.copy[locale];
     const arrow = locale === 'ar' ? 'ph-arrow-left' : 'ph-arrow-right';
-    const journeyIcons = ['ph-clipboard-text', 'ph-package', 'ph-scan', 'ph-chart-line-up'];
+    const journeyIcons = ['ph-clipboard-text', 'ph-check-circle', 'ph-download-simple', 'ph-shield-check', 'ph-package', 'ph-scan', 'ph-truck', 'ph-chart-line-up'];
     const audienceIcons = ['ph-warehouse', 'ph-hard-hat', 'ph-shield-check'];
     const demo = this.activeDemo;
     document.title = locale === 'ar' ? 'KYNOX WMS — منصة إدارة المستودعات' : 'KYNOX WMS — Warehouse Execution Platform';
@@ -111,7 +127,7 @@ Pages.landing = {
           <div class="wl-hero-copy"><p class="wl-eyebrow">${c.eyebrow}</p><h1>${c.title}</h1><p>${c.body}</p>
             <div class="wl-actions"><button class="wl-button wl-button-primary" type="button" data-scroll="journey">${c.explore}<i class="ph ${arrow}" aria-hidden="true"></i></button><a class="wl-button wl-button-secondary" href="#/login"><i class="ph ph-sign-in" aria-hidden="true"></i>${c.signIn}</a></div>
           </div>
-          <div class="wl-hero-visual" aria-label="${c.proofEyebrow}"><figure class="wl-shot wl-shot-back"><img src="${this.demos.control}" alt="${c.alts.control}"></figure><figure class="wl-shot wl-shot-front"><img src="${this.demos.mobile}" alt="${c.alts.mobile}"></figure></div>
+          <div class="wl-hero-visual" aria-label="${c.proofEyebrow}"><figure class="wl-shot wl-shot-back"><img src="${this.demos.inbound}" alt="${c.alts.inbound}"></figure><figure class="wl-shot wl-shot-front"><img src="${this.demos.outbound}" alt="${c.alts.outbound}"></figure></div>
         </section>
 
         <section class="wl-demo" id="demo"><div class="wl-heading"><p class="wl-eyebrow">${c.proofEyebrow}</p><h2>${c.proofTitle}</h2><p>${c.proofBody}</p></div>
@@ -120,7 +136,7 @@ Pages.landing = {
         </section>
 
         <section class="wl-journey" id="journey"><div class="wl-heading centered"><p class="wl-eyebrow">${c.journeyEyebrow}</p><h2>${c.journeyTitle}</h2></div>
-          <ol class="wl-journey-steps">${c.journey.map((step, index) => `<li><span class="wl-journey-icon"><i class="ph-duotone ${journeyIcons[index]}" aria-hidden="true"></i></span><small>${String(index + 1).padStart(2, '0')}</small><h3>${step[0]}</h3><p>${step[1]}</p></li>`).join('')}</ol>
+          <ol class="wl-journey-steps">${c.journey.map((step, index) => `<li><span class="wl-phase">${c.phases[Math.floor(index / 2)]}</span><span class="wl-journey-icon"><i class="ph-duotone ${journeyIcons[index]}" aria-hidden="true"></i></span><small>${String(index + 1).padStart(2, '0')}</small><h3>${step[0]}</h3><p>${step[1]}</p></li>`).join('')}</ol>
         </section>
 
         <section class="wl-audiences"><h2>${c.designed}</h2><div>${c.audiences.map((audience, index) => `<article><i class="ph-duotone ${audienceIcons[index]}" aria-hidden="true"></i><span><h3>${audience[0]}</h3><p>${audience[1]}</p></span></article>`).join('')}</div></section>
