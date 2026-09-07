@@ -3,6 +3,7 @@ window.Pages = window.Pages || {};
 
 Pages.landing = {
   activeDemo: 'control',
+  slideTheme: 'light',
 
   copy: {
     en: {
@@ -12,9 +13,13 @@ Pages.landing = {
       title: 'One workspace connecting every material movement',
       body: 'From request and approval to receiving, picking, goods issue, and audit — WMS gives every team a clear, controlled path from need to stock movement.',
       explore: 'Explore the workflow',
-      proofEyebrow: 'Screens from the working product',
+      proofEyebrow: 'Interactive product walkthrough',
       proofTitle: 'Operational control from request to warehouse execution',
-      proofBody: 'Move between real WMS demonstration views and see how priorities, warehouse work, and traceability connect in one system.',
+      proofBody: 'Move between WMS demonstration views built with clearly hypothetical operational data. Choose the light or dark presentation to review each workflow.',
+      previewStyle: 'Preview style',
+      lightStyle: 'Light',
+      darkStyle: 'Dark',
+      demoData: 'Hypothetical demo data',
       tabs: { control: 'Operations control', inbound: 'Inbound & quality', outbound: 'Outbound & issue', mobile: 'Mobile execution', trace: 'Material network' },
       alts: { control: 'WMS operations control workspace', inbound: 'WMS inbound quality inspection workspace', outbound: 'WMS outbound goods issue posting queue', mobile: 'WMS mobile warehouse picking workflow', trace: 'Connected warehouse and logistics network' },
       notes: {
@@ -55,9 +60,13 @@ Pages.landing = {
       title: 'مساحة واحدة تربط كل حركة للمواد',
       body: 'من الطلب والاعتماد إلى الاستلام والالتقاط والصرف والتدقيق — يمنح WMS كل فريق مساراً واضحاً ومنضبطاً من الاحتياج حتى حركة المخزون.',
       explore: 'استكشف رحلة العمل',
-      proofEyebrow: 'شاشات من المنتج الفعلي',
+      proofEyebrow: 'عرض تفاعلي للمنتج',
       proofTitle: 'تحكم تشغيلي من الطلب حتى التنفيذ داخل المستودع',
-      proofBody: 'تنقّل بين عروض توضيحية حقيقية من WMS وشاهد كيف تتصل الأولويات والتنفيذ والتتبع في نظام واحد.',
+      proofBody: 'تنقّل بين شاشات WMS ببيانات تشغيلية افتراضية بالكامل، واختر العرض الفاتح أو الداكن لمراجعة كل رحلة عمل.',
+      previewStyle: 'نمط العرض',
+      lightStyle: 'فاتح',
+      darkStyle: 'داكن',
+      demoData: 'بيانات افتراضية للعرض',
       tabs: { control: 'التحكم التشغيلي', inbound: 'الاستلام والجودة', outbound: 'الصرف والشحن', mobile: 'التنفيذ الميداني', trace: 'شبكة المواد' },
       alts: { control: 'مساحة التحكم في عمليات WMS', inbound: 'مساحة فحص الجودة لعمليات الاستلام في WMS', outbound: 'قائمة ترحيل الصرف للعمليات الصادرة في WMS', mobile: 'رحلة الالتقاط الميدانية عبر WMS', trace: 'شبكة المستودعات والخدمات اللوجستية المترابطة' },
       notes: {
@@ -94,11 +103,11 @@ Pages.landing = {
   },
 
   demos: {
-    control: '/design-preview/kynox-redesign-preview-desktop.png',
-    inbound: '/img/landing/wms-inbound-operation.png',
-    outbound: '/img/landing/wms-outbound-operation.png',
-    mobile: '/design-preview/kynox-redesign-preview-mobile.png',
-    trace: '/img/hero-network.jpg',
+    control: { light: '/design-preview/kynox-redesign-preview-desktop.png', dark: '/design-preview/kynox-redesign-preview-desktop.png' },
+    inbound: { light: '/img/landing/demo/inbound-light.png', dark: '/img/landing/demo/inbound-dark.png' },
+    outbound: { light: '/img/landing/demo/outbound-light.png', dark: '/img/landing/demo/outbound-dark.png' },
+    mobile: { light: '/design-preview/kynox-redesign-preview-mobile.png', dark: '/design-preview/kynox-redesign-preview-mobile.png' },
+    trace: { light: '/img/hero-network.jpg', dark: '/img/hero-network.jpg' },
   },
 
   render() {
@@ -108,6 +117,8 @@ Pages.landing = {
     const journeyIcons = ['ph-clipboard-text', 'ph-check-circle', 'ph-download-simple', 'ph-shield-check', 'ph-package', 'ph-scan', 'ph-truck', 'ph-chart-line-up'];
     const audienceIcons = ['ph-warehouse', 'ph-hard-hat', 'ph-shield-check'];
     const demo = this.activeDemo;
+    const slideTheme = this.slideTheme;
+    const demoSource = (key) => this.demos[key][slideTheme];
     document.title = locale === 'ar' ? 'KYNOX WMS — منصة إدارة المستودعات' : 'KYNOX WMS — Warehouse Execution Platform';
 
     document.getElementById('app').innerHTML = `
@@ -127,12 +138,12 @@ Pages.landing = {
           <div class="wl-hero-copy"><p class="wl-eyebrow">${c.eyebrow}</p><h1>${c.title}</h1><p>${c.body}</p>
             <div class="wl-actions"><button class="wl-button wl-button-primary" type="button" data-scroll="journey">${c.explore}<i class="ph ${arrow}" aria-hidden="true"></i></button><a class="wl-button wl-button-secondary" href="#/login"><i class="ph ph-sign-in" aria-hidden="true"></i>${c.signIn}</a></div>
           </div>
-          <div class="wl-hero-visual" aria-label="${c.proofEyebrow}"><figure class="wl-shot wl-shot-back"><img src="${this.demos.inbound}" alt="${c.alts.inbound}"></figure><figure class="wl-shot wl-shot-front"><img src="${this.demos.outbound}" alt="${c.alts.outbound}"></figure></div>
+          <div class="wl-hero-visual" aria-label="${c.proofEyebrow}"><figure class="wl-shot wl-shot-back"><img src="${this.demos.inbound.light}" alt="${c.alts.inbound}"></figure><figure class="wl-shot wl-shot-front"><img src="${this.demos.outbound.dark}" alt="${c.alts.outbound}"></figure></div>
         </section>
 
         <section class="wl-demo" id="demo"><div class="wl-heading"><p class="wl-eyebrow">${c.proofEyebrow}</p><h2>${c.proofTitle}</h2><p>${c.proofBody}</p></div>
-          <div class="wl-tabs" role="tablist" aria-label="${c.proofTitle}">${Object.keys(this.demos).map((key) => `<button type="button" role="tab" data-demo="${key}" aria-selected="${demo === key}">${c.tabs[key]}</button>`).join('')}</div>
-          <div class="wl-demo-stage"><div class="wl-demo-frame wl-demo-${demo}"><img src="${this.demos[demo]}" alt="${c.alts[demo]}"></div><ol class="wl-annotations">${c.notes[demo].map((note, index) => `<li><span>${index + 1}</span><strong>${note}</strong></li>`).join('')}</ol></div>
+          <div class="wl-demo-controls"><div class="wl-tabs" role="tablist" aria-label="${c.proofTitle}">${Object.keys(this.demos).map((key) => `<button type="button" role="tab" data-demo="${key}" aria-selected="${demo === key}">${c.tabs[key]}</button>`).join('')}</div><div class="wl-theme-picker" role="group" aria-label="${c.previewStyle}"><span>${c.previewStyle}</span><button type="button" data-slide-theme="light" aria-pressed="${slideTheme === 'light'}"><i class="ph ph-sun" aria-hidden="true"></i>${c.lightStyle}</button><button type="button" data-slide-theme="dark" aria-pressed="${slideTheme === 'dark'}"><i class="ph ph-moon" aria-hidden="true"></i>${c.darkStyle}</button></div></div>
+          <div class="wl-demo-stage wl-demo-theme-${slideTheme}"><div class="wl-slide"><div class="wl-slide-meta"><span>${String(Object.keys(this.demos).indexOf(demo) + 1).padStart(2, '0')} / ${String(Object.keys(this.demos).length).padStart(2, '0')}</span><strong>${c.tabs[demo]}</strong><em><i class="ph ph-flask" aria-hidden="true"></i>${c.demoData}</em></div><div class="wl-demo-frame wl-demo-${demo}"><img src="${demoSource(demo)}" alt="${c.alts[demo]}"></div></div><ol class="wl-annotations">${c.notes[demo].map((note, index) => `<li><span>${index + 1}</span><strong>${note}</strong></li>`).join('')}</ol></div>
         </section>
 
         <section class="wl-journey" id="journey"><div class="wl-heading centered"><p class="wl-eyebrow">${c.journeyEyebrow}</p><h2>${c.journeyTitle}</h2></div>
@@ -150,6 +161,11 @@ Pages.landing = {
     }));
     document.querySelectorAll('[data-demo]').forEach((button) => button.addEventListener('click', () => {
       this.activeDemo = button.dataset.demo;
+      this.render();
+      document.getElementById('demo').scrollIntoView({ block: 'start' });
+    }));
+    document.querySelectorAll('[data-slide-theme]').forEach((button) => button.addEventListener('click', () => {
+      this.slideTheme = button.dataset.slideTheme;
       this.render();
       document.getElementById('demo').scrollIntoView({ block: 'start' });
     }));
