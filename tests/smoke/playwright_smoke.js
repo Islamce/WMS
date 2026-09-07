@@ -102,6 +102,17 @@ function check(name, cond, detail) {
     check('landing demo tabs update the selected product view',
       await page.getByRole('tab', { name: 'Mobile execution' }).getAttribute('aria-selected') === 'true' &&
       (await page.locator('.wl-demo-frame img').getAttribute('src')).includes('mobile'));
+    check('landing exposes five operational demo views', await page.getByRole('tab').count() === 5);
+    await page.getByRole('tab', { name: 'Inbound & quality' }).click();
+    check('landing inbound demo uses the real quality-control capture',
+      await page.getByRole('tab', { name: 'Inbound & quality' }).getAttribute('aria-selected') === 'true' &&
+      await page.locator('.wl-demo-inbound img[src="/img/landing/wms-inbound-operation.png"]').count() === 1);
+    await page.getByRole('tab', { name: 'Outbound & issue' }).click();
+    check('landing outbound demo uses the real goods-issue capture',
+      await page.getByRole('tab', { name: 'Outbound & issue' }).getAttribute('aria-selected') === 'true' &&
+      await page.locator('.wl-demo-outbound img[src="/img/landing/wms-outbound-operation.png"]').count() === 1);
+    check('landing presents the expanded eight-control workflow',
+      await page.locator('.wl-journey-steps > li').count() === 8);
     await page.locator('a[href="#/login"]').first().click();
     await page.waitForSelector('#login-form');
     check('login form renders', await page.locator('#login-form').count() > 0);
