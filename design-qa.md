@@ -1,7 +1,7 @@
 # WMS Landing Page — Design QA
 
 - Source visual truth: `docs/uat/2026-09-07/wms-landing-page/source-r4c-desktop-hero.png` and `source-r4c-mobile-hero.png`
-- Implementation evidence: `hypothetical-slides-light-desktop.png`, `hypothetical-slides-dark-desktop.png`, and `hypothetical-slides-dark-mobile.png` in the same evidence directory. The displayed inbound/outbound product art is now generated specifically for the landing page under `public/img/landing/demo/`, with matching light/dark variants and explicit `DEMO DATA` labels.
+- Implementation evidence: `hypothetical-slides-light-desktop.png`, `hypothetical-slides-dark-desktop.png`, `hypothetical-slides-dark-mobile.png`, `production-hypothetical-light.png`, and `production-hypothetical-dark.png` in the same evidence directory. The displayed inbound/outbound product art is now generated specifically for the landing page under `public/img/landing/demo/`, with matching light/dark variants and explicit `DEMO DATA` labels.
 - Desktop comparison: 1425 × 860 pixels, 1440 × 900 requested CSS viewport, device scale factor 1, English and Arabic hero states
 - Mobile comparison: 375 × 811 pixels, 390 × 844 requested CSS viewport, device scale factor 1, English and Arabic hero states
 - State: public unauthenticated landing page at `/`; login remains at `#/login`
