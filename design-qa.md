@@ -1,7 +1,7 @@
 # WMS Landing Page — Design QA
 
 - Source visual truth: `docs/uat/2026-09-07/wms-landing-page/source-r4c-desktop-hero.png` and `source-r4c-mobile-hero.png`
-- Implementation evidence: `implementation-desktop-hero.png`, `implementation-desktop-arabic.png`, `implementation-desktop-demo.png`, `implementation-desktop-journey.png`, `implementation-mobile-english.png`, and `implementation-mobile-arabic.png` in the same evidence directory
+- Implementation evidence: `implementation-desktop-hero.png`, `implementation-desktop-arabic.png`, `implementation-desktop-demo.png`, `implementation-desktop-journey.png`, `implementation-mobile-english.png`, and `implementation-mobile-arabic.png` in the same evidence directory; post-deployment captures are `production-desktop-english.png` and `production-desktop-arabic.png`
 - Desktop comparison: 1425 × 860 pixels, 1440 × 900 requested CSS viewport, device scale factor 1, English and Arabic hero states
 - Mobile comparison: 375 × 811 pixels, 390 × 844 requested CSS viewport, device scale factor 1, English and Arabic hero states
 - State: public unauthenticated landing page at `/`; login remains at `#/login`
