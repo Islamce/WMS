@@ -103,6 +103,7 @@ function check(name, cond, detail) {
       await page.getByRole('tab', { name: 'Mobile execution' }).getAttribute('aria-selected') === 'true' &&
       (await page.locator('.wl-demo-frame img').getAttribute('src')).includes('mobile'));
     await page.locator('a[href="#/login"]').first().click();
+    await page.waitForSelector('#login-form');
     check('login form renders', await page.locator('#login-form').count() > 0);
     check('login email field present', await page.locator('#li-email').count() > 0);
 
