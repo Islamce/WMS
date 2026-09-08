@@ -1,10 +1,11 @@
 # WMS Current Status
 
-Last updated: 2026-09-07
+Last updated: 2026-09-08
 
 ## Executive status
 
 - **PRODUCTION LIVE ON VPS (updated 2026-09-07).** WMS is healthy in Docker on the Hostinger VPS (`82.29.175.206`) behind Caddy automatic HTTPS. PR #115 was merged and deployed as `bd7034d14039d25e886aafb3a44d3146c091b613`, replacing the landing page's prior operational captures with clearly labeled, fully hypothetical inbound/outbound data and coordinated light/dark workflow slides. Authentication remains at `#/login`. Live browser verification passed with five interactive demo tabs, accessible light/dark controls, English/Arabic RTL support, eight workflow cards, zero horizontal overflow, and zero console errors; public `/healthz` returns `{"status":"ok","service":"wms"}`. The remaining historical Passenger facts below describe the now-defunct shared-hosting deployment; see `docs/HOSTINGER-VPS-MIGRATION-2026-09-06.md` for VPS migration evidence.
+- **VPS security posture verified/hardened (2026-09-08).** UFW is active with default-deny inbound and only 22/80/443 exposed; all eight Docker containers use `unless-stopped` and all application/data containers report healthy; `unattended-upgrades` is enabled and active. SSH now uses a tested key-only `deploy` sudo administrator, disables password/keyboard-interactive authentication, limits attempts to 3, and keeps root as key-only emergency access. Public WMS, R4C web/API, and kynox.io HTTPS checks all return HTTP 200 with valid TLS.
 - **Account migration complete for all four websites:** R4C PR #88 received the required independent approval and merged as `57f7ac8`. `r4c.kynox.io` and `r4c-api.kynox.io` are publicly live over valid HTTPS and verified through an authenticated `islam@kynox.io` login/session smoke test; all 12 migrations applied and Postgres/Redis/MinIO are healthy. `kynox.io` and `www.kynox.io` are publicly live over valid HTTPS from the verified static archive, correcting the earlier PHP/MySQL assumption; apex IPv4 and IPv6 both point to the VPS. The separate Hostinger email dispute remains parked with no purchase authorized.
 - Repository: `Islamce/WMS`
 - Production URL: `https://wms.kynox.io` (publicly live on the VPS)
