@@ -1609,3 +1609,9 @@ Queried the production database without exposing hashes or secrets and confirmed
 Verified the generated credential through the public Next.js session endpoint at `https://r4c.kynox.io` (HTTP 201 and valid session response). The temporary password was delivered directly to the operator and the root-only VPS scratch file was deleted. No credential was committed or recorded in documentation.
 
 **Exact next step:** after independent approval of PR #89, merge the exact reviewed head, take a fresh PostgreSQL backup, rebuild only R4C web/API as required, and verify the new public landing route plus both administrator logins before declaring the redesign live.
+
+## 2026-09-08 (cont'd 2) — R4C landing merge deployed; authenticated design audit pending
+
+PR #89 received independent approval from `sam41234` and merged as `d7d3e2f895cb0b242555fa581fd8b48470762d27`. Production was still at `57f7ac8`, confirming why the live page initially appeared unchanged. Created fresh PostgreSQL custom-format backup `/opt/backups/r4c/r4c-pre-pr89-20260908T030243Z.dump`, fast-forwarded `/opt/apps/r4c` to the exact merge, rebuilt only the R4C web image, and recreated only `r4c-web-1`. The container reached healthy status; public root and `/login` return HTTPS 200 with valid TLS. API and database containers were not changed.
+
+The operator separately reports the authenticated internal design is faulty. PR #89 primarily adds the public landing experience and fixture cleanup; it does not establish that every internal workspace was redesigned. Per the Product Design audit workflow, the next step is to capture the authenticated navigation and key internal screens from the newly deployed build, tie findings to current screenshots, and only then implement corrections. Browser entry requires action-time authorization to transmit the temporary administrator credential to `r4c.kynox.io`; no credential is stored in docs or Git.
