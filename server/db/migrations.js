@@ -543,6 +543,52 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    id: '022_stock_ownership',
+    description: 'Who OWNS stock, distinct from who delivered it. A contracting store holds company material and subcontractor-owned material side by side; ownership never transfers, only possession moves. Every existing row defaults to COMPANY, so a live deployment is unchanged by this migration. See docs/CONTRACTING-EDITION-REQUIREMENTS.md.',
+    up(database) {
+      // batches.supplier_* answers "who delivered it". These answer "whose is
+      // it while we hold it" — a different question, and the one a contractor
+      // has to answer at site closeout. NOT NULL with a COMPANY default is what
+      // makes this migration a no-op for every existing install.
+      addColumnIfMissing(database, 'batches', 'owner_type',
+        "TEXT NOT NULL DEFAULT 'COMPANY'");
+      addColumnIfMissing(database, 'batches', 'owner_subcontractor_id',
+        'INTEGER REFERENCES subcontractors(id)');
+      database.exec(`
+        CREATE INDEX IF NOT EXISTS idx_batches_owner
+          ON batches(owner_type, owner_subcontractor_id);
+      `);
+
+      // A subcontractor may supply materials only, or materials plus execution.
+      // The two settle differently, but they post IDENTICALLY here — the
+      // difference is presentational, so this is one attribute and a rendering
+      // rule, never a second transaction path.
+      addColumnIfMissing(database, 'subcontractors', 'engagement_type',
+        "TEXT NOT NULL DEFAULT 'SUPPLY_ONLY'");
+
+      // Issues were unattributable: subcontractor_consumptions recorded what
+      // left and from which warehouse, but never to WHOM. Material is issued on
+      // the subcontractor's request, so the request's originator has to be on
+      // the row. Existing rows stay NULL — we genuinely do not know, and
+      // inventing an attribution would be worse than admitting the gap.
+      addColumnIfMissing(database, 'subcontractor_consumptions', 'subcontractor_id',
+        'INTEGER REFERENCES subcontractors(id)');
+      database.exec(`
+        CREATE INDEX IF NOT EXISTS idx_subc_consumption_subcontractor
+          ON subcontractor_consumptions(subcontractor_id);
+      `);
+
+      // Returning a subcontractor's leftover material is a real outbound
+      // movement under its own type, so a return can never be mistaken for
+      // consumption in any report or reconciliation. 54x is the subcontracting
+      // range in the movement-type scheme already in use here.
+      database.exec(`
+        INSERT OR IGNORE INTO movement_types (code, description, direction, cost_object, requires_wbs)
+        VALUES ('542', 'Return of Subcontractor-Owned Material', 'ISSUE', 'WBS', 1);
+      `);
+    },
+  },
 ];
 
 function ensureTable() {

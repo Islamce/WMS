@@ -59,6 +59,8 @@ run_suite autoseed_guard_test.py
 run_suite provisioning_test.py
 # Offline: provisions throwaway tenants, verifies edition gating both ways.
 run_suite tenant_edition_test.py
+# Offline: migrated temp database; pins that ownership defaults leave live data alone.
+run_suite stock_ownership_test.py
 stop_server
 
 echo ""
