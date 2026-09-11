@@ -1,0 +1,91 @@
+name: Subcontractor ledger convergence report
+
+# READ-ONLY. Runs scripts/converge-subcontractor-ledger.js against production
+# without --apply, so it reports and writes nothing.
+#
+# The legacy free-text subcontractor stream and the owned-batch stream describe
+# one physical store. Phase 4 built the tool to carry the legacy rows across;
+# this runs its report so the question "is there anything to convert?" gets an
+# answer from production rather than an assumption.
+#
+# There is deliberately NO apply path here yet. Applying writes stock rows and
+# needs a verified backup, the report reviewed and the material mapping agreed —
+# and the report may well say there is nothing to convert, in which case an
+# apply path would be machinery built for a job that does not exist. It gets
+# added when the report shows it is needed, not before.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wms-ledger-report
+  cancel-in-progress: false
+
+jobs:
+  report:
+    name: Report (read-only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      REMOTE_APP_DIR: /opt/apps/wms
+    steps:
+      - name: Configure SSH (pinned known_hosts; StrictHostKeyChecking on)
+        env:
+          SSH_KEY: ${{ secrets.HOSTINGER_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.HOSTINGER_KNOWN_HOSTS }}
+          SSH_HOST: ${{ secrets.HOSTINGER_HOST }}
+          SSH_USER: ${{ secrets.HOSTINGER_USERNAME }}
+          SSH_PORT: ${{ secrets.HOSTINGER_PORT }}
+        run: |
+          set -euo pipefail
+          if [ -z "${KNOWN_HOSTS:-}" ]; then echo "::error::HOSTINGER_KNOWN_HOSTS secret is required"; exit 1; fi
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_report
+          chmod 600 ~/.ssh/id_report
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+          {
+            echo "Host hostinger"
+            echo "  HostName $SSH_HOST"
+            echo "  User $SSH_USER"
+            echo "  Port $SSH_PORT"
+            echo "  IdentityFile ~/.ssh/id_report"
+            echo "  IdentitiesOnly yes"
+            echo "  StrictHostKeyChecking yes"
+            echo "  UserKnownHostsFile ~/.ssh/known_hosts"
+          } > ~/.ssh/config
+          chmod 600 ~/.ssh/config
+
+      # No --apply. The script is a report unless that flag is given, and it is
+      # not given anywhere in this file.
+      - name: Run the convergence report
+        run: |
+          set -Eeuo pipefail
+          ssh hostinger "cd '$REMOTE_APP_DIR' && docker compose exec -T wms \
+            node scripts/converge-subcontractor-ledger.js" | tee report.txt
+
+      - name: Confirm nothing was written
+        run: |
+          set -Eeuo pipefail
+          converged="$(ssh hostinger "cd '$REMOTE_APP_DIR' && docker compose exec -T wms node -e \"
+            const db = require('better-sqlite3')('/app/data/wms.db', {readonly:true});
+            console.log(db.prepare('SELECT COUNT(*) c FROM subcontractor_ledger_convergence').get().c);
+          \"")"
+          echo "subcontractor_ledger_convergence rows: $converged"
+          # A report must leave this at zero. If it is not zero, either a
+          # conversion has already been run deliberately, or this workflow did
+          # something it should not have — and either way somebody must look.
+          if [ "$(echo "$converged" | tr -d '[:space:]')" != "0" ]; then
+            echo "::warning::The convergence table is not empty. A conversion has been applied at some point — check the audit trail for LEDGER_CONVERGED before running anything else."
+          fi
+
+      - name: Publish the report
+        uses: actions/upload-artifact@v4
+        with:
+          name: subcontractor-ledger-report
+          path: report.txt
+          retention-days: 30
