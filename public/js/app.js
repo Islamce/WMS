@@ -170,9 +170,31 @@ const LS = { collapsed: 'wms_nav_collapsed', groups: 'wms_nav_groups' };
 const App = {
   user: null,
 
+  /**
+   * The deployment's industry edition, from /api/auth/me.
+   * `modules: null` (or no tenant at all) means the install has no configured
+   * edition and everything stays visible — see server/services/tenant.js.
+   */
+  tenant: null,
+
+  /**
+   * True when this organisation's edition includes the module. Admins do NOT
+   * bypass this: an edition is what the organisation bought, not a permission
+   * level, so a module the tenant does not have must be invisible to everyone
+   * including the administrator.
+   */
+  tenantHasModule(moduleKey) {
+    const modules = this.tenant && this.tenant.modules;
+    if (!modules) return true;
+    return modules.includes(moduleKey);
+  },
+
   can(permission) {
     if (!this.user) return false;
     if (Array.isArray(permission)) return permission.some((p) => this.can(p));
+    // Edition gate first: an unsold module is hidden regardless of role, and
+    // the admin short-circuit below must not reach past it.
+    if (!this.tenantHasModule(permission)) return false;
     if (this.user.role === 'admin') return true;
     return this.user.permissions.includes(permission);
   },
@@ -182,18 +204,20 @@ const App = {
     window.addEventListener('hashchange', () => this.route());
     if (Api.token) {
       try {
-        const { user } = await Api.get('/api/auth/me');
+        const { user, tenant } = await Api.get('/api/auth/me');
         this.user = user;
+        this.tenant = tenant || null;
       } catch { /* handled by onSessionExpired */ }
     }
     this.route();
   },
 
-  onSessionExpired() { this.user = null; this.route(); },
+  onSessionExpired() { this.user = null; this.tenant = null; this.route(); },
 
   logout() {
     Api.setToken(null);
     this.user = null;
+    this.tenant = null;
     location.hash = '#/login';
   },
 

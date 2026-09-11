@@ -57,6 +57,8 @@ run_suite quickwins_test.py
 run_suite autoseed_guard_test.py
 # Works on its own temporary databases; needs no server or shared dataset.
 run_suite provisioning_test.py
+# Offline: provisions throwaway tenants, verifies edition gating both ways.
+run_suite tenant_edition_test.py
 stop_server
 
 echo ""

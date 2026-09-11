@@ -528,6 +528,21 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    id: '021_tenant_profile',
+    description: 'Tenant identity and industry edition (Contracting / Manufacturing) for the deployment. Created empty on purpose: an existing single-company install has no row, and no row means no edition restriction, so this migration cannot change how a running deployment behaves.',
+    up(database) {
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS tenant_profile (
+          id               INTEGER PRIMARY KEY CHECK (id = 1),
+          tenant_name      TEXT NOT NULL,
+          industry_profile TEXT NOT NULL,
+          provisioned_at   TEXT NOT NULL DEFAULT (datetime('now')),
+          provisioned_by   TEXT
+        );
+      `);
+    },
+  },
 ];
 
 function ensureTable() {

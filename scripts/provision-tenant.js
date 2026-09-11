@@ -197,16 +197,9 @@ function main() {
       VALUES (?, ?, ?, (SELECT id FROM roles WHERE name = 'admin'), 'active', 1)
     `).run(adminName, adminEmail, hash);
 
-    // The tenant's identity and edition, readable by the app at runtime.
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS tenant_profile (
-        id              INTEGER PRIMARY KEY CHECK (id = 1),
-        tenant_name     TEXT NOT NULL,
-        industry_profile TEXT NOT NULL,
-        provisioned_at  TEXT NOT NULL DEFAULT (datetime('now')),
-        provisioned_by  TEXT
-      );
-    `);
+    // The table itself comes from migration 021, which already ran above — the
+    // schema has exactly one owner. Writing the row is what turns this database
+    // from an unrestricted install into a tenant on a specific edition.
     db.prepare(`
       INSERT OR REPLACE INTO tenant_profile (id, tenant_name, industry_profile, provisioned_by)
       VALUES (1, ?, ?, ?)
