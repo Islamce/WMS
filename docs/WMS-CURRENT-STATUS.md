@@ -1,8 +1,45 @@
 # WMS Current Status
 
-Last updated: 2026-09-08
+Last updated: 2026-09-11
 
 ## Executive status
+
+- **CONTRACTING EDITION DEPLOYED (2026-09-11).** Production moved from
+  `bd7034d14039d25e886aafb3a44d3146c091b613` to
+  `76a1420a9d7f1f34b71ffae609fd9ee2896269a6` — PRs #116, #117, #118, #120, #121
+  and #122. Migrations 20 → 25. **Verified (production)** from the deploy run's
+  own before/after comparison: `users=11`, `materials=9746`, `batches=3274`,
+  `requests=8` — every one **unchanged** — and `integrity=ok`. Health returned
+  200 on the second attempt; the automatic rollback step was skipped because it
+  was not needed. Independently re-checked afterwards: `/healthz` 200, `/` 200,
+  and `/js/pages/subcontractorOwnership.js` 200 — a file that exists only in the
+  new code, so the new build is genuinely serving rather than the old container
+  having merely restarted.
+
+  **Nothing changed for existing users.** There is no `tenant_profile` row, so no
+  edition restriction applies and every module stays visible. The two new
+  authorities (`project_management_approval`, `subcontractor_return_approval`)
+  ship granted to no role, so the new screens are admin-only until an
+  administrator assigns them.
+
+  **The legacy subcontractor ledger has NOT been converged.** The tooling is
+  deployed and dry-runs by default; running it writes stock rows and is a
+  separate decision needing a verified backup, the report reviewed and the
+  mapping agreed. See `docs/CONTRACTING-EDITION-REQUIREMENTS.md` §5 phase 4.
+
+- **Release workflow retargeted and proven (2026-09-11).**
+  `production-release.yml` had still pointed at the shared host retired on
+  2026-09-06 — the `~/domains` path, the `/opt/alt/alt-nodejs20` runtime and a
+  Passenger `tmp/restart.txt` restart. The backup workflow was retargeted during
+  that migration; this one was missed, leaving it dispatchable and broken. It now
+  targets `/opt/apps/wms` under Docker Compose, defaults to `plan_only`, takes a
+  verified backup first, records the deployed commit as an automatic rollback
+  target, and compares row counts before and after. Run `34650365973` is its
+  first real use and succeeded.
+
+  **The `production` environment has no required reviewers**, so dispatching it
+  without `plan_only` deploys immediately with no approval prompt. Add reviewers
+  in the environment settings if that gate is wanted.
 
 - **PRODUCTION LIVE ON VPS (updated 2026-09-07).** WMS is healthy in Docker on the Hostinger VPS (`82.29.175.206`) behind Caddy automatic HTTPS. PR #115 was merged and deployed as `bd7034d14039d25e886aafb3a44d3146c091b613`, replacing the landing page's prior operational captures with clearly labeled, fully hypothetical inbound/outbound data and coordinated light/dark workflow slides. Authentication remains at `#/login`. Live browser verification passed with five interactive demo tabs, accessible light/dark controls, English/Arabic RTL support, eight workflow cards, zero horizontal overflow, and zero console errors; public `/healthz` returns `{"status":"ok","service":"wms"}`. The remaining historical Passenger facts below describe the now-defunct shared-hosting deployment; see `docs/HOSTINGER-VPS-MIGRATION-2026-09-06.md` for VPS migration evidence.
 - **VPS security posture verified/hardened (2026-09-08).** UFW is active with default-deny inbound and only 22/80/443 exposed; all eight Docker containers use `unless-stopped` and all application/data containers report healthy; `unattended-upgrades` is enabled and active. SSH now uses a tested key-only `deploy` sudo administrator, disables password/keyboard-interactive authentication, limits attempts to 3, and keeps root as key-only emergency access. Public WMS, R4C web/API, and kynox.io HTTPS checks all return HTTP 200 with valid TLS.
@@ -13,12 +50,12 @@ Last updated: 2026-09-08
 - Production app path: `/opt/apps/wms` (Docker Compose; host-mounted persistent data at `/opt/apps/wms/data`)
 - Production database: SQLite at `data/wms.db` using WAL mode
 - Production runtime: Node `v20.20.2`, npm `10.8.2` in container `wms-wms-1` (**Verified 2026-09-07**).
-- Current deployed commit: `bd7034d14039d25e886aafb3a44d3146c091b613` (**Verified 2026-09-07** from `/opt/apps/wms`, container health, public light/dark assets, and the running landing page).
+- Current deployed commit: `76a1420a9d7f1f34b71ffae609fd9ee2896269a6` (**Verified 2026-09-11** by the deploy run reading `git rev-parse HEAD` at `/opt/apps/wms` before and after, plus an independent public asset check). Previously `bd7034d14039d25e886aafb3a44d3146c091b613` (verified 2026-09-07).
 - Production deploy mechanism: fast-forward the read-only deploy-key checkout at `/opt/apps/wms`, build `wms-wms`, then recreate only the `wms` Compose service. Persistent SQLite and backup paths are bind-mounted from the host and remain outside container replacement. The retired Passenger release mechanism below is historical only.
 - Health endpoint: healthy, returning `{"status":"ok","service":"wms"}` (**Verified 2026-09-07** locally on the VPS and publicly over HTTPS).
 - Passenger runtime environment (**Verified, 2026-08-31, via `/proc/<pid>/environ` on the live process**): `NODE_ENV=production`, `SKIP_AUTO_SEED=1`, `ALLOW_AUTO_SEED=0`, `PRODUCTION_INITIALIZATION_ENABLED=false`, `DB_PATH` correctly set. All five required invariants confirmed correct on the actual serving process, not just an interactive shell.
 - Production database (**Verified, 2026-08-31, via direct `sqlite3` query over SSH**): `users=11`, `materials=9746`, `PRAGMA integrity_check=ok`. Healthy and consistent with the last recorded snapshot.
-- Database migrations: 20 recorded in production (**Verified 2026-09-07** from the recreated Docker container startup gate, which reported `Migrations: up to date (20 recorded)`).
+- Database migrations: **25** recorded in production (**Verified 2026-09-11** by the deploy run querying `schema_migrations` in the container before and after: 20 → 25). Migrations 021–025 are additive; no row count changed.
 - Offsite backup: **Verified (repo + production), 2026-08-31:** the workflow had failed its last three scheduled runs (#57–#59) with `client_loop: send disconnect: Broken pipe` mid-SSH-session — not the IP-allowlist/ban cause originally suspected (this Hostinger plan tier has no IP-allowlist or firewall feature at all, and no active ban was found). The likely cause is account-wide process-count pressure on the shared hosting plan (Max Processes averaging 186–200 of a 200 cap, cyclical) — unresolved, see "Known remaining work." A manual re-run (`production-backup.yml` run #60, `33431636062`) completed successfully with no configuration changes, producing verified offsite set `20260831193821`. A non-blocking warning about local retention pruning was also surfaced (offsite copy unaffected) — see "Known remaining work." **Update, 2026-09-03: this has recurred — every run since has failed. See item 13 below; there is very likely no successful verified offsite backup since run #60.** **Update, 2026-09-04: root cause CONFIRMED via live hPanel evidence — the account is pegged at/near its 200-process cap almost continuously since 2026-08-29 (all other resources healthy). See item 13 for the full evidence and remediation options (plan upgrade or reducing standing load).** **Update, 2026-09-04 (later): owner authorized deleting `logix.kynox.io` and `analytics.kynox.io`; done. Max Processes dropped from ~189-197/200 to 79/200. RESOLVED — confirmed by an on-demand `Production Offsite Backup` run (`33852928458`) completing fully successfully, the first since run #60 on 2026-08-31. See item 13.**
 - **Offsite backup on VPS — VERIFIED 2026-09-06:** workflow retargeted from retired Passenger paths to `/opt/apps/wms` and the production Docker container. Run `34047172529` completed every phase successfully in 49 seconds, including remote and runner restore verification, encrypted offsite upload, object verification, heartbeat, and dry-run retention. The backup scripts now use the container's matching Node 20/`better-sqlite3` runtime; see `docs/HOSTINGER-SCHEDULED-BACKUP.md`.
 - PR #53 merged 2026-08-01; its CI and native-build checks were green at merge (see `WMS-INCIDENT-LOG.md` → `INC-2026-07-31-01` for the full artifact/inspection history).
