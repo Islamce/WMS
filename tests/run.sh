@@ -55,6 +55,8 @@ run_suite p1_hardening_test.py
 run_suite quickwins_test.py
 # Boots its own throwaway servers on separate ports; needs no shared dataset.
 run_suite autoseed_guard_test.py
+# Works on its own temporary databases; needs no server or shared dataset.
+run_suite provisioning_test.py
 stop_server
 
 echo ""
