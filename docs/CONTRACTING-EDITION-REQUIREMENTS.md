@@ -223,7 +223,24 @@ Settlement differences live outside this system, per §1.1.
   contracting profile's modules, or the edition gate would hide the screens from
   the tenant that bought the edition.
 
-  Covered by `tests/smoke/subcontractor_ownership_browser.js` (16 assertions),
+- **Phase 3c — the write path.** *Done, and it was a real defect.* Phases 1–3
+  and the screens all shipped without any application code that ever **wrote**
+  `owner_type`. Every test set it with raw SQL, which hid the gap: in production
+  the entire Contracting differentiator was unreachable, because the return
+  workflow refuses company-owned batches and every batch was company-owned.
+
+  Ownership is now set at goods receipt and **nowhere else**. There is
+  deliberately no endpoint that reclassifies an existing batch — that would be a
+  way to turn company stock into someone else's property, or the reverse, after
+  the fact. A purchase order is also no longer demanded for material the company
+  did not buy: subcontractor-owned material requires a delivery note instead,
+  because forcing a storekeeper to invent a PO number is worse than having none.
+
+  Covered by `tests/e2e/stock_ownership_receipt_test.py` (26 assertions), whose
+  point is the end-to-end loop with **no raw SQL anywhere**: receive owned →
+  it appears in the report → request, approve and hand over a return.
+
+  Covered by `tests/smoke/subcontractor_ownership_browser.js` (23 assertions),
   which pins the authority split as a user experiences it: the warehouse sees the
   return queue but is not offered Approve, and assigning the authority makes both
   the warning and the missing button change — proving the fail-closed permissions

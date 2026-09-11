@@ -35,8 +35,17 @@ Pages.receiving = {
   },
 
   // --- Step 1: receive ------------------------------------------------------
-  renderReceive() {
+  async renderReceive() {
     const box = this.el.querySelector('#gr-tab');
+    // Contracting only. On a Manufacturing tenant the edition gate hides the
+    // module and asking for the register would 404, so don't ask.
+    if (this.subcontractors === undefined) {
+      this.subcontractors = [];
+      if (App.tenantHasModule('subcontractor_admin')) {
+        try { ({ subcontractors: this.subcontractors } = await Api.get('/api/subcontractor/subcontractors')); }
+        catch (e) { this.subcontractors = []; }
+      }
+    }
     box.innerHTML = `
       <div class="card" style="max-width:820px">
         <h3>Goods Receipt from Supplier</h3>
@@ -44,8 +53,23 @@ Pages.receiving = {
         <form id="gr-form" novalidate>
           <div class="form-group autocomplete"><label>Material *</label>
             <input type="text" id="gr-material" placeholder="Click to browse or type to search…" autocomplete="off"></div>
+          ${this.subcontractors.length ? `
           <div class="form-row">
-            <div class="form-group"><label>PO Number * (mandatory)</label><input type="text" id="gr-po"></div>
+            <div class="form-group"><label>Whose material is this? *</label>
+              <select id="gr-owner">
+                <option value="COMPANY">The company&rsquo;s own stock</option>
+                <option value="SUBCONTRACTOR">A subcontractor&rsquo;s material (we only hold it)</option>
+              </select></div>
+            <div class="form-group" id="gr-owner-who" hidden><label>Subcontractor *</label>
+              <select id="gr-subcontractor">
+                ${this.subcontractors.map((sc) => `<option value="${sc.id}">${UI.esc(sc.name)}</option>`).join('')}
+              </select>
+              <div class="hint">Ownership is set here and cannot be changed later.</div></div>
+          </div>` : ''}
+          <div class="form-row">
+            <div class="form-group"><label id="gr-ref-label">PO Number * (mandatory)</label>
+              <input type="text" id="gr-po">
+              <div class="hint" id="gr-ref-hint"></div></div>
             <div class="form-group"><label>Received Quantity *</label><input type="number" id="gr-qty" min="0" step="any"></div>
           </div>
           <div class="form-row">
@@ -78,6 +102,26 @@ Pages.receiving = {
 
     this.selected = null;
     UI.materialAutocomplete(box.querySelector('#gr-material'), (m) => { this.selected = m; });
+
+    // A purchase order is proof the COMPANY bought the material. There is none
+    // for material the company never bought, so the field asks for the delivery
+    // note instead rather than making the storekeeper invent a PO number.
+    const ownerSel = box.querySelector('#gr-owner');
+    if (ownerSel) {
+      const who = box.querySelector('#gr-owner-who');
+      const label = box.querySelector('#gr-ref-label');
+      const hint = box.querySelector('#gr-ref-hint');
+      const applyOwner = () => {
+        const owned = ownerSel.value === 'SUBCONTRACTOR';
+        who.hidden = !owned;
+        label.textContent = owned ? 'Delivery Note * (mandatory)' : 'PO Number * (mandatory)';
+        hint.textContent = owned
+          ? 'The company did not buy this material, so there is no purchase order.'
+          : '';
+      };
+      ownerSel.addEventListener('change', applyOwner);
+      applyOwner();
+    }
     box.querySelector('#gr-form').addEventListener('submit', (e) => { e.preventDefault(); this.receive(); });
 
     // Bin dropdown follows the selected warehouse (compact codes only).
@@ -102,18 +146,26 @@ Pages.receiving = {
       material_id: this.selected.id,
       received_quantity: Number(box.querySelector('#gr-qty').value), warehouse_code: box.querySelector('#gr-wh').value,
       po_number: box.querySelector('#gr-po').value, supplier_code: box.querySelector('#gr-supcode').value,
+      owner_type: (box.querySelector('#gr-owner') || {}).value || 'COMPANY',
+      owner_subcontractor_id: (box.querySelector('#gr-owner') || {}).value === 'SUBCONTRACTOR'
+        ? Number(box.querySelector('#gr-subcontractor').value) : undefined,
+      delivery_note: (box.querySelector('#gr-owner') || {}).value === 'SUBCONTRACTOR'
+        ? box.querySelector('#gr-po').value : undefined,
       supplier_name: box.querySelector('#gr-supname').value, manufacturing_date: box.querySelector('#gr-mfg').value || null,
       expiry_date: box.querySelector('#gr-exp').value || null, shelf_life_period: box.querySelector('#gr-slp').value || null,
       shelf_life_unit: box.querySelector('#gr-slu').value,
       bin_location: box.querySelector('#gr-bin').value || null,
     };
     try {
-      const { qr, batch_number, warehouse_code, bin_location } = await Api.post('/api/receiving', payload);
+      const { qr, batch_number, warehouse_code, bin_location, owner_name } = await Api.post('/api/receiving', payload);
       UI.toast(`Received. Batch ${batch_number} + QR generated.`);
       box.querySelector('#gr-result').innerHTML = `<div class="card">
         <h3>Batch ${UI.esc(batch_number)}</h3>
         <div class="details-list">
           <div class="item"><div class="k">Warehouse</div><div class="v">${UI.esc(warehouse_code || '')}</div></div>
+          <div class="item"><div class="k">Owner</div><div class="v">${owner_name
+            ? `<span class="badge pending">${UI.esc(owner_name)}</span>`
+            : 'Company stock'}</div></div>
           <div class="item"><div class="k">Bin Location</div><div class="v">${bin_location
             ? `<span class="chip">${UI.esc(bin_location)}</span>`
             : '<span class="badge OUT">not assigned — use step 3 · Assign Bin</span>'}</div></div>

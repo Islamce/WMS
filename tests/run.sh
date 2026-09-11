@@ -68,6 +68,10 @@ run_suite stock_ownership_test.py
 # LAST in this phase — it marks a batch as subcontractor-owned and depletes it,
 # so it must not run before suites that expect the seeded stock intact.
 run_suite subcontractor_report_test.py
+# AFTER the report suite: this receives NEW subcontractor-owned stock, which
+# would otherwise be in the dataset before that suite measures the owner split
+# against the seeded batches.
+run_suite stock_ownership_receipt_test.py
 stop_server
 
 echo ""
