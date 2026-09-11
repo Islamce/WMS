@@ -27,7 +27,14 @@
  */
 const CORE_MODULES = [
   'dashboard', 'notifications',
-  'material_requests', 'create_request', 'approvals',
+  // erp_operator is core, not optional. Manager approval moves a request to
+  // APPROVED_PENDING_ERP and the ERP Operator queue is the ONLY screen that
+  // advances it. Leaving it out of an edition does not remove a feature, it
+  // dead-ends the request workflow: every approved request sits in a queue no
+  // user can open, admins included, because App.can() checks the edition before
+  // the admin short-circuit. The contracting profile even renames this screen
+  // to "Procurement Officer" — you do not rename a screen you meant to remove.
+  'material_requests', 'create_request', 'approvals', 'erp_operator',
   'warehouse_dashboard', 'bin_batch_assignment', 'picker_assignment', 'picking', 'gi_posting',
   'goods_receipt', 'qr_printing', 'batch_tracking',
   'materials', 'locations', 'warehouses_master', 'bins_master',

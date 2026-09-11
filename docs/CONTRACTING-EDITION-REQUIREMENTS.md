@@ -182,6 +182,29 @@ attribute on the subcontractor record plus a rendering rule — not a second set
 transactions, a second reconciliation, or a branch through the movement logic.
 Settlement differences live outside this system, per §1.1.
 
+## 4.3 A defect the edition model made easy to miss
+
+An edition is an allow-list, so a permission absent from it is a screen **nobody
+on that tenant can open** — administrators included, because `App.can()` checks
+the edition before the admin short-circuit. A module the tenant did not buy and
+a module somebody forgot to list look identical in the code: a key simply not
+in a list.
+
+That bit twice. The phase 2/3 authorities were missing from the contracting
+profile and would have hidden the new screens from the tenant who bought the
+edition. Then `erp_operator` turned out to be in **no** profile at all — which
+dead-ended the request workflow on every provisioned tenant, since manager
+approval moves a request to `APPROVED_PENDING_ERP` and the ERP Operator queue is
+the only screen that advances it. The contracting profile even renames that
+screen to "Procurement Officer"; nobody renames a screen they meant to remove.
+
+`erp_operator` is now a core module, and `tests/e2e/edition_route_coverage_test.js`
+is the deterministic control: a permission gating a client route must be in at
+least one edition, a route gated only by core permissions must work on every
+edition, and a deliberate exclusion must be listed with its reason. Scope is
+routes on purpose — a permission that gates no route is checked server-side
+against the user's own permissions and is unaffected by the edition.
+
 ## 5. Implementation phases
 
 - **Phase 1 — schema foundation.** Owner on stock (defaulting every existing row
