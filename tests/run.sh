@@ -63,6 +63,11 @@ run_suite autoseed_guard_test.py
 run_suite provisioning_test.py
 # Offline: provisions throwaway tenants, verifies edition gating both ways.
 run_suite tenant_edition_test.py
+# Offline: switching the edition of an EXISTING install, dry run first.
+run_suite tenant_edition_switch_test.py
+# Offline: no screen may be unreachable on every edition — the control for the
+# erp_operator break, which dead-ended the request workflow on every tenant.
+if ! node tests/e2e/edition_route_coverage_test.js; then FAILED=1; fi
 # Offline: migrated temp database; pins that ownership defaults leave live data alone.
 run_suite stock_ownership_test.py
 # LAST in this phase — it marks a batch as subcontractor-owned and depletes it,
