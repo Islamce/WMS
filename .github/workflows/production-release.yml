@@ -21,7 +21,17 @@ name: Manual production release
 #     rollback target if health or the post-checks fail.
 #   * Row counts are compared before and after. A schema migration that changes
 #     a row count is a stop-and-investigate event, not a warning.
-#   * The production environment gate still requires a human approval.
+#   * Any failure — the deploy itself, health, or the post-checks — rolls back to
+#     the recorded commit automatically. A failed `docker compose build` matters
+#     as much as a failed health check: the checkout has already moved while the
+#     old container is still serving, so production stays UP and the mismatch is
+#     easy to miss until someone's next `docker compose up -d` ships unvalidated
+#     code.
+#
+# NOTE: the `production` environment below is used for its deployment URL. It has
+# no required reviewers configured, so dispatching this with plan_only unchecked
+# deploys immediately — there is no approval prompt. Add reviewers in the
+# environment settings if that gate is wanted.
 
 on:
   workflow_dispatch:
@@ -173,7 +183,9 @@ jobs:
           echo "Re-dispatch with plan_only unchecked to deploy."
 
       - name: Deploy
+        id: deploy
         if: ${{ !inputs.plan_only }}
+        continue-on-error: true
         run: |
           set -Eeuo pipefail
           ssh hostinger "set -e; cd '$REMOTE_APP_DIR'; \
@@ -185,7 +197,7 @@ jobs:
 
       - name: Wait for health
         id: health
-        if: ${{ !inputs.plan_only }}
+        if: ${{ !inputs.plan_only && steps.deploy.outcome == 'success' }}
         continue-on-error: true
         run: |
           set -Eeuo pipefail
@@ -230,7 +242,7 @@ jobs:
           " '${{ steps.before.outputs.counts }}' "$counts"
 
       - name: Roll back
-        if: ${{ !inputs.plan_only && (steps.health.outcome != 'success' || steps.after.outcome != 'success') }}
+        if: ${{ !inputs.plan_only && (steps.deploy.outcome != 'success' || steps.health.outcome != 'success' || steps.after.outcome != 'success') }}
         env:
           CURRENT: ${{ steps.current.outputs.current_sha }}
         run: |
@@ -252,7 +264,7 @@ jobs:
           exit 1
 
       - name: Summary
-        if: ${{ !inputs.plan_only && steps.health.outcome == 'success' && steps.after.outcome == 'success' }}
+        if: ${{ !inputs.plan_only && steps.deploy.outcome == 'success' && steps.health.outcome == 'success' && steps.after.outcome == 'success' }}
         env:
           CURRENT: ${{ steps.current.outputs.current_sha }}
         run: |
