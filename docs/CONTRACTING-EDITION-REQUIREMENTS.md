@@ -145,9 +145,52 @@ anything else currently in the Contracting edition.
 
 ---
 
-## 4. Open questions
+## 4. Answered design questions
 
-- Does project-management approval on a return need to be a distinct approval
-  stage, or can it reuse the existing quantity-approval path?
-- Should a supply-and-execute subcontractor's consumption post differently from a
-  supply-only one, or only present differently in the report?
+Both were put to the contractor and answered (2026-09-11). Both answers reduce
+the work rather than expanding it.
+
+### 4.1 Return to owner — a distinct approval stage, then a real issue
+
+> A separate stage, after which the approved quantity is issued out of inventory
+> under a distinctive movement number.
+
+So a return is **not** a soft flag or a report-only adjustment. It is:
+
+1. a **separate approval stage** — project management approves the quantity to be
+   returned, distinct from the approval that authorises a normal issue;
+2. followed by a **real outbound stock movement** that removes the approved
+   quantity from inventory, carrying its **own movement type** so a return is
+   never confused with consumption in any report or reconciliation.
+
+The approved quantity — not the requested one — is what moves. Ownership is
+untouched throughout: the material was always the subcontractor's; only
+possession changes.
+
+### 4.2 Supply-and-execute — same postings, different colour
+
+> Normal supply and withdrawal movements are recorded; in the same report, just
+> give it a different colour to distinguish it.
+
+No separate posting path. A supply-and-execute subcontractor's material moves
+through exactly the same receipt and issue transactions as a supply-only one.
+The distinction is **presentational**: one report, with the engagement type
+visually distinguished.
+
+This matters more than it looks. It means the engagement type is a single
+attribute on the subcontractor record plus a rendering rule — not a second set of
+transactions, a second reconciliation, or a branch through the movement logic.
+Settlement differences live outside this system, per §1.1.
+
+## 5. Implementation phases
+
+- **Phase 1 — schema foundation.** Owner on stock (defaulting every existing row
+  to the company, so a live deployment is unchanged), subcontractor attribution
+  on issues, engagement type on the subcontractor record, and the return movement
+  type. Additive; no behaviour change.
+- **Phase 2 — workflow.** Subcontractor requests routed through approval with
+  project management as the approving authority on quantities; the separate
+  return-approval stage and its outbound movement (§4.1).
+- **Phase 3 — reporting.** One consumption report per project/subcontractor,
+  engagement type distinguished (§4.2), and reorder alerts extended to cover
+  owned-by-subcontractor stock now that it is real inventory.
