@@ -43,8 +43,16 @@ If you find yourself typing any of these, you have misdiagnosed the problem.
 | Database | `/opt/apps/wms/data/wms.db` (host) = `/app/data/wms.db` (container) |
 | Backups | `/opt/apps/wms/backups` (host) = `/app/backups` (container) |
 
-Production was last deployed **before PR #107**. Six merged pull requests are
-being deployed at once: #107, #116, #117, #118, #120, #121.
+Six merged pull requests are candidates for this deploy: #107, #116, #117,
+#118, #120, #121.
+
+**Which of them production already has is NOT established.** A session log entry
+records PR #107 as deployed, but that predates the move to this VPS, and the
+release workflow that statement refers to targeted the old shared host. What
+`/opt/apps/wms` is checked out at right now is a runtime fact, so read it in §2
+and trust that, not this paragraph. If the recorded commit already contains some
+of these pull requests, the deploy is simply smaller than the list above — it is
+not a reason to stop.
 
 ### Schema change — read this before you start
 
@@ -103,7 +111,7 @@ docker compose exec wms node -e "
   console.log('requests:', db.prepare('SELECT COUNT(*) c FROM material_request_headers').get().c);
   console.log('integrity:', db.pragma('integrity_check')[0].integrity_check);
 "
-git -C /opt/apps/wms rev-parse HEAD
+git -C /opt/apps/wms rev-parse HEAD   # WRITE THIS DOWN — it is the rollback target
 curl -sS -o /dev/null -w '%{http_code}\n' https://wms.kynox.io/healthz
 ```
 
@@ -234,6 +242,19 @@ Read that output before using `--apply`. Clearing the edition
 revoked.
 
 ---
+
+## 6b. Do NOT use the `production-release` GitHub Actions workflow
+
+`.github/workflows/production-release.yml` still targets the **old shared host**:
+`/home/u716763642/domains/...`, the `/opt/alt/alt-nodejs20/...` Node runtime, and
+a Passenger `tmp/restart.txt` restart. None of those exist on this VPS.
+
+`production-backup.yml` was retargeted to `/opt/apps/wms` and `docker compose`
+during the 2026-09-06 migration. The release workflow was not. Dispatching it
+would fail, or act on a path that is not production — which is worse, because it
+would look like it worked.
+
+Deploy by hand with §4 until that workflow is retargeted and reviewed.
 
 ## 7. Rollback
 
