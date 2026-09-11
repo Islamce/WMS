@@ -243,18 +243,30 @@ revoked.
 
 ---
 
-## 6b. Do NOT use the `production-release` GitHub Actions workflow
+## 6b. The `production-release` workflow, and how to use it the first time
 
-`.github/workflows/production-release.yml` still targets the **old shared host**:
-`/home/u716763642/domains/...`, the `/opt/alt/alt-nodejs20/...` Node runtime, and
-a Passenger `tmp/restart.txt` restart. None of those exist on this VPS.
+`.github/workflows/production-release.yml` used to target the **old shared
+host** — `/home/u716763642/domains/...`, the `/opt/alt/alt-nodejs20/...` runtime,
+and a Passenger `tmp/restart.txt` restart. `production-backup.yml` was
+retargeted to `/opt/apps/wms` and `docker compose` during the 2026-09-06
+migration; the release workflow was missed. It is now retargeted to match.
 
-`production-backup.yml` was retargeted to `/opt/apps/wms` and `docker compose`
-during the 2026-09-06 migration. The release workflow was not. Dispatching it
-would fail, or act on a path that is not production — which is worse, because it
-would look like it worked.
+It could not be rehearsed against production before its first use, so:
 
-Deploy by hand with §4 until that workflow is retargeted and reviewed.
+- **`plan_only` defaults to true.** The first dispatch changes nothing and proves
+  the plumbing — SSH, the checkout, container health, the database. Run it that
+  way first and read the output.
+- A verified backup is taken before anything is touched, using the same scripts
+  the backup workflow already runs here.
+- The currently deployed commit is recorded first and is the automatic rollback
+  target if health or the post-checks fail.
+- Row counts are compared before and after; a changed count fails the run.
+- The `production` environment gate still requires a human approval.
+
+**If the plan run reports that `/opt/apps/wms` is not a git checkout**, the
+workflow stops and this manual procedure is the only route. That is not a
+failure of the workflow — it means the directory has to be reconciled into a
+checkout before any automation can move it between commits.
 
 ## 7. Rollback
 
