@@ -44,7 +44,43 @@ router.post('/', requirePermission('goods_receipt'), withIdempotency('POST /api/
   if (!isId(b.material_id)) return res.status(400).json({ error: 'Material is required.' });
   if (!isPositiveNumber(b.received_quantity)) return res.status(400).json({ error: 'Received quantity must be greater than zero.' });
   if (!isNonEmptyString(b.warehouse_code)) return res.status(400).json({ error: 'Warehouse is required.' });
-  if (!isNonEmptyString(b.po_number)) return res.status(400).json({ error: 'PO number is mandatory.' });
+
+  // Ownership is decided HERE and nowhere else. Material that belongs to a
+  // subcontractor is still real stock in a real bin — it just is not the
+  // company's to consume, sell or plan against. Receipt is the only moment the
+  // question has a truthful answer, so there is deliberately no endpoint that
+  // reclassifies an existing batch: that would be a way to turn company stock
+  // into someone else's property, or the reverse, after the fact.
+  const ownerType = (b.owner_type || 'COMPANY').toUpperCase();
+  if (!['COMPANY', 'SUBCONTRACTOR'].includes(ownerType)) {
+    return res.status(400).json({ error: "owner_type must be 'COMPANY' or 'SUBCONTRACTOR'." });
+  }
+  let owner = null;
+  if (ownerType === 'SUBCONTRACTOR') {
+    if (!isId(b.owner_subcontractor_id)) {
+      return res.status(400).json({ error: 'A subcontractor is required when the material is subcontractor-owned.' });
+    }
+    owner = db.prepare('SELECT id, name, is_active FROM subcontractors WHERE id=?').get(b.owner_subcontractor_id);
+    if (!owner) return res.status(404).json({ error: 'Subcontractor not found.' });
+    if (!owner.is_active) return res.status(409).json({ error: `Subcontractor '${owner.name}' is not active.` });
+  }
+
+  // A purchase order is proof the COMPANY bought the material. There is none
+  // for material the company never bought, so requiring one would force the
+  // storekeeper to invent a number — and an invented PO is worse than no PO.
+  // Subcontractor-owned material arrives on a delivery note instead, kept in
+  // the same reference column because it answers the same question: which
+  // document did this material arrive on. The audit entry records which of the
+  // two it actually was, so the distinction survives.
+  const arrivalReference = ownerType === 'SUBCONTRACTOR'
+    ? (b.delivery_note || b.po_number) : b.po_number;
+  if (!isNonEmptyString(arrivalReference)) {
+    return res.status(400).json({
+      error: ownerType === 'SUBCONTRACTOR'
+        ? 'A delivery note reference is mandatory for subcontractor-owned material.'
+        : 'PO number is mandatory.',
+    });
+  }
 
   const material = db.prepare('SELECT * FROM materials WHERE id=?').get(b.material_id);
   if (!material) return res.status(404).json({ error: 'Material not found.' });
@@ -88,21 +124,31 @@ router.post('/', requirePermission('goods_receipt'), withIdempotency('POST /api/
       INSERT INTO batches
         (batch_number, material_id, material_code, material_description, supplier_code, supplier_name,
          po_number, gr_number, receiving_date, manufacturing_date, expiry_date, shelf_life_period, shelf_life_unit,
-         received_quantity, remaining_quantity, warehouse_code, bin_location, quality_status, fifo_date, fefo_date)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+         received_quantity, remaining_quantity, warehouse_code, bin_location, quality_status, fifo_date, fefo_date,
+         owner_type, owner_subcontractor_id)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `).run(batchNumber, material.id, material.item_code, material.description,
-      b.supplier_code || null, b.supplier_name || null, b.po_number.trim(), null,
+      b.supplier_code || null, b.supplier_name || null, arrivalReference.trim(), null,
       receivingDate, mfg, expiry, b.shelf_life_period || null, b.shelf_life_unit || null,
-      qty, qty, b.warehouse_code, binLocation, 'QUALITY_HOLD', receivingDate, expiry);
+      qty, qty, b.warehouse_code, binLocation, 'QUALITY_HOLD', receivingDate, expiry,
+      ownerType, owner ? owner.id : null);
 
     const batch = db.prepare('SELECT * FROM batches WHERE id=?').get(info.lastInsertRowid);
     const qrId = qrService.generateForBatch(batch, { uom: material.unit });
     db.prepare('UPDATE batches SET qr_code_id=? WHERE id=?').run(qrId, batch.id);
     recordMovement({ type: 'IN', materialId: material.id, warehouseCode: b.warehouse_code,
       quantity: qty, userId: req.user.id, movementCategory: 'RECEIPT',
-      notes: `GR batch ${batchNumber} (PO ${b.po_number.trim()})` });
+      notes: owner
+        ? `GR batch ${batchNumber} (delivery note ${arrivalReference.trim()}) — owned by ${owner.name}`
+        : `GR batch ${batchNumber} (PO ${arrivalReference.trim()})` });
     audit.record({ entityType: 'Batch', entityId: batch.id, action: 'GOODS_RECEIPT',
-      newValue: { batch: batchNumber, qty, po: b.po_number, expiry, warehouse: b.warehouse_code, quality: 'QUALITY_HOLD' },
+      newValue: {
+        batch: batchNumber, qty, expiry, warehouse: b.warehouse_code, quality: 'QUALITY_HOLD',
+        owner_type: ownerType,
+        ...(owner
+          ? { delivery_note: arrivalReference.trim(), owner: owner.name }
+          : { po: arrivalReference.trim() }),
+      },
       user: req.user, sourceScreen: 'Goods Receipt' });
     return { batchId: batch.id, qrId };
   });
@@ -112,12 +158,19 @@ router.post('/', requirePermission('goods_receipt'), withIdempotency('POST /api/
   notify.notifyRole('quality', {
     notificationType: 'QUALITY_INSPECTION_NEEDED',
     title: `Batch ${batchNumber} awaiting quality inspection`,
-    message: `${material.item_code} — ${qty} ${material.unit} received into ${b.warehouse_code} (PO ${b.po_number.trim()}).`,
+    message: `${material.item_code} — ${qty} ${material.unit} received into ${b.warehouse_code} `
+      + (owner
+        ? `(delivery note ${arrivalReference.trim()}, owned by ${owner.name}).`
+        : `(PO ${arrivalReference.trim()}).`),
   });
   res.status(201).json({
-    message: `Goods received. Batch ${batchNumber} created (quality hold) and QR generated.`,
+    message: owner
+      ? `Goods received. Batch ${batchNumber} created (quality hold), owned by ${owner.name}, and QR generated.`
+      : `Goods received. Batch ${batchNumber} created (quality hold) and QR generated.`,
     batch_id: batchId, batch_number: batchNumber, qr,
     warehouse_code: b.warehouse_code, bin_location: binLocation,
+    owner_type: ownerType, owner_subcontractor_id: owner ? owner.id : null,
+    owner_name: owner ? owner.name : null,
   });
 }));
 

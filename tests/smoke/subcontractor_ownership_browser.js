@@ -226,6 +226,34 @@ async function stopServer(server) {
     check('and project management is now offered the approve action',
       grantedApprove >= 1, grantedApprove);
 
+    // ---- Receiving: the write path that makes all of the above reachable ----
+    // Without this screen the whole Contracting differentiator is dead code:
+    // nothing in the product could make a batch subcontractor-owned.
+    const receivingPage = await (await browser.newContext()).newPage();
+    receivingPage.on('pageerror', (e) => consoleErrors.push(String(e)));
+    await loginUi(receivingPage, 'supervisor@example.com', 'Passw0rd!');
+    await goTo(receivingPage, '#/receiving', '#gr-form');
+
+    const ownerField = await receivingPage.locator('#gr-owner').count();
+    check('goods receipt asks whose material it is', ownerField === 1, ownerField);
+    const defaultOwner = await receivingPage.locator('#gr-owner').inputValue();
+    check('and defaults to company stock', defaultOwner === 'COMPANY', defaultOwner);
+    check('the subcontractor picker stays hidden until it is needed',
+      await receivingPage.locator('#gr-owner-who').isHidden());
+    const poLabel = await receivingPage.locator('#gr-ref-label').textContent();
+    check('the reference field asks for a PO for company stock',
+      /PO Number/.test(poLabel || ''), poLabel);
+
+    await receivingPage.selectOption('#gr-owner', 'SUBCONTRACTOR');
+    check('choosing a subcontractor reveals the picker',
+      await receivingPage.locator('#gr-owner-who').isVisible());
+    const dnLabel = await receivingPage.locator('#gr-ref-label').textContent();
+    check('and the reference field asks for a delivery note, not a PO',
+      /Delivery Note/.test(dnLabel || '') && !/PO Number/.test(dnLabel || ''), dnLabel);
+    const dnHint = await receivingPage.locator('#gr-ref-hint').textContent();
+    check('stating why there is no purchase order',
+      /did not buy/.test(dnHint || ''), dnHint);
+
     check('no uncaught page errors on any screen', consoleErrors.length === 0, consoleErrors);
   } catch (error) {
     failed += 1;
