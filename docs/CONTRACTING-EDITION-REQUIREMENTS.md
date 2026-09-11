@@ -36,14 +36,41 @@ this work assumed the WMS would need to hold BOQ line items and measure
 consumption against them. Point 7 contradicts that: the warehouse neither sets
 required quantities nor determines progress.
 
-The WMS records **what was received, from whom, owned by whom, and what was
-issued, to whom, against which approval**. Project management reconciles that
-record against their own BOQ. Building a BOQ module here would duplicate — and
-compete with — a system the customer already has, and would put the warehouse in
-charge of numbers it does not own.
+The contractor stated the boundary exactly:
 
-This decision removed roughly a month of planned work. Revisit it only if a
-contractor states the opposite.
+> The store is only receipt and issue of materials. It has nothing to do with
+> execution or the subcontractor's progress rate. It measures received
+> quantities, issued quantities, and some indicators derived from those.
+
+So the WMS records **what was received, from whom, owned by whom, and what was
+issued, to whom, against which approval** — plus indicators derived from those
+two quantities. Project management reconciles that record against their own BOQ.
+
+### 1.2 Why the "ideal" integration is the wrong target
+
+The same contractor described the textbook ideal and then explained why it does
+not survive contact with a construction site:
+
+> Ideally it would be tied to project progress and execution, and linked to
+> planning software like Primavera. But that requires a BOM and BOQ mapped to
+> every WBS element, and that is hard to achieve on construction projects, and
+> very hard to keep tracked.
+
+This is the important part, and it is a stronger statement than "BOQ is out of
+scope". A BOQ/BOM-to-WBS mapping is not merely absent — on real construction work
+it is **expensive to establish and harder still to keep accurate as the job
+changes**. Any warehouse feature whose value depends on that mapping being
+complete and current will therefore be dead weight in the field, however good it
+looks in a demo.
+
+That makes the constraint a product advantage rather than a limitation: this
+system must deliver its value from **receipt and issue quantities alone**, with
+no BOQ/WBS prerequisite. A competitor that requires the mapping before the
+customer sees anything useful has a much harder sale and a much worse first
+90 days.
+
+Revisit this only if a contractor states the opposite — and specifically, only if
+one says they *do* keep a BOQ-to-WBS mapping accurate in practice.
 
 ---
 
@@ -86,6 +113,10 @@ What this buys, all of it falling out of the same change:
 - One consumption report per project/subcontractor for project management to
   reconcile against their BOQ (requirement 7's actual deliverable).
 - One physical count closes the site, not two.
+- **Every indicator stays computable from receipt and issue quantities alone**
+  (§1.2): received vs issued vs on hand, per owner, per project, per material.
+  None of it needs a BOQ/WBS mapping to exist, which is what lets the system be
+  useful on day one instead of after a mapping exercise that may never finish.
 
 Scope, derived from the answers above:
 - Add owner to stock; default every existing row to the company, so the live
