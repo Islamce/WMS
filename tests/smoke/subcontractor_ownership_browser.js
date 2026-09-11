@@ -187,7 +187,9 @@ async function stopServer(server) {
       /UI Browser Contracting/.test(inboxText || ''), (inboxText || '').slice(0, 200));
 
     await managerPage.locator(`#ap-table tr[data-id="${created.id}"]`).click();
-    await managerPage.waitForSelector('#ap-detail .card');
+    // #ap-detail .card also matches the "Loading…" placeholder, so waiting on it
+    // races the fetch. #ap-approve only exists once the real detail rendered.
+    await managerPage.waitForSelector('#ap-detail #ap-approve');
     const detailText = await managerPage.locator('#ap-detail').textContent();
     check('the approver is warned about the missing authority up front',
       /Project Management Approval/.test(detailText || ''), (detailText || '').slice(0, 300));
@@ -213,7 +215,7 @@ async function stopServer(server) {
     await loginUi(grantedPage, 'manager@example.com', 'Passw0rd!');
     await goTo(grantedPage, '#/approvals', '#ap-table tr[data-id]');
     await grantedPage.locator(`#ap-table tr[data-id="${created.id}"]`).click();
-    await grantedPage.waitForSelector('#ap-detail .card');
+    await grantedPage.waitForSelector('#ap-detail #ap-approve');
     const grantedText = await grantedPage.locator('#ap-detail').textContent();
     check('once the authority is assigned the warning is gone',
       !/Project Management Approval<\/strong> authority/.test(grantedText || '')
