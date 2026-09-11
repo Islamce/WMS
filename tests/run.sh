@@ -65,6 +65,8 @@ run_suite provisioning_test.py
 run_suite tenant_edition_test.py
 # Offline: switching the edition of an EXISTING install, dry run first.
 run_suite tenant_edition_switch_test.py
+# Offline: converging the legacy free-text subcontractor ledger into owned stock.
+run_suite ledger_convergence_test.py
 # Offline: no screen may be unreachable on every edition — the control for the
 # erp_operator break, which dead-ended the request workflow on every tenant.
 if ! node tests/e2e/edition_route_coverage_test.js; then FAILED=1; fi
