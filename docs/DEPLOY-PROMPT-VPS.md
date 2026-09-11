@@ -48,7 +48,7 @@ being deployed at once: #107, #116, #117, #118, #120, #121.
 
 ### Schema change — read this before you start
 
-Production currently reports **20 applied migrations**. This deploy adds four:
+Production currently reports **20 applied migrations**. This deploy adds five:
 
 | Migration | What it does |
 |---|---|
@@ -56,6 +56,7 @@ Production currently reports **20 applied migrations**. This deploy adds four:
 | `022_stock_ownership` | Adds `owner_type` (default `'COMPANY'`) and `owner_subcontractor_id` to `batches`; `engagement_type` to `subcontractors`; movement type `542` |
 | `023_subcontractor_returns` | New `subcontractor_returns` table; seeds permission `subcontractor_return_approval` |
 | `024_request_subcontractor_attribution` | Adds `subcontractor_id`/`subcontractor_name` to `material_request_headers`; seeds permission `project_management_approval` |
+| `025_subcontractor_ledger_convergence` | Creates an **empty** `subcontractor_ledger_convergence` table; writes nothing until a conversion is deliberately run |
 
 Every one is **additive**. No column is dropped, no row is rewritten, no default
 changes an existing value. Migration 021 creates its table empty **on purpose**:
@@ -188,7 +189,7 @@ curl -sS -o /dev/null -w '%{http_code}\n' https://wms.kynox.io/healthz
 
 Pass criteria, all of them:
 
-1. `migrations` is now **24**.
+1. `migrations` is now **25**.
 2. `users`, `materials`, `batches`, `requests` are **identical** to §2. A
    schema migration must not change a single row count.
 3. `integrity` is `ok`.
