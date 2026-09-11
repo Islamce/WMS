@@ -71,7 +71,7 @@ async function login(email, password) {
 }
 
 async function loginUi(page, email, password) {
-  await page.goto(BASE, { waitUntil: 'networkidle' });
+  await page.goto(BASE + '/#/login', { waitUntil: 'networkidle' });
   await page.locator('#li-email').fill(email);
   await page.locator('#li-password').fill(password);
   await page.locator('#login-form button[type="submit"]').click();

@@ -12,7 +12,7 @@
 const express = require('express');
 const db = require('./../db/connection');
 const { authenticate, requirePermission } = require('./../middleware/auth');
-const { isNonEmptyString, isId, parsePagination } = require('./../utils/validate');
+const { isNonEmptyString, isId, isPositiveNumber, parsePagination } = require('./../utils/validate');
 const audit = require('./../services/audit');
 const { withIdempotency } = require('./../middleware/idempotency');
 
@@ -112,7 +112,7 @@ router.post('/deliveries', requirePermission('subcontractor_receiving'), withIde
   if (!lines.length) return res.status(400).json({ error: 'At least one line is required.' });
   for (const [i, l] of lines.entries()) {
     if (!isNonEmptyString(l.description)) return res.status(400).json({ error: `Line ${i + 1}: description is required.` });
-    if (!(Number(l.quantity_delivered) > 0)) return res.status(400).json({ error: `Line ${i + 1}: quantity must be greater than zero.` });
+    if (!isPositiveNumber(l.quantity_delivered)) return res.status(400).json({ error: `Line ${i + 1}: quantity must be greater than zero.` });
   }
 
   const run = db.transaction(() => {
@@ -145,7 +145,7 @@ router.patch('/deliveries/:id/lines/:lineId', requirePermission('subcontractor_q
   if (!QUALITY_STATUSES.includes(quality_status) || quality_status === 'Pending') {
     return res.status(400).json({ error: `quality_status must be one of ${QUALITY_STATUSES.filter((s) => s !== 'Pending').join(', ')}.` });
   }
-  if (quality_status !== 'Rejected' && !(Number(quantity_approved) > 0)) {
+  if (quality_status !== 'Rejected' && !isPositiveNumber(quantity_approved)) {
     return res.status(400).json({ error: 'quantity_approved must be greater than zero unless the line is rejected.' });
   }
   if (Number(quantity_approved) > line.quantity_delivered) {
@@ -241,7 +241,7 @@ router.post('/consumption', requirePermission('subcontractor_receiving'), withId
   const b = req.body || {};
   if (!isNonEmptyString(b.warehouse_code)) return res.status(400).json({ error: 'Warehouse is required.' });
   if (!isNonEmptyString(b.description)) return res.status(400).json({ error: 'Description is required.' });
-  if (!(Number(b.quantity_issued) > 0)) return res.status(400).json({ error: 'quantity_issued must be greater than zero.' });
+  if (!isPositiveNumber(b.quantity_issued)) return res.status(400).json({ error: 'quantity_issued must be greater than zero.' });
   const uom = b.uom || 'EA';
   const categoryId = b.category_id || null;
 

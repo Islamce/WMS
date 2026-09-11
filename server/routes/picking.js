@@ -9,11 +9,11 @@
 const express = require('express');
 const db = require('./../db/connection');
 const { authenticate, requirePermission } = require('./../middleware/auth');
-const { isId, isPositiveNumber, isNonEmptyString, isNonNegativeNumber } = require('./../utils/validate');
+const { isPositiveNumber, isNonEmptyString, isNonNegativeNumber } = require('./../utils/validate');
 const audit = require('./../services/audit');
 const notify = require('./../services/notify');
 const qrService = require('./../services/qr');
-const { setHeaderStatus, refreshRollups, getHeaderOr404 } = require('./../services/requests');
+const { setHeaderStatus, refreshRollups } = require('./../services/requests');
 const { HEADER_STATUS, LINE_STATUS, TASK_STATUS } = require('./../workflow/states');
 const { withExecutionContext, withExecutionContexts } = require('./../services/workflowContext');
 

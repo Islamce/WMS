@@ -6,7 +6,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const db = require('../db/connection');
 const { authenticate, requirePermission } = require('../middleware/auth');
-const { isId, isNonEmptyString, validatePasswordPolicy } = require('../utils/validate');
+const { isId, validatePasswordPolicy } = require('../utils/validate');
 const audit = require('../services/audit');
 
 const router = express.Router();

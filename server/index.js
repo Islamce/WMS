@@ -163,6 +163,10 @@ app.use('/release-assets/:release', (req, res, next) => {
 app.use(express.static(publicRoot));
 // Chart.js is served from node_modules so the app has no CDN dependency.
 app.use('/vendor', express.static(path.join(__dirname, '..', 'node_modules', 'chart.js', 'dist')));
+app.use('/vendor/phosphor', express.static(path.join(__dirname, '..', 'node_modules', '@phosphor-icons', 'web', 'src')));
+// Product screenshots used by the public landing page stay with the tracked
+// design evidence instead of being duplicated into the production asset tree.
+app.use('/design-preview', express.static(path.join(__dirname, '..', 'design-preview')));
 
 // Unknown API routes -> JSON 404 (instead of the SPA page).
 app.use('/api', (req, res) => res.status(404).json({ error: 'API route not found.' }));

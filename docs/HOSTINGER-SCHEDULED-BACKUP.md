@@ -1,31 +1,28 @@
 # WMS Production — Scheduled Offsite Backup (GitHub Actions)
 
 Automated daily offsite backup of the WMS production database, implemented as a
-GitHub Actions workflow (`.github/workflows/production-backup.yml`) because the
-Hostinger plan provides no working scheduler.
+GitHub Actions workflow (`.github/workflows/production-backup.yml`). Retargeted
+from the retired shared-hosting/Passenger deployment to the VPS Docker deployment
+on 2026-09-06 and verified end to end by run `34047172529`.
 
 ## 1. Confirmed production architecture
-- **Hosting:** Hostinger **Managed Node.js** using **Passenger / lsnode** — *not*
-  a VPS, *not* PM2. Do not use `pm2`, `sudo`, `apt`, `systemctl`, or system cron.
-- **App path:** `/home/u716763642/domains/wms.kynox.io/nodejs`
-- **Startup:** `app.js` → loads `server/index.js`.
-- **Deployed checkout:** detached HEAD at the deployed commit — **normal**; never
-  run `git checkout main` / `git pull` / reset on it. The workflow never modifies
-  the deployed tree.
-- **Node runtime:** the deployed `better-sqlite3` is compiled for Node ABI 115,
-  so backups **must** run with Node.js 20:
-  `/opt/alt/alt-nodejs20/root/usr/bin/node` (verified `v20.19.4`).
-  **Node 22 fails** (`NODE_MODULE_VERSION 115` vs `127`). Never `npm rebuild` /
-  `npm install` / `rm -rf node_modules` on production as part of backup.
-- **Local backup dir:** `/home/u716763642/secure/wms-backups`
-- **Ops log dir:** `/home/u716763642/.logs/wms`
+- **Hosting:** Hostinger VPS, Docker Compose, central Caddy reverse proxy.
+- **Host app path:** `/opt/apps/wms`.
+- **Container:** Compose service `wms`; Node 20 and its matching
+  `better-sqlite3` build come from the production image.
+- **Live database:** host `/opt/apps/wms/data/wms.db`, mounted at
+  `/app/data/wms.db` in the container.
+- **Local backup dir:** host `/opt/apps/wms/backups`, mounted at
+  `/app/backups` in the container.
+- The workflow never modifies the checkout, rebuilds the image, migrates the
+  database, or restarts the service.
 
 ## 2. Why not Hostinger cron
-hPanel (this plan) exposes no Cron Jobs UI, and SSH `crontab` is **not
-persistent** (`crontab -e`/`crontab -` do not save; `crontab -l` stays empty).
-We therefore schedule externally via GitHub Actions and drive the tested backup
-scripts over SSH. No HTTP backup endpoint is added, and backups never run inside
-web requests.
+The workflow originated because the retired shared-hosting plan exposed no
+working scheduler. It remains the offsite scheduler on the VPS because it also
+provides independent runner verification, encrypted S3-compatible upload,
+object verification, retention, and heartbeat monitoring. No HTTP backup
+endpoint is added, and backups never run inside web requests.
 
 ## 3. Schedule
 `cron: "30 2 * * *"` = **02:30 UTC daily = 05:30 Asia/Riyadh (UTC+3)**. Also
@@ -39,7 +36,7 @@ Never commit these; the workflow never prints them.
 | Secret | Purpose |
 |---|---|
 | `HOSTINGER_HOST` | SSH host (e.g. the server hostname/IP) |
-| `HOSTINGER_USERNAME` | SSH user (`u716763642`) |
+| `HOSTINGER_USERNAME` | VPS SSH user (`root`, as currently configured) |
 | `HOSTINGER_PORT` | SSH port |
 | `HOSTINGER_SSH_PRIVATE_KEY` | Private key for the backup-only key pair (§6) |
 | `HOSTINGER_KNOWN_HOSTS` | Pinned host key line(s) for the server (§7) |
@@ -49,7 +46,7 @@ Never commit these; the workflow never prints them.
 | `BACKUP_STORAGE_ENDPOINT` | S3-compatible endpoint URL (e.g. `https://s3.<region>.backblazeb2.com`) |
 | `BACKUP_STORAGE_REGION` | Region for the endpoint |
 
-Paths (`REMOTE_APP_DIR`, `REMOTE_NODE`, `REMOTE_BACKUP_DIR`, `KEEP_SETS`) are set
+Paths (`REMOTE_APP_DIR`, `REMOTE_BACKUP_DIR`, `CONTAINER_BACKUP_DIR`, `REMOTE_DB_PATH`, `KEEP_SETS`) are set
 as non-secret `env:` in the workflow and match the verified production paths;
 change them there if the hosting layout changes.
 
@@ -64,8 +61,7 @@ supported). Transit is HTTPS.
 On a trusted machine (not committed anywhere):
 ```bash
 ssh-keygen -t ed25519 -f wms_backup_key -C "wms-gha-backup" -N ""
-# Install the PUBLIC key on Hostinger (hPanel → Advanced → SSH Access → Manage
-# SSH keys, or append to ~/.ssh/authorized_keys for u716763642).
+# Install the PUBLIC key in the VPS user's ~/.ssh/authorized_keys.
 cat wms_backup_key.pub
 # Put the PRIVATE key contents into the HOSTINGER_SSH_PRIVATE_KEY secret:
 cat wms_backup_key
@@ -89,12 +85,12 @@ legitimately, re-run and update the secret.
    independent integrity check — never touches production `node_modules`).
 2. Write the SSH key + pinned `known_hosts`; `StrictHostKeyChecking yes`.
 3. Snapshot existing remote manifests (the "before" set).
-4. **Remote backup + verify** — exactly the tested commands:
+4. **Remote backup + verify** — from `/opt/apps/wms`, exactly the tested pattern:
    ```bash
-   BACKUP_DIR=/home/u716763642/secure/wms-backups \
-     /opt/alt/alt-nodejs20/root/usr/bin/node scripts/backup.js
-   BACKUP_DIR=/home/u716763642/secure/wms-backups \
-     /opt/alt/alt-nodejs20/root/usr/bin/node scripts/verify-backup.js
+   docker compose exec -T -e BACKUP_DIR=/app/backups \
+     -e DB_PATH=/app/data/wms.db wms node scripts/backup.js
+   docker compose exec -T -e BACKUP_DIR=/app/backups \
+     wms node scripts/verify-backup.js
    ```
    Any failure aborts the job. No npm, migrations, restarts, installs, or git.
 5. **Deterministic new-set identification** — set-difference of manifest lists
@@ -141,10 +137,10 @@ node /path/to/WMS/scripts/verify-backup.js .
 # Restored DB is at ./wms-<stamp>.db ; attachments in ./attachments-<stamp>/ (untar if archived).
 ```
 **Production restore approval:** restoring onto production is a controlled,
-approved operation (see `docs/OPS-RUNBOOK.md §2.5`): stop is not possible under
-Passenger the same way, so coordinate a maintenance window, back up the current
-`wms.db` first, copy the restored DB over `DB_PATH`, and confirm `/healthz`.
-Requires sign-off from the recovery owner (below).
+approved operation (see `docs/OPS-RUNBOOK.md §2.5`): coordinate a maintenance
+window, create a final backup, stop the WMS container, replace the host-side
+`/opt/apps/wms/data/wms.db` (and handle WAL/SHM as one SQLite state), restart,
+and confirm `/healthz`. Requires sign-off from the recovery owner (below).
 
 ## 12. Retention
 - **Local (Hostinger):** newest **7** verified sets (this workflow).
@@ -161,7 +157,7 @@ Requires sign-off from the recovery owner (below).
 | Symptom | Likely cause / action |
 |---|---|
 | SSH fails at host-key step | `HOSTINGER_KNOWN_HOSTS` wrong/rotated — re-run §7 |
-| Remote backup fails | Wrong node path or ABI — must be the node 20 path; do not rebuild |
+| Remote backup fails | Container unavailable, bind mount missing, or image/runtime mismatch — inspect `docker compose ps/logs`; do not rebuild as part of backup |
 | "Expected exactly 1 new manifest" | A prior partial run or another backup racing — check `concurrency`; inspect the backup dir |
 | Runner integrity check fails | Corrupt transfer — re-run; if persistent, the source set is bad |
 | Upload/verify size mismatch | Provider/endpoint issue — check bucket/endpoint/region secrets |

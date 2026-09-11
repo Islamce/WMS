@@ -10,7 +10,6 @@
  * no workflow code changes.
  */
 const db = require('./../db/connection');
-const config = require('./../config');
 
 const ERP_SYSTEM = process.env.ERP_SYSTEM || 'MANUAL';
 

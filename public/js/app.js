@@ -229,6 +229,7 @@ const App = {
     const [hash, param] = raw.split('/');
 
     if (!this.user) {
+      if (!hash || hash === 'landing') return Pages.landing.render();
       if (hash === 'signup') return Pages.auth.render('signup');
       return Pages.auth.render('login');
     }

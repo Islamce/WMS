@@ -88,6 +88,41 @@ function check(name, cond, detail) {
     page.on('pageerror', (e) => consoleErrors.push(String(e)));
 
     await page.goto(BASE_URL, { waitUntil: 'networkidle' });
+    check('public landing page renders', await page.locator('#wms-landing').count() === 1);
+    check('landing page offers English and Arabic', await page.locator('[data-landing-language]').count() === 1);
+    await page.locator('[data-landing-language]').click();
+    check('landing language switch updates copy and RTL direction',
+      await page.locator('html').getAttribute('dir') === 'rtl' &&
+      (await page.locator('.wl-hero h1').innerText()).includes('مساحة واحدة'));
+    await page.locator('[data-landing-language]').click();
+    await page.locator('[data-scroll="demo"]').first().click();
+    check('landing section navigation does not collide with the SPA hash router',
+      await page.locator('#wms-landing').count() === 1 && !page.url().includes('#/login'));
+    await page.getByRole('tab', { name: 'Mobile execution' }).click();
+    check('landing demo tabs update the selected product view',
+      await page.getByRole('tab', { name: 'Mobile execution' }).getAttribute('aria-selected') === 'true' &&
+      (await page.locator('.wl-demo-frame img').getAttribute('src')).includes('mobile'));
+    check('landing exposes five operational demo views', await page.getByRole('tab').count() === 5);
+    await page.getByRole('tab', { name: 'Inbound & quality' }).click();
+    check('landing inbound demo uses the hypothetical light presentation',
+      await page.getByRole('tab', { name: 'Inbound & quality' }).getAttribute('aria-selected') === 'true' &&
+      await page.locator('.wl-demo-inbound img[src="/img/landing/demo/inbound-light.png"]').count() === 1);
+    await page.locator('[data-slide-theme="dark"]').click();
+    check('landing theme switch selects the dark inbound presentation',
+      await page.locator('[data-slide-theme="dark"]').getAttribute('aria-pressed') === 'true' &&
+      await page.locator('.wl-demo-inbound img[src="/img/landing/demo/inbound-dark.png"]').count() === 1);
+    await page.getByRole('tab', { name: 'Outbound & issue' }).click();
+    check('landing outbound demo keeps the selected dark presentation',
+      await page.getByRole('tab', { name: 'Outbound & issue' }).getAttribute('aria-selected') === 'true' &&
+      await page.locator('.wl-demo-outbound img[src="/img/landing/demo/outbound-dark.png"]').count() === 1);
+    await page.locator('[data-slide-theme="light"]').click();
+    check('landing theme switch restores the light outbound presentation',
+      await page.locator('[data-slide-theme="light"]').getAttribute('aria-pressed') === 'true' &&
+      await page.locator('.wl-demo-outbound img[src="/img/landing/demo/outbound-light.png"]').count() === 1);
+    check('landing presents the expanded eight-control workflow',
+      await page.locator('.wl-journey-steps > li').count() === 8);
+    await page.locator('a[href="#/login"]').first().click();
+    await page.waitForSelector('#login-form');
     check('login form renders', await page.locator('#login-form').count() > 0);
     check('login email field present', await page.locator('#li-email').count() > 0);
 

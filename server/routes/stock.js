@@ -8,6 +8,7 @@ const express = require('express');
 const db = require('../db/connection');
 const { authenticate, requirePermission } = require('../middleware/auth');
 const { isNonEmptyString, isPositiveNumber, isId, parsePagination } = require('../utils/validate');
+const { sendError } = require('../utils/errors');
 const { recordMovement } = require('../services/ledger');
 
 const router = express.Router();
@@ -82,8 +83,7 @@ router.post('/in', requirePermission('stock_in'), (req, res) => {
   try {
     stockIn();
   } catch (err) {
-    console.error('Stock in failed:', err);
-    return res.status(500).json({ error: 'Stock in failed. No changes were saved.' });
+    return sendError(res, err, 'Stock in failed. No changes were saved.');
   }
 
   res.status(201).json({ message: 'Stock in recorded successfully.' });
@@ -129,9 +129,7 @@ router.post('/out', requirePermission('stock_out'), (req, res) => {
   try {
     stockOut();
   } catch (err) {
-    if (err.status === 400) return res.status(400).json({ error: err.message });
-    console.error('Stock out failed:', err);
-    return res.status(500).json({ error: 'Stock out failed. No changes were saved.' });
+    return sendError(res, err, 'Stock out failed. No changes were saved.');
   }
 
   res.status(201).json({ message: 'Stock out recorded successfully.' });

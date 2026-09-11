@@ -7,8 +7,8 @@ services:
     build: .
     restart: unless-stopped
     ports:
-      # host:container — put Hostinger's reverse proxy / a public port in front.
-      - "3000:3000"
+      # Local diagnostic access only. Caddy reaches the service over `web`.
+      - "127.0.0.1:3000:3000"
     environment:
       NODE_ENV: production
       # REQUIRED: replace with a real secret (see .env.example for how to make one).
@@ -19,13 +19,20 @@ services:
       ALLOW_AUTO_SEED: "0"
       PRODUCTION_INITIALIZATION_ENABLED: "false"
     volumes:
-      # Persist the SQLite database across rebuilds/restarts.
-      - wms-data:/app/data
+      # Keep SQLite on a stable host path so restores and verified backups do
+      # not depend on Docker's opaque named-volume location.
+      - ./data:/app/data
+      # The offsite workflow runs the tested backup scripts inside this
+      # container, while SSH/SCP accesses the resulting sets on the host.
+      - ./backups:/app/backups
+    networks:
+      - web
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3000/healthz',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
       interval: 30s
       timeout: 5s
       retries: 3
 
-volumes:
-  wms-data:
+networks:
+  web:
+    external: true

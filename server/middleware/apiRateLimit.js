@@ -6,11 +6,12 @@
  * surface. Defaults are generous (2000 requests / 60s) and configurable via
  * API_RATE_LIMIT / API_RATE_WINDOW_MS. Set API_RATE_LIMIT=0 to disable.
  *
- * In-memory state suits the single-process deployment; move to a shared store
- * (Redis) when running multiple instances. The pure `check()` is exported so
- * the limiting logic is unit-testable without issuing thousands of requests.
+ * The pure `check()` is exported so the limiting logic is unit-testable
+ * without issuing thousands of requests.
  */
-const buckets = new Map(); // key -> { count, windowStart }
+const { WindowCounter } = require('../utils/windowCounter');
+
+const counter = new WindowCounter();
 
 function limitFromEnv() {
   const v = process.env.API_RATE_LIMIT;
@@ -26,11 +27,7 @@ function windowFromEnv() {
  */
 function check(key, max, windowMs, now = Date.now()) {
   if (!max || max <= 0) return { allowed: true, remaining: Infinity, retryAfterMs: 0 };
-  let b = buckets.get(key);
-  if (!b || now - b.windowStart >= windowMs) {
-    b = { count: 0, windowStart: now };
-    buckets.set(key, b);
-  }
+  const b = counter.bucket(key, windowMs, now);
   b.count += 1;
   const allowed = b.count <= max;
   return {
@@ -40,19 +37,13 @@ function check(key, max, windowMs, now = Date.now()) {
   };
 }
 
-function prune(now, windowMs) {
-  for (const [k, v] of buckets) {
-    if (now - v.windowStart >= windowMs) buckets.delete(k);
-  }
-}
-
 /** Express middleware. */
 function apiRateLimit(req, res, next) {
   const max = limitFromEnv();
   if (!max || max <= 0) return next();
   const windowMs = windowFromEnv();
   const now = Date.now();
-  if (buckets.size > 20000) prune(now, windowMs);
+  if (counter.size > 20000) counter.prune(windowMs, now);
   const ip = req.ip || req.socket.remoteAddress || 'unknown';
   const r = check(ip, max, windowMs, now);
   res.setHeader('X-RateLimit-Limit', String(max));
@@ -64,4 +55,4 @@ function apiRateLimit(req, res, next) {
   next();
 }
 
-module.exports = { apiRateLimit, check, _buckets: buckets };
+module.exports = { apiRateLimit, check, _buckets: counter.buckets };

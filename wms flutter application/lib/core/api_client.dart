@@ -26,9 +26,15 @@ class ApiClient {
     return Uri.parse('$b$path');
   }
 
+  /// `{'Authorization': 'Bearer ...'}` when a token is set, empty otherwise —
+  /// shared by [_headers] and [downloadBytes] so the "is there a token"
+  /// check lives in exactly one place.
+  Map<String, String> get _authHeaders =>
+      (token != null && token!.isNotEmpty) ? {'Authorization': 'Bearer $token'} : const {};
+
   Map<String, String> get _headers => {
         'Content-Type': 'application/json',
-        if (token != null && token!.isNotEmpty) 'Authorization': 'Bearer $token',
+        ..._authHeaders,
       };
 
   Future<dynamic> get(String path) => _send('GET', path);
@@ -44,7 +50,7 @@ class ApiClient {
       res = await http.get(
         _uri(path),
         headers: {
-          if (token != null && token!.isNotEmpty) 'Authorization': 'Bearer $token',
+          ..._authHeaders,
           'Accept': expectedContentType ?? 'application/octet-stream',
         },
       ).timeout(const Duration(seconds: 30));

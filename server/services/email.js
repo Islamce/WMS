@@ -37,12 +37,6 @@ function initTransport() {
   }
 }
 
-/** True when a real SMTP transport is available. */
-function isConfigured() {
-  if (!triedInit) initTransport();
-  return !!transporter;
-}
-
 /**
  * Send an email. Resolves { ok, transport: 'smtp'|'log', error? }. Never throws.
  */
@@ -63,4 +57,4 @@ async function sendEmail({ to, subject, text, html }) {
   }
 }
 
-module.exports = { sendEmail, isConfigured };
+module.exports = { sendEmail };
