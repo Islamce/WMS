@@ -148,6 +148,77 @@ try:
           count(factory, 'permissions') == count(tenant, 'permissions'),
           'editions must stay schema-identical — one codebase, not a fork')
 
+    # ===== 7. Docker-native deployment artifacts =====
+    # Production runs container-per-tenant behind a shared Caddy proxy, so a
+    # tenant is a running container, not just a database file.
+    droot = os.path.join(work, 'tenants')
+    r7 = subprocess.run(
+        ['node', os.path.join(REPO, 'scripts', 'provision-tenant.js'),
+         '--name', 'Acme Contracting', '--profile', 'contracting',
+         '--admin-email', 'ops@acme.example', '--domain', 'acme.wms.example',
+         '--tenants-root', droot],
+        cwd=REPO, capture_output=True, text=True)
+    check('P7 provisions with deployment artifacts', r7.returncode == 0, r7.stderr[-400:])
+
+    tdir = os.path.join(droot, 'acme-contracting')
+    check('P7 slug derived from tenant name', os.path.isdir(tdir), os.listdir(droot) if os.path.isdir(droot) else 'missing')
+    for rel in ('data/wms.db', 'docker-compose.yml', '.env'):
+        check(f'P7 creates {rel}', os.path.exists(os.path.join(tdir, rel)))
+    check('P7 creates backups directory', os.path.isdir(os.path.join(tdir, 'backups')))
+
+    # The secret file must not be world-readable: it signs that tenant sessions.
+    mode = oct(os.stat(os.path.join(tdir, '.env')).st_mode & 0o777)
+    check('P7 secret file is chmod 600', mode == '0o600', mode)
+
+    compose = open(os.path.join(tdir, 'docker-compose.yml')).read()
+    check('P7 container name is tenant-scoped', 'container_name: wms-acme-contracting' in compose)
+    check('P7 joins the shared proxy network', 'external: true' in compose and 'web' in compose)
+    check('P7 publishes NO host port (no collisions, proxy-only reach)',
+          'ports:' not in compose, 'a published port would collide between tenants')
+    check('P7 keeps the production safety flags',
+          all(f in compose for f in ('SKIP_AUTO_SEED: "1"', 'ALLOW_AUTO_SEED: "0"',
+                                     'PRODUCTION_INITIALIZATION_ENABLED: "false"')), compose)
+    check('P7 pins one shared image tag (one build, many tenants)',
+          'image: wms-app:latest' in compose)
+    check('P7 prints the Caddy block for the domain',
+          'acme.wms.example' in r7.stdout and 'reverse_proxy wms-acme-contracting:3000' in r7.stdout,
+          r7.stdout[-300:])
+
+    # ===== 8. Per-tenant JWT secret — the isolation the model depends on =====
+    # Every tenant runs the same image against its own database, and a token's
+    # `sub` is resolved against whichever database the process points at. A
+    # shared secret would let a token minted at tenant A log its bearer in as
+    # tenant B's user of the same id. Nothing in the app code would be wrong;
+    # isolation rests entirely on these values differing.
+    r8 = subprocess.run(
+        ['node', os.path.join(REPO, 'scripts', 'provision-tenant.js'),
+         '--name', 'Beta Builders', '--profile', 'contracting',
+         '--admin-email', 'ops@beta.example', '--tenants-root', droot],
+        cwd=REPO, capture_output=True, text=True)
+    check('P8 second tenant provisions', r8.returncode == 0, r8.stderr[-300:])
+
+    def secret_of(slug):
+        for line in open(os.path.join(droot, slug, '.env')):
+            if line.startswith('JWT_SECRET='):
+                return line.split('=', 1)[1].strip()
+        return None
+
+    a, b = secret_of('acme-contracting'), secret_of('beta-builders')
+    check('P8 both tenants got a secret', bool(a) and bool(b))
+    check('P8 secrets DIFFER between tenants', a != b,
+          'a shared secret is cross-tenant account takeover')
+    check('P8 secret has real entropy (>= 64 hex chars)', a and len(a) >= 64, len(a or ''))
+
+    # ===== 9. --db still provisions a bare database, no artifacts =====
+    bare = os.path.join(work, 'bare', 'wms.db')
+    r9 = provision(bare, name='Sandbox')
+    check('P9 --db still works', r9.returncode == 0, r9.stderr[-300:])
+    check('P9 --db creates the database', os.path.exists(bare))
+    check('P9 --db writes no compose file',
+          not os.path.exists(os.path.join(os.path.dirname(bare), 'docker-compose.yml')))
+    check('P9 --db writes no secret file',
+          not os.path.exists(os.path.join(os.path.dirname(bare), '.env')))
+
 finally:
     shutil.rmtree(work, ignore_errors=True)
 
