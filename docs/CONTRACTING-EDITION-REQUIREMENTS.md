@@ -214,5 +214,17 @@ Settlement differences live outside this system, per §1.1.
   missing. Every batch defaults to `COMPANY`, so an install with no owned stock
   sees the identical number it saw before.
 
-  Still open: no screen exposes any of phases 2–3 — the subcontractor field on a
-  request, the return queue, or this report. That is the remaining work.
+- **Phase 3b — screens.** *Done.* Two new screens (Returns to Owner, and the
+  Subcontractor-Owned Stock report), the subcontractor field on the request form,
+  and the attribution plus authority notice on the approval screen. The approver
+  is told why they cannot approve a subcontractor request **before** acting,
+  rather than being refused by the server afterwards; they are also told they may
+  still return or reject it. Both new permission keys are listed in the
+  contracting profile's modules, or the edition gate would hide the screens from
+  the tenant that bought the edition.
+
+  Covered by `tests/smoke/subcontractor_ownership_browser.js` (16 assertions),
+  which pins the authority split as a user experiences it: the warehouse sees the
+  return queue but is not offered Approve, and assigning the authority makes both
+  the warning and the missing button change — proving the fail-closed permissions
+  are assignable rather than permanently locked.

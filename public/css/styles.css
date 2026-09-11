@@ -398,6 +398,10 @@ input[readonly] { background: var(--surface-2); color: var(--text-muted); }
 .inline-alert { padding: 10px 14px; border-radius: 8px; margin-bottom: 14px; font-weight: 600; }
 .inline-alert.error { background: var(--danger-bg); color: var(--danger); }
 .inline-alert.success { background: var(--success-bg); color: var(--success); }
+.inline-alert.warning { background: var(--warning-bg); color: var(--warning); }
+/* A row that needs attention but is not an error — e.g. subcontractor stock
+   close to depletion. Tinted, never coloured text, so the numbers stay readable. */
+tr.row-warn > td { background: var(--warning-bg); }
 
 /* --- Modal ---------------------------------------------------------------- */
 .modal-overlay {

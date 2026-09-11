@@ -85,6 +85,8 @@ const MODULES = [
     { route: 'subcontractor-quality', label: 'Deliveries & Quality', icon: 'shield', permission: ['subcontractor_receiving', 'subcontractor_quality_inspection'] },
     { route: 'subcontractor-stock', label: 'On-Hand Stock', icon: 'archive', permission: ['subcontractor_receiving', 'subcontractor_quality_inspection', 'subcontractor_admin'] },
     { route: 'subcontractor-reconciliation', label: 'Reconciliation', icon: 'bar-chart', permission: ['subcontractor_receiving', 'subcontractor_quality_inspection', 'subcontractor_admin'] },
+    { route: 'subcontractor-returns', label: 'Returns to Owner', icon: 'corner-up-left', permission: ['subcontractor_admin', 'subcontractor_receiving', 'subcontractor_return_approval'] },
+    { route: 'subcontractor-owned-stock', label: 'Owned Stock Report', icon: 'pie-chart', permission: ['subcontractor_admin', 'subcontractor_receiving', 'subcontractor_return_approval', 'project_management_approval', 'kpi_dashboard'] },
     { route: 'subcontractors', label: 'Subcontractors & Categories', icon: 'users', permission: 'subcontractor_admin' },
   ] },
   { key: 'receiving', label: 'Receiving & Quality', icon: 'download', items: [
@@ -142,6 +144,8 @@ const ROUTE_PAGES = {
   'subcontractor-quality': { title: 'Subcontractor Deliveries & Quality', page: 'subcontractorQuality', permission: ['subcontractor_receiving', 'subcontractor_quality_inspection'] },
   'subcontractor-stock': { title: 'Subcontractor On-Hand Stock', page: 'subcontractorStock', permission: ['subcontractor_receiving', 'subcontractor_quality_inspection', 'subcontractor_admin'] },
   'subcontractor-reconciliation': { title: 'Subcontractor Reconciliation', page: 'subcontractorReconciliation', permission: ['subcontractor_receiving', 'subcontractor_quality_inspection', 'subcontractor_admin'] },
+  'subcontractor-returns': { title: 'Returns to Owner', page: 'subcontractorReturns', permission: ['subcontractor_admin', 'subcontractor_receiving', 'subcontractor_return_approval'] },
+  'subcontractor-owned-stock': { title: 'Subcontractor-Owned Stock', page: 'subcontractorOwnedStock', permission: ['subcontractor_admin', 'subcontractor_receiving', 'subcontractor_return_approval', 'project_management_approval', 'kpi_dashboard'] },
   'subcontractors': { title: 'Subcontractors & Categories', page: 'subcontractors', permission: 'subcontractor_admin' },
   'physical-inventory': { title: 'Physical Inventory', page: 'inventory', permission: ['inventory_count', 'cycle_count'] },
   'receiving': { title: 'Goods Receipt & QR', page: 'receiving', permission: ['goods_receipt', 'erp_operator', 'picking'] },

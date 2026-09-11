@@ -50,7 +50,8 @@
     {
       key: 'subcontractor',
       label: 'Subcontractor Materials',
-      routes: ['subcontractor-quality', 'subcontractor-stock', 'subcontractor-reconciliation', 'subcontractors'],
+      routes: ['subcontractor-quality', 'subcontractor-stock', 'subcontractor-reconciliation',
+        'subcontractor-returns', 'subcontractor-owned-stock', 'subcontractors'],
     },
   ];
 
@@ -107,6 +108,8 @@
     'subcontractor-quality': 'Deliveries & Quality Inspection',
     'subcontractor-stock': 'Subcontractor On-Hand Stock',
     'subcontractor-reconciliation': 'Subcontractor Reconciliation',
+    'subcontractor-returns': 'Returns to Owner',
+    'subcontractor-owned-stock': 'Subcontractor-Owned Stock',
     subcontractors: 'Subcontractors & Categories',
   };
 

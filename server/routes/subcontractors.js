@@ -24,7 +24,13 @@ router.use(authenticate);
 const QUALITY_STATUSES = ['Pending', 'Approved', 'Approved with Remarks', 'Rejected'];
 
 // --- Subcontractors ----------------------------------------------------------
-router.get('/subcontractors', requirePermission(['subcontractor_admin', 'subcontractor_quality_inspection', 'subcontractor_receiving']), (req, res) => {
+// The register of names is readable by anyone who has to name a subcontractor
+// on a document: you cannot raise a request for one, or approve a request raised
+// for one, without seeing the list. Names and trades only — nothing here is
+// commercially sensitive, and the write endpoints below stay admin-only.
+router.get('/subcontractors', requirePermission(['subcontractor_admin', 'subcontractor_quality_inspection',
+  'subcontractor_receiving', 'create_request', 'approvals', 'project_management_approval',
+  'subcontractor_return_approval']), (req, res) => {
   const rows = db.prepare('SELECT * FROM subcontractors WHERE is_active=1 ORDER BY name').all();
   res.json({ subcontractors: rows });
 });
