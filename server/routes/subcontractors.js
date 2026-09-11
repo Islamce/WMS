@@ -15,6 +15,8 @@ const { authenticate, requirePermission } = require('./../middleware/auth');
 const { isNonEmptyString, isId, isPositiveNumber, parsePagination } = require('./../utils/validate');
 const audit = require('./../services/audit');
 const { withIdempotency } = require('./../middleware/idempotency');
+const { recordMovement } = require('./../services/ledger');
+const { activeFreeze, freezeMessage } = require('./../services/freeze');
 
 const router = express.Router();
 router.use(authenticate);
@@ -323,6 +325,264 @@ router.get('/reconciliation', requirePermission(['subcontractor_receiving', 'sub
     ORDER BY rec.warehouse_code, rec.description
   `).all(...params);
   res.json({ reconciliation: rows });
+});
+
+// ---------------------------------------------------------------------------
+// Return of subcontractor-owned material
+//
+// Leftover material in a site store still belongs to the subcontractor; we hold
+// it. Returning it is therefore NOT a stock adjustment and NOT consumption — it
+// is a real outbound movement of someone else's property, and the contractor was
+// explicit about the shape: a SEPARATE approval stage by project management,
+// after which the APPROVED quantity (not the requested one) is issued out under
+// a distinctive movement number.
+//
+// Movement type 542 is what keeps a return distinguishable from consumption in
+// every later report and reconciliation. Ownership is never transferred by any
+// of this; only possession moves.
+//
+// The lifecycle deliberately mirrors stock reallocation
+// (PENDING_APPROVAL → APPROVED → EXECUTING → EXECUTED, with idempotent replay,
+// an atomic claim, and re-validation at execution time): the guarantees are the
+// same, and a reviewer already knows the shape.
+// ---------------------------------------------------------------------------
+
+/** Read a return with the joined context every handler needs. */
+function getReturn(id) {
+  return db.prepare(`
+    SELECT r.*, s.name AS subcontractor_name, b.batch_number, b.material_id,
+           b.material_code, b.remaining_quantity, b.reserved_quantity,
+           b.owner_type, b.owner_subcontractor_id
+    FROM subcontractor_returns r
+    JOIN subcontractors s ON s.id = r.subcontractor_id
+    JOIN batches b ON b.id = r.batch_id
+    WHERE r.id = ?
+  `).get(id);
+}
+
+/** GET /api/subcontractor/returns — queue, newest first. */
+router.get('/returns', requirePermission(['subcontractor_admin', 'subcontractor_receiving', 'subcontractor_return_approval']), (req, res) => {
+  const { limit, offset } = parsePagination(req.query);
+  const status = isNonEmptyString(req.query.status) ? req.query.status.trim() : null;
+  const where = status ? 'WHERE r.status = ?' : '';
+  const params = status ? [status] : [];
+  const returns = db.prepare(`
+    SELECT r.*, s.name AS subcontractor_name, b.batch_number, b.material_code
+    FROM subcontractor_returns r
+    JOIN subcontractors s ON s.id = r.subcontractor_id
+    JOIN batches b ON b.id = r.batch_id
+    ${where}
+    ORDER BY r.id DESC LIMIT ? OFFSET ?
+  `).all(...params, limit, offset);
+  res.json({ returns });
+});
+
+/**
+ * POST /api/subcontractor/returns — request a return.
+ * Body: { batch_id, quantity, reason }
+ */
+router.post('/returns', requirePermission(['subcontractor_admin', 'subcontractor_receiving']),
+  withIdempotency('POST /api/subcontractor/returns', (req, res) => {
+    const b = req.body || {};
+    if (!isId(b.batch_id)) return res.status(400).json({ error: 'A batch is required.' });
+    if (!isPositiveNumber(b.quantity)) return res.status(400).json({ error: 'Quantity must be greater than zero.' });
+
+    const batch = db.prepare('SELECT * FROM batches WHERE id=?').get(b.batch_id);
+    if (!batch) return res.status(404).json({ error: 'Batch not found.' });
+
+    // Only material the subcontractor owns can go back to them. Company stock
+    // leaving the store is a goods issue, a different thing with a different
+    // authority — refusing here is what stops the two being confused.
+    if (batch.owner_type !== 'SUBCONTRACTOR' || !batch.owner_subcontractor_id) {
+      return res.status(409).json({
+        error: 'This batch is company-owned. Only subcontractor-owned material can be returned to its owner.',
+      });
+    }
+
+    const available = Number(batch.remaining_quantity) - Number(batch.reserved_quantity || 0);
+    if (Number(b.quantity) > available) {
+      return res.status(409).json({ error: `Only ${available} is available to return (the rest is reserved).` });
+    }
+
+    const seq = db.prepare('SELECT COUNT(*) AS n FROM subcontractor_returns').get().n + 1;
+    const returnNumber = `SCR-${String(seq).padStart(6, '0')}`;
+    const info = db.prepare(`
+      INSERT INTO subcontractor_returns
+        (return_number, subcontractor_id, warehouse_code, batch_id, quantity_requested, reason,
+         requested_by, requested_by_name)
+      VALUES (?,?,?,?,?,?,?,?)
+    `).run(returnNumber, batch.owner_subcontractor_id, batch.warehouse_code, batch.id,
+      Number(b.quantity), isNonEmptyString(b.reason) ? b.reason.trim() : null,
+      req.user.id, req.user.name);
+
+    audit.record({ entityType: 'SubcontractorReturn', entityId: info.lastInsertRowid, action: 'REQUESTED',
+      newValue: { return_number: returnNumber, batch: batch.batch_number, quantity: Number(b.quantity) },
+      user: req.user, sourceScreen: 'Subcontractor Returns' });
+
+    res.status(201).json({
+      message: `Return ${returnNumber} submitted for project-management approval.`,
+      id: info.lastInsertRowid, return_number: returnNumber, status: 'PENDING_APPROVAL',
+    });
+  }));
+
+/**
+ * POST /api/subcontractor/returns/:id/approve — project management only.
+ * Body: { quantity_approved? } — defaults to the requested quantity.
+ */
+router.post('/returns/:id/approve', requirePermission('subcontractor_return_approval'), (req, res) => {
+  const ret = getReturn(req.params.id);
+  if (!ret) return res.status(404).json({ error: 'Return request not found.' });
+  if (ret.status === 'APPROVED') {
+    return res.json({ message: `Return ${ret.return_number} is already approved.`, status: 'APPROVED', idempotent: true });
+  }
+  if (ret.status !== 'PENDING_APPROVAL') {
+    return res.status(409).json({ error: `Cannot approve a ${ret.status} return.` });
+  }
+  // Four-eyes, consistent with every other approval in this system.
+  if (Number(ret.requested_by) === Number(req.user.id) && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'You cannot approve a return you requested yourself.' });
+  }
+
+  const requested = Number(ret.quantity_requested);
+  const approved = req.body && req.body.quantity_approved !== undefined
+    ? Number(req.body.quantity_approved) : requested;
+  if (!isPositiveNumber(approved)) return res.status(400).json({ error: 'Approved quantity must be greater than zero.' });
+  if (approved > requested) {
+    return res.status(400).json({ error: `Cannot approve ${approved}; only ${requested} was requested.` });
+  }
+
+  const changed = db.prepare(`
+    UPDATE subcontractor_returns
+    SET status='APPROVED', quantity_approved=?, approved_by=?, approved_by_name=?,
+        approved_at=datetime('now'), updated_at=datetime('now')
+    WHERE id=? AND status='PENDING_APPROVAL'
+  `).run(approved, req.user.id, req.user.name, ret.id);
+  if (!changed.changes) return res.status(409).json({ error: 'The return changed state; reload and try again.' });
+
+  audit.record({ entityType: 'SubcontractorReturn', entityId: ret.id, action: 'APPROVED',
+    oldValue: { status: 'PENDING_APPROVAL', quantity_requested: requested },
+    newValue: { status: 'APPROVED', quantity_approved: approved },
+    user: req.user, sourceScreen: 'Subcontractor Returns' });
+
+  res.json({
+    message: approved < requested
+      ? `Return ${ret.return_number} approved for ${approved} of ${requested}.`
+      : `Return ${ret.return_number} approved.`,
+    status: 'APPROVED', quantity_approved: approved,
+  });
+});
+
+/** POST /api/subcontractor/returns/:id/reject — project management only. */
+router.post('/returns/:id/reject', requirePermission('subcontractor_return_approval'), (req, res) => {
+  const ret = getReturn(req.params.id);
+  if (!ret) return res.status(404).json({ error: 'Return request not found.' });
+  if (ret.status === 'REJECTED') {
+    return res.json({ message: `Return ${ret.return_number} is already rejected.`, status: 'REJECTED', idempotent: true });
+  }
+  if (ret.status !== 'PENDING_APPROVAL') {
+    return res.status(409).json({ error: `Cannot reject a ${ret.status} return.` });
+  }
+
+  const reason = isNonEmptyString((req.body || {}).reason) ? req.body.reason.trim() : null;
+  const changed = db.prepare(`
+    UPDATE subcontractor_returns
+    SET status='REJECTED', rejected_by=?, rejected_by_name=?, rejected_at=datetime('now'),
+        rejection_reason=?, updated_at=datetime('now')
+    WHERE id=? AND status='PENDING_APPROVAL'
+  `).run(req.user.id, req.user.name, reason, ret.id);
+  if (!changed.changes) return res.status(409).json({ error: 'The return changed state; reload and try again.' });
+
+  audit.record({ entityType: 'SubcontractorReturn', entityId: ret.id, action: 'REJECTED',
+    oldValue: 'PENDING_APPROVAL', newValue: 'REJECTED', reason,
+    user: req.user, sourceScreen: 'Subcontractor Returns' });
+
+  res.json({ message: `Return ${ret.return_number} rejected.`, status: 'REJECTED' });
+});
+
+/**
+ * POST /api/subcontractor/returns/:id/execute — hand the material back.
+ *
+ * Issues the APPROVED quantity out of the batch under movement type 542. Stock
+ * is re-validated here rather than trusted from approval time: approval and
+ * handover are separated in time, and the batch can have moved or been reserved
+ * in between.
+ */
+router.post('/returns/:id/execute', requirePermission(['subcontractor_admin', 'subcontractor_receiving']), (req, res) => {
+  const initial = getReturn(req.params.id);
+  if (!initial) return res.status(404).json({ error: 'Return request not found.' });
+  if (initial.status === 'EXECUTED') {
+    return res.json({ message: `Return ${initial.return_number} was already handed over.`, status: 'EXECUTED', idempotent: true });
+  }
+  if (initial.status !== 'APPROVED') {
+    return res.status(409).json({ error: `Only APPROVED returns can be handed over (current: ${initial.status}).` });
+  }
+
+  let outcome;
+  const execute = db.transaction(() => {
+    const ret = getReturn(initial.id);
+    if (ret.status === 'EXECUTED') return { idempotent: true };
+    if (ret.status !== 'APPROVED') throw Object.assign(new Error(`Return state changed to ${ret.status}.`), { status: 409 });
+
+    // Atomic claim: two concurrent handovers cannot both proceed.
+    const claim = db.prepare(`
+      UPDATE subcontractor_returns SET status='EXECUTING', execution_error=NULL, updated_at=datetime('now')
+      WHERE id=? AND status='APPROVED'
+    `).run(ret.id);
+    if (!claim.changes) throw Object.assign(new Error('Handover was already claimed.'), { status: 409 });
+
+    const freeze = activeFreeze(ret.warehouse_code);
+    if (freeze) throw Object.assign(new Error(freezeMessage(freeze, ret.warehouse_code)), { status: 409 });
+
+    const batch = db.prepare('SELECT * FROM batches WHERE id=?').get(ret.batch_id);
+    if (!batch) throw Object.assign(new Error('The batch no longer exists.'), { status: 409 });
+    const quantity = Number(ret.quantity_approved);
+    const available = Number(batch.remaining_quantity) - Number(batch.reserved_quantity || 0);
+    if (quantity > available) {
+      throw Object.assign(
+        new Error(`Only ${available} is now available; stock or reservations changed after approval.`),
+        { status: 409 });
+    }
+
+    db.prepare("UPDATE batches SET remaining_quantity = remaining_quantity - ?, updated_at=datetime('now') WHERE id=?")
+      .run(quantity, batch.id);
+
+    const transactionId = recordMovement({
+      type: 'OUT', materialId: batch.material_id, warehouseCode: ret.warehouse_code,
+      quantity, userId: req.user.id, movementCategory: 'ISSUE',
+      notes: `Return ${ret.return_number} to ${ret.subcontractor_name} — movement type 542 (subcontractor-owned material)`,
+    });
+
+    db.prepare(`
+      UPDATE subcontractor_returns
+      SET status='EXECUTED', executed_by=?, executed_by_name=?, executed_at=datetime('now'),
+          movement_type='542', updated_at=datetime('now')
+      WHERE id=?
+    `).run(req.user.id, req.user.name, ret.id);
+
+    audit.record({ entityType: 'SubcontractorReturn', entityId: ret.id, action: 'EXECUTED',
+      oldValue: 'APPROVED',
+      newValue: { status: 'EXECUTED', movement_type: '542', quantity, batch: batch.batch_number,
+        stock_transaction_id: transactionId },
+      user: req.user, sourceScreen: 'Subcontractor Returns' });
+
+    return { idempotent: false, quantity, transactionId };
+  });
+
+  try {
+    outcome = execute();
+  } catch (err) {
+    db.prepare("UPDATE subcontractor_returns SET status='APPROVED', execution_error=?, updated_at=datetime('now') WHERE id=? AND status='EXECUTING'")
+      .run(String(err.message || err).slice(0, 500), initial.id);
+    return res.status(err.status || 400).json({ error: err.message || 'Handover failed. No changes were saved.' });
+  }
+
+  if (outcome.idempotent) {
+    return res.json({ message: `Return ${initial.return_number} was already handed over.`, status: 'EXECUTED', idempotent: true });
+  }
+  res.json({
+    message: `Return ${initial.return_number} handed over: ${outcome.quantity} issued under movement type 542.`,
+    status: 'EXECUTED', movement_type: '542', quantity: outcome.quantity,
+  });
 });
 
 module.exports = router;
