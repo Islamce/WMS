@@ -10,3 +10,7 @@ data
 wms flutter application
 tests
 *.md
+
+# Tenant data and secrets must never be baked into the image. Each tenant's
+# database is bind-mounted at run time instead.
+tenants

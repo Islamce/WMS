@@ -69,9 +69,12 @@ Pages.auth = {
     const password = document.getElementById('li-password').value;
     if (!email || !password) return this.alert('Email and password are required.');
     try {
-      const { token, user } = await Api.post('/api/auth/login', { email, password });
+      const { token, user, tenant } = await Api.post('/api/auth/login', { email, password });
       Api.setToken(token);
       App.user = user;
+      // The edition decides which modules exist for this organisation, so it has
+      // to be in place before defaultRoute() picks a landing screen below.
+      App.tenant = tenant || null;
       // Changing the hash triggers routing via the hashchange event; only
       // route directly when the hash is already the target (no event fires).
       const target = `#/${App.defaultRoute() || ''}`;

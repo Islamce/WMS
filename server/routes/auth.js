@@ -7,6 +7,7 @@ const { authenticate, getUserPermissions } = require('../middleware/auth');
 const { loginRateLimit, recordLoginFailure, clearLoginFailures } = require('../middleware/rateLimit');
 const { isNonEmptyString, isEmail, validatePasswordPolicy } = require('../utils/validate');
 const audit = require('../services/audit');
+const { getTenant } = require('../services/tenant');
 
 const router = express.Router();
 
@@ -92,15 +93,22 @@ router.post('/login', loginRateLimit, asyncHandler(async (req, res) => {
       must_change_password: !!user.must_change_password,
       permissions: getUserPermissions(user.id),
     },
+    // Same shape as GET /me, so the client can render the correct edition
+    // immediately after login without a second round trip.
+    tenant: getTenant(),
   });
 }));
 
 /**
  * GET /api/auth/me
- * Returns the current user with fresh permissions (used on app load).
+ * Returns the current user with fresh permissions (used on app load), plus the
+ * deployment's tenant context so the client can hide modules this organisation's
+ * edition does not include. `tenant.modules` is null on an install with no
+ * configured edition, which the client reads as "show everything" — see
+ * server/services/tenant.js for why that direction is the safe one.
  */
 router.get('/me', authenticate, (req, res) => {
-  res.json({ user: req.user });
+  res.json({ user: req.user, tenant: getTenant() });
 });
 
 /**

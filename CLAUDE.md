@@ -74,13 +74,15 @@ Do not require multiple AI agents to review every normal task. Use deterministic
 
 ## Production safety invariants
 
-Production app path: `~/domains/wms.kynox.io/nodejs`
+Production runs on a Hostinger VPS under Docker Compose since 2026-09-06 (see `docs/HOSTINGER-VPS-MIGRATION-2026-09-06.md`). The shared-hosting/Passenger layout below it is gone: there is no `~/domains/...` app directory and no `/opt/alt/alt-nodejs20/...` runtime. Commands that assumed either will fail or, worse, operate on the wrong path.
 
-Production database: `data/wms.db`
+Production app directory (VPS host): `/opt/apps/wms`
 
-Host runtime path: `/opt/alt/alt-nodejs20/root/usr/bin`
+Production database: `/opt/apps/wms/data/wms.db` on the host, bind-mounted into the container as `/app/data/wms.db`. Backups land in `/opt/apps/wms/backups` (`/app/backups` inside the container).
 
-Required production flags:
+Runtime: the `wms` service in `/opt/apps/wms/docker-compose.yml`, on the external Docker network `web` behind the central Caddy proxy at `/opt/proxy`. Run application commands inside the container (`docker compose exec wms node …`), never against a host Node installation. Restart with `docker compose`; there is no Passenger restart file.
+
+Required production flags (set in `docker-compose.yml`, not the shell):
 
 - `NODE_ENV=production`
 - `SKIP_AUTO_SEED=1`
@@ -102,7 +104,7 @@ Before any destructive or data-changing production operation, require an explici
 
 ## Current critical context
 
-Production database files were accidentally deleted on 2026-07-25. Recovery ultimately used a validated final live copy with integrity checks, rollback preservation, migration-only recovery, Passenger restart, health verification, and restored administrator login.
+Production database files were accidentally deleted on 2026-07-25. Recovery ultimately used a validated final live copy with integrity checks, rollback preservation, migration-only recovery, Passenger restart, health verification, and restored administrator login. That recovery ran on the old shared-hosting stack; the Passenger step in it is history, not a current procedure — today the equivalent is a `docker compose` restart on the VPS.
 
 The old first-run auto-seed behavior and an independent `reset-admin` hidden-seed path were hardened in later PRs. Current production state must still be verified from runtime evidence before relying on repository history for a risky operation.
 

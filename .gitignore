@@ -5,3 +5,8 @@ data/*.db-wal
 data/*.db-shm
 .env
 npm-debug.log*
+
+# Provisioned tenants: each directory holds a customer's live SQLite database
+# and its own JWT secret (.env). Never committed — one leaked secret here lets a
+# token forged for that tenant authenticate against it.
+tenants/

@@ -79,6 +79,7 @@ app.use(express.json({ limit: '2mb' }));
 // (complements the stricter per-email login limiter). Generous by default;
 // tune with API_RATE_LIMIT / API_RATE_WINDOW_MS, disable with API_RATE_LIMIT=0.
 const { apiRateLimit } = require('./middleware/apiRateLimit');
+const { requireModule } = require('./services/tenant');
 app.use('/api', apiRateLimit);
 
 // Lightweight structured request logging for API calls (skip health + static).
@@ -137,7 +138,11 @@ app.use('/api/cycle-count', require('./routes/cycleCount'));
 app.use('/api/reallocation', require('./routes/reallocation'));
 app.use('/api/inventory', require('./routes/inventory'));
 app.use('/api/shipping', require('./routes/shipping'));
-app.use('/api/subcontractor', require('./routes/subcontractors'));
+// Subcontractor custody is the Contracting edition's differentiator and is not
+// part of the Manufacturing edition. requireModule is a no-op on an install with
+// no configured edition, so this cannot restrict an existing deployment — see
+// server/services/tenant.js.
+app.use('/api/subcontractor', requireModule('subcontractor_admin'), require('./routes/subcontractors'));
 app.use('/api/admin', require('./routes/admin'));
 // Attachment routes live under /api (paths: /requests/:id/attachments, /attachments/:aid/...).
 app.use('/api', require('./routes/attachments'));
