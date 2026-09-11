@@ -37,18 +37,26 @@ If you find yourself typing any of these, you have misdiagnosed the problem.
 | | |
 |---|---|
 | Repository | `Islamce/WMS` |
-| Deploy commit | `bd3b5bc11f708cf2c9c61d1e54e542d75aabdaaf` on `main` |
+| Deploy commit | `a21df51af007931369b45225bbed3f5abd2b93d8` on `main` |
 | Host path | `/opt/apps/wms` |
 | Runtime | Docker Compose service `wms`, behind central Caddy at `/opt/proxy` on the external network `web` |
 | Database | `/opt/apps/wms/data/wms.db` (host) = `/app/data/wms.db` (container) |
 | Backups | `/opt/apps/wms/backups` (host) = `/app/backups` (container) |
 
-Production was last deployed **before PR #107**. Four merged pull requests are
-being deployed at once: #107, #116, #117, #118.
+Six merged pull requests are candidates for this deploy: #107, #116, #117,
+#118, #120, #121.
+
+**Which of them production already has is NOT established.** A session log entry
+records PR #107 as deployed, but that predates the move to this VPS, and the
+release workflow that statement refers to targeted the old shared host. What
+`/opt/apps/wms` is checked out at right now is a runtime fact, so read it in §2
+and trust that, not this paragraph. If the recorded commit already contains some
+of these pull requests, the deploy is simply smaller than the list above — it is
+not a reason to stop.
 
 ### Schema change — read this before you start
 
-Production currently reports **20 applied migrations**. This deploy adds four:
+Production currently reports **20 applied migrations**. This deploy adds five:
 
 | Migration | What it does |
 |---|---|
@@ -56,6 +64,7 @@ Production currently reports **20 applied migrations**. This deploy adds four:
 | `022_stock_ownership` | Adds `owner_type` (default `'COMPANY'`) and `owner_subcontractor_id` to `batches`; `engagement_type` to `subcontractors`; movement type `542` |
 | `023_subcontractor_returns` | New `subcontractor_returns` table; seeds permission `subcontractor_return_approval` |
 | `024_request_subcontractor_attribution` | Adds `subcontractor_id`/`subcontractor_name` to `material_request_headers`; seeds permission `project_management_approval` |
+| `025_subcontractor_ledger_convergence` | Creates an **empty** `subcontractor_ledger_convergence` table; writes nothing until a conversion is deliberately run |
 
 Every one is **additive**. No column is dropped, no row is rewritten, no default
 changes an existing value. Migration 021 creates its table empty **on purpose**:
@@ -64,6 +73,18 @@ behaves exactly as it does today.
 
 Migrations run automatically when the container starts (`server/index.js` line
 11 requires `./db/migrate`). You do not run them by hand.
+
+### Two behaviour changes worth knowing before you watch the logs
+
+**Goods receipt now asks who owns the material.** The field defaults to
+`COMPANY` and the batch column defaults to `'COMPANY'`, so an existing
+integration that posts a receipt without it behaves exactly as before. The
+screen only offers the choice when subcontractors are on file.
+
+**The industry editions do nothing on this install.** Production has no
+`tenant_profile` row, and no row means no edition restriction. All the edition
+work in these six pull requests is inert here until somebody deliberately runs
+`scripts/set-tenant-profile.js`. Do not run it as part of this deploy — see §6.
 
 ### Two new permissions are granted to NO role
 
@@ -90,7 +111,7 @@ docker compose exec wms node -e "
   console.log('requests:', db.prepare('SELECT COUNT(*) c FROM material_request_headers').get().c);
   console.log('integrity:', db.pragma('integrity_check')[0].integrity_check);
 "
-git -C /opt/apps/wms rev-parse HEAD
+git -C /opt/apps/wms rev-parse HEAD   # WRITE THIS DOWN — it is the rollback target
 curl -sS -o /dev/null -w '%{http_code}\n' https://wms.kynox.io/healthz
 ```
 
@@ -130,8 +151,8 @@ during deployment is still recoverable.
 ```bash
 cd /opt/apps/wms
 git fetch origin main
-git log --oneline -1 origin/main          # expect bd3b5bc
-git checkout bd3b5bc11f708cf2c9c61d1e54e542d75aabdaaf
+git log --oneline -1 origin/main          # expect a21df51
+git checkout a21df51af007931369b45225bbed3f5abd2b93d8
 docker compose build
 docker compose up -d
 docker compose logs -f wms                # watch the migrations apply, then Ctrl-C
@@ -176,7 +197,7 @@ curl -sS -o /dev/null -w '%{http_code}\n' https://wms.kynox.io/healthz
 
 Pass criteria, all of them:
 
-1. `migrations` is now **24**.
+1. `migrations` is now **25**.
 2. `users`, `materials`, `batches`, `requests` are **identical** to §2. A
    schema migration must not change a single row count.
 3. `integrity` is `ok`.
@@ -207,7 +228,45 @@ decide who gets them:
 
 Assign through the existing Permissions screen. Do not edit the database.
 
+### Do NOT set an industry edition as part of this deploy
+
+`scripts/set-tenant-profile.js` can put this install onto the Contracting or
+Manufacturing edition. Leave it alone here. Setting an edition **hides screens**
+from people who used them yesterday, and mixing that into a deploy makes the two
+changes impossible to tell apart when something looks wrong the next morning.
+
+When the owner does want it, that script dry-runs by default and prints exactly
+which modules would disappear and how many active users hold each one today.
+Read that output before using `--apply`. Clearing the edition
+(`--profile none --apply`) restores everything, because permissions are never
+revoked.
+
 ---
+
+## 6b. The `production-release` workflow, and how to use it the first time
+
+`.github/workflows/production-release.yml` used to target the **old shared
+host** — `/home/u716763642/domains/...`, the `/opt/alt/alt-nodejs20/...` runtime,
+and a Passenger `tmp/restart.txt` restart. `production-backup.yml` was
+retargeted to `/opt/apps/wms` and `docker compose` during the 2026-09-06
+migration; the release workflow was missed. It is now retargeted to match.
+
+It could not be rehearsed against production before its first use, so:
+
+- **`plan_only` defaults to true.** The first dispatch changes nothing and proves
+  the plumbing — SSH, the checkout, container health, the database. Run it that
+  way first and read the output.
+- A verified backup is taken before anything is touched, using the same scripts
+  the backup workflow already runs here.
+- The currently deployed commit is recorded first and is the automatic rollback
+  target if health or the post-checks fail.
+- Row counts are compared before and after; a changed count fails the run.
+- The `production` environment gate still requires a human approval.
+
+**If the plan run reports that `/opt/apps/wms` is not a git checkout**, the
+workflow stops and this manual procedure is the only route. That is not a
+failure of the workflow — it means the directory has to be reconciled into a
+checkout before any automation can move it between commits.
 
 ## 7. Rollback
 

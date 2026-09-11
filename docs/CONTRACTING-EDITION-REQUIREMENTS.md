@@ -246,6 +246,39 @@ against the user's own permissions and is unaffected by the edition.
   contracting profile's modules, or the edition gate would hide the screens from
   the tenant that bought the edition.
 
+- **Phase 4 — converging the two ledgers.** *Done.* §2.1 described the real
+  problem: two ledgers for one physical store. §3 required that existing
+  subcontractor ledger rows be **converted to owned stock rather than
+  discarded**, and nothing had done it, so the legacy free-text stream still sat
+  beside the new owned-batch stream.
+
+  `scripts/converge-subcontractor-ledger.js` carries them across, and refuses to
+  paper over the three things that make it harder than it looks:
+
+  1. A legacy line has no `material_id`. Guessing which material a free-text
+     description means is how a stock file gets corrupted, and a wrong match is
+     invisible afterwards because the quantity looks right against the wrong
+     item. Only an **exact** match on item code or description is proposed;
+     anything else needs a mapping the operator reviewed.
+  2. On-hand is **pooled across subcontractors** — when two delivered the same
+     description to the same site, the data does not say whose the remainder is.
+     Those lines are reported undecidable rather than assigned to whoever sorts
+     first, and are resolved by a mapping entry naming the owner, which is the
+     operator asserting what the data cannot.
+  3. On-hand is derived, so there is no row to stamp as done. Migration 025's
+     `subcontractor_ledger_convergence` records each conversion in the same
+     transaction as the batch, which is what stops a second run doubling the
+     site's stock.
+
+  Conversion deliberately writes **no inbound movement**. This material arrived
+  long ago; booking it as received today would corrupt every consumption rate and
+  reorder point computed from the ledger by date. The batch carries its real
+  quantity and its real owner, and nothing else.
+
+  Covered by `tests/e2e/ledger_convergence_test.py` (37 assertions), including
+  the one that matters most: running twice leaves exactly one batch at exactly
+  the same quantity.
+
 - **Phase 3c — the write path.** *Done, and it was a real defect.* Phases 1–3
   and the screens all shipped without any application code that ever **wrote**
   `owner_type`. Every test set it with raw SQL, which hid the gap: in production

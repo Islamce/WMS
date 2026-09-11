@@ -686,6 +686,43 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    id: '025_subcontractor_ledger_convergence',
+    description: 'Record which lines of the legacy free-text subcontractor ledger have been converted into owned batches, so a conversion can never run twice over the same stock. See docs/CONTRACTING-EDITION-REQUIREMENTS.md §3 and §6.',
+    up(database) {
+      // The legacy subcontractor stream is keyed on (warehouse, description,
+      // category, uom) — there is no row that represents "this quantity of this
+      // thing" to stamp, because the on-hand figure is derived: receipts minus
+      // consumptions. So idempotency needs its own record of what was converted.
+      //
+      // Without it a second run would create a second batch for the same
+      // physical material and double the site's stock. That is the failure this
+      // table exists to make impossible, and it is why conversion writes here in
+      // the same transaction as the batch.
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS subcontractor_ledger_convergence (
+          id                INTEGER PRIMARY KEY AUTOINCREMENT,
+          warehouse_code    TEXT NOT NULL,
+          description       TEXT NOT NULL,
+          category_id       INTEGER,
+          uom               TEXT NOT NULL,
+          subcontractor_id  INTEGER NOT NULL REFERENCES subcontractors(id),
+          material_id       INTEGER NOT NULL REFERENCES materials(id),
+          quantity          REAL NOT NULL CHECK (quantity > 0),
+          batch_id          INTEGER NOT NULL REFERENCES batches(id),
+          converged_at      TEXT NOT NULL DEFAULT (datetime('now')),
+          converged_by      TEXT
+        );
+
+        -- One conversion per legacy line. category_id is nullable and SQLite
+        -- treats NULLs as distinct in a UNIQUE index, so it is coalesced to a
+        -- sentinel — otherwise a line with no category could convert repeatedly.
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_subc_convergence_line
+          ON subcontractor_ledger_convergence(
+            warehouse_code, description, COALESCE(category_id, -1), uom);
+      `);
+    },
+  },
 ];
 
 function ensureTable() {
