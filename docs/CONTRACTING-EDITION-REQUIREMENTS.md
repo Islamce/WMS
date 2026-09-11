@@ -188,9 +188,43 @@ Settlement differences live outside this system, per §1.1.
   to the company, so a live deployment is unchanged), subcontractor attribution
   on issues, engagement type on the subcontractor record, and the return movement
   type. Additive; no behaviour change.
-- **Phase 2 — workflow.** Subcontractor requests routed through approval with
-  project management as the approving authority on quantities; the separate
-  return-approval stage and its outbound movement (§4.1).
-- **Phase 3 — reporting.** One consumption report per project/subcontractor,
-  engagement type distinguished (§4.2), and reorder alerts extended to cover
-  owned-by-subcontractor stock now that it is real inventory.
+- **Phase 2 — workflow.** *Done.* Subcontractor requests routed through approval
+  with project management as the approving authority on quantities
+  (`project_management_approval`, gating both the decision and any change to an
+  approved quantity — but deliberately not rejection); the separate
+  return-approval stage and its outbound movement under type 542 (§4.1).
+  Both authorities are seeded granted to no role, so an existing install is
+  unchanged until an administrator assigns them. Server-side only so far: no
+  screen yet exposes either, which is the first thing phase 3 needs.
+- **Phase 3 — reporting.** *Server side done.* One report per
+  subcontractor/material/store over the real owned inventory
+  (`GET /api/subcontractor/owned-stock-report`): received, returned, issued and
+  on hand, with `engagement_type` carried on every row for presentation (§4.2)
+  and nothing branching on it. Depletion alerts are a percentage of what was
+  delivered, not a reorder point, because no reorder point can exist for
+  material the company neither buys nor owns; a fully depleted line is
+  deliberately not an alert.
+
+  Phase 1 turned out to have introduced a defect rather than left a gap here.
+  Replenishment summed batches without looking at the owner, so a
+  subcontractor's material counted as stock the company could draw on and
+  suppressed the reorder signal on the company's own. `current_stock` in
+  `services/analytics.js` now counts COMPANY-owned batches only, with
+  `subcontractor_stock` reported alongside so the quantity is never silently
+  missing. Every batch defaults to `COMPANY`, so an install with no owned stock
+  sees the identical number it saw before.
+
+- **Phase 3b — screens.** *Done.* Two new screens (Returns to Owner, and the
+  Subcontractor-Owned Stock report), the subcontractor field on the request form,
+  and the attribution plus authority notice on the approval screen. The approver
+  is told why they cannot approve a subcontractor request **before** acting,
+  rather than being refused by the server afterwards; they are also told they may
+  still return or reject it. Both new permission keys are listed in the
+  contracting profile's modules, or the edition gate would hide the screens from
+  the tenant that bought the edition.
+
+  Covered by `tests/smoke/subcontractor_ownership_browser.js` (16 assertions),
+  which pins the authority split as a user experiences it: the warehouse sees the
+  return queue but is not offered Approve, and assigning the authority makes both
+  the warning and the missing button change — proving the fail-closed permissions
+  are assignable rather than permanently locked.

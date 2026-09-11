@@ -11,6 +11,14 @@ Pages.createRequest = {
     try { this.meta = await Api.get('/api/meta'); }
     catch (e) { this.meta = { priorities: ['NORMAL'], requestTypes: ['COST_CENTER'], departments: [], plants: [], costCenters: [] }; }
 
+    // Contracting only. On a Manufacturing tenant the edition gate hides the
+    // module, and asking for the register would 404 — so don't ask.
+    this.subcontractors = [];
+    if (App.tenantHasModule('subcontractor_admin')) {
+      try { ({ subcontractors: this.subcontractors } = await Api.get('/api/subcontractor/subcontractors')); }
+      catch (e) { this.subcontractors = []; }
+    }
+
     const opts = (arr, valueKey, labelKey) =>
       arr.map((o) => `<option value="${UI.esc(o[valueKey])}">${UI.esc(o[labelKey])}</option>`).join('');
 
@@ -35,6 +43,16 @@ Pages.createRequest = {
             <div class="form-group"><label>Cost Center</label>
               <select id="cr-cost-center"><option value="">— Select —</option>${opts(this.meta.costCenters, 'code', 'label')}</select></div>
           </div>
+          ${this.subcontractors.length ? `
+          <div class="form-row">
+            <div class="form-group"><label>Raised for Subcontractor <span class="muted">(optional)</span></label>
+              <select id="cr-subcontractor"><option value="">— Company labour —</option>
+                ${this.subcontractors.map((sc) => `<option value="${sc.id}">${UI.esc(sc.name)}</option>`).join('')}
+              </select>
+              <div class="hint">Naming a subcontractor makes the issue attributable to them, and moves approval
+                of the quantity to project management.</div></div>
+            <div class="form-group"></div>
+          </div>` : ''}
           <div class="form-row">
             <div class="form-group"><label>WBS Element</label><input type="text" id="cr-wbs" /></div>
             <div class="form-group"><label>Internal / Production Order</label><input type="text" id="cr-order" /></div>
@@ -150,6 +168,7 @@ Pages.createRequest = {
       wbs_element: document.getElementById('cr-wbs').value,
       internal_order: document.getElementById('cr-order').value,
       purpose: document.getElementById('cr-purpose').value,
+      subcontractor_id: Number((document.getElementById('cr-subcontractor') || {}).value) || undefined,
       lines: this.lines.map((l) => ({ material_id: l.material_id, requested_quantity: l.requested_quantity })),
     };
     await UI.withBusy(btn, async () => {

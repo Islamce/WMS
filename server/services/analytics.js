@@ -164,9 +164,25 @@ function analyzeWithCoverage() {
   const byMaterial = {};
   windowMovements.forEach((movement) => { (byMaterial[movement.material_id] = byMaterial[movement.material_id] || []).push(movement); });
 
+  // current_stock counts only COMPANY-owned batches. Once a subcontractor's
+  // material became real inventory (phase 1 of the Contracting edition), an
+  // owner-blind sum would tell replenishment that the company holds stock it may
+  // not draw on: 500 blocks belonging to a subcontractor would suppress the
+  // reorder signal on the company's own blocks. Every batch defaults to
+  // 'COMPANY', so on an install with no owned stock this is the same number as
+  // before — the split only starts to matter once somebody marks stock as owned.
+  //
+  // Subcontractor-owned stock is reported alongside rather than dropped: it is
+  // real material in a real bin, it just answers a different question. Its own
+  // depletion signal lives in the owned-stock report, where the party who has to
+  // act on it can see it.
   const materials = db.prepare(`SELECT m.id, m.item_code, m.description, m.unit, m.price, m.currency, m.material_group, m.plant,
-    COALESCE((SELECT SUM(remaining_quantity-reserved_quantity) FROM batches WHERE material_id=m.id),0) AS current_stock,
-    (SELECT MIN(receiving_date) FROM batches WHERE material_id=m.id AND remaining_quantity>0) AS oldest_stock_date
+    COALESCE((SELECT SUM(remaining_quantity-reserved_quantity) FROM batches
+              WHERE material_id=m.id AND COALESCE(owner_type,'COMPANY')='COMPANY'),0) AS current_stock,
+    COALESCE((SELECT SUM(remaining_quantity-reserved_quantity) FROM batches
+              WHERE material_id=m.id AND owner_type='SUBCONTRACTOR'),0) AS subcontractor_stock,
+    (SELECT MIN(receiving_date) FROM batches
+     WHERE material_id=m.id AND remaining_quantity>0 AND COALESCE(owner_type,'COMPANY')='COMPANY') AS oldest_stock_date
     FROM materials m ORDER BY m.item_code`).all();
 
   const items = materials.map((material) => {
@@ -211,6 +227,10 @@ function analyzeWithCoverage() {
     return {
       material_id: material.id, item_code: material.item_code, description: material.description, unit: material.unit,
       material_group: material.material_group, price: material.price, current_stock: Number(material.current_stock),
+      // Held on site but not the company's to plan against. Reported so the
+      // number is never silently missing from a stock screen, and excluded from
+      // every replenishment signal below.
+      subcontractor_stock: Number(material.subcontractor_stock),
       stock_value: round(Number(material.current_stock) * (material.price || 0)),
       out_qty_window: round(grossIssues), out_events_window: issueEvents, net_consumption: round(netConsumption),
       avg_monthly_consumption: round(Math.max(0, netConsumption) / WINDOW_DAYS * 30),

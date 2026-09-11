@@ -589,6 +589,103 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    id: '023_subcontractor_returns',
+    description: 'Return of subcontractor-owned material: a distinct approval stage, then a real outbound movement of the APPROVED quantity under movement type 542. Requested by project management, not the warehouse. See docs/CONTRACTING-EDITION-REQUIREMENTS.md §4.1.',
+    up(database) {
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS subcontractor_returns (
+          id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+          return_number       TEXT NOT NULL UNIQUE,
+          subcontractor_id    INTEGER NOT NULL REFERENCES subcontractors(id),
+          warehouse_code      TEXT NOT NULL,
+          batch_id            INTEGER NOT NULL REFERENCES batches(id),
+          -- The contractor was explicit that the APPROVED quantity is what
+          -- moves, not the requested one. Keeping both is what makes a
+          -- part-approval auditable after the fact.
+          quantity_requested  REAL NOT NULL CHECK (quantity_requested > 0),
+          quantity_approved   REAL CHECK (quantity_approved IS NULL OR quantity_approved > 0),
+          status              TEXT NOT NULL DEFAULT 'PENDING_APPROVAL'
+                              CHECK (status IN ('PENDING_APPROVAL','APPROVED','REJECTED','EXECUTING','EXECUTED')),
+          reason              TEXT,
+          requested_by        INTEGER REFERENCES users(id),
+          requested_by_name   TEXT,
+          requested_at        TEXT NOT NULL DEFAULT (datetime('now')),
+          approved_by         INTEGER REFERENCES users(id),
+          approved_by_name    TEXT,
+          approved_at         TEXT,
+          rejected_by         INTEGER REFERENCES users(id),
+          rejected_by_name    TEXT,
+          rejected_at         TEXT,
+          rejection_reason    TEXT,
+          executed_by         INTEGER REFERENCES users(id),
+          executed_by_name    TEXT,
+          executed_at         TEXT,
+          execution_error     TEXT,
+          movement_type       TEXT,
+          updated_at          TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_subc_returns_status
+          ON subcontractor_returns(status, requested_at);
+        CREATE INDEX IF NOT EXISTS idx_subc_returns_subcontractor
+          ON subcontractor_returns(subcontractor_id, status);
+        CREATE INDEX IF NOT EXISTS idx_subc_returns_batch
+          ON subcontractor_returns(batch_id);
+      `);
+
+      // Project management approves the quantity, NOT the warehouse. That
+      // separation is the point of the requirement, so it gets its own
+      // permission rather than reusing a warehouse one. Seeded as a permission
+      // only: no role is granted it here, so on an existing install the
+      // capability starts admin-only until an administrator assigns it —
+      // fail-closed, and visible.
+      database.exec(`
+        INSERT OR IGNORE INTO permissions (key, label)
+        VALUES ('subcontractor_return_approval', 'Subcontractor Return Approval');
+      `);
+    },
+  },
+  {
+    id: '024_request_subcontractor_attribution',
+    description: 'Attribute a material request to the subcontractor it is raised for, and make project management the approving authority on quantities for those requests. See docs/CONTRACTING-EDITION-REQUIREMENTS.md §5 (phase 2).',
+    up(database) {
+      // Material is drawn on the subcontractor's request. Until now the request
+      // recorded who typed it and which cost object it hit, but never on whose
+      // behalf it was raised — so an issue could not be attributed to the party
+      // whose material it was. Nullable on purpose: a company-labour request has
+      // no subcontractor, and every existing row genuinely has none.
+      addColumnIfMissing(database, 'material_request_headers', 'subcontractor_id',
+        'INTEGER REFERENCES subcontractors(id)');
+      // Snapshot of the name at request time, matching how this table already
+      // keeps requester_name: a subcontractor can be renamed, and a historical
+      // request must keep reading the way it was approved.
+      addColumnIfMissing(database, 'material_request_headers', 'subcontractor_name', 'TEXT');
+      database.exec(`
+        CREATE INDEX IF NOT EXISTS idx_request_headers_subcontractor
+          ON material_request_headers(subcontractor_id, request_status);
+      `);
+
+      // The contractor was explicit: quantities and progress are set by project
+      // management and design, not by the stores. So on a request raised for a
+      // subcontractor, holding 'approvals' is no longer sufficient — the
+      // approver must also hold this authority. Kept separate from
+      // 'subcontractor_return_approval' because the two decisions differ in
+      // consequence: an issue is routine and reversible on paper, handing
+      // material back out of the company's custody is not. One organisation can
+      // still grant both to the same role; a split is only possible if the keys
+      // are.
+      //
+      // Seeded as a permission only: no role is granted it here, so on an
+      // existing install nothing changes for company requests and a
+      // subcontractor request starts admin-approvable until an administrator
+      // assigns it — fail-closed, and visible.
+      database.exec(`
+        INSERT OR IGNORE INTO permissions (key, label)
+        VALUES ('project_management_approval', 'Project Management Approval (subcontractor quantities)');
+      `);
+    },
+  },
 ];
 
 function ensureTable() {

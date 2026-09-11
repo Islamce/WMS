@@ -19,7 +19,8 @@ Pages.approvals = {
         <tbody>${requests.map((r) => `
           <tr class="row-link" data-id="${r.id}" role="button" tabindex="0" aria-label="Review request ${UI.esc(r.request_number)}">
             <td><span class="chip accent">${UI.esc(r.request_number)}</span></td><td>${UI.esc(r.requester_name || '')}</td>
-            <td>${UI.esc(r.department || '')}</td>
+            <td>${UI.esc(r.department || '')}${r.subcontractor_name
+              ? `<div class="muted sm">for ${UI.esc(r.subcontractor_name)}</div>` : ''}</td>
             <td><span class="badge ${r.priority === 'URGENT' || r.priority === 'HIGH' ? 'pending' : 'role'}">${r.priority}</span></td>
             <td><span class="badge ${statusClass(r.request_status)}">${UI.esc(r.request_status)}</span></td>
             <td>${r.total_lines}</td><td>${UI.fmtDate(r.submitted_at)}</td>
@@ -43,7 +44,16 @@ Pages.approvals = {
           <div class="item"><div class="k">Required</div><div class="v">${r.required_date || '—'}</div></div>
           <div class="item"><div class="k">Cost Center</div><div class="v">${UI.esc(r.cost_center || '—')}</div></div>
           <div class="item"><div class="k">WBS</div><div class="v">${UI.esc(r.wbs_element || '—')}</div></div>
+          ${r.subcontractor_name ? `<div class="item"><div class="k">Raised for</div>
+            <div class="v">${UI.esc(r.subcontractor_name)}</div></div>` : ''}
         </div>
+        ${r.subcontractor_id && !App.can('project_management_approval') ? `
+          <div class="inline-alert warning" style="margin-bottom:12px">
+            This request is raised for <strong>${UI.esc(r.subcontractor_name || 'a subcontractor')}</strong>.
+            Quantities on a subcontractor request are approved by project management, so approving it or
+            changing a quantity needs the <strong>Project Management Approval</strong> authority. You can
+            still return or reject it.
+          </div>` : ''}
         <button class="btn secondary sm" id="ap-edit-header">Modify header</button>
         <button class="btn secondary sm" id="ap-add-line">+ Add line</button>
 

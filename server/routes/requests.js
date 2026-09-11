@@ -33,6 +33,7 @@ router.get('/', requirePermission('material_requests'), (req, res) => {
       .some((p) => req.user.permissions.includes(p));
   if (!privileged) { filters.push('requester_id = ?'); params.push(req.user.id); }
   if (req.query.status) { filters.push('request_status = ?'); params.push(req.query.status); }
+  if (req.query.subcontractor_id) { filters.push('subcontractor_id = ?'); params.push(req.query.subcontractor_id); }
   if (req.query.search) {
     filters.push('(request_number LIKE ? OR purpose LIKE ? OR requester_name LIKE ?)');
     const like = `%${req.query.search}%`;
@@ -44,7 +45,7 @@ router.get('/', requirePermission('material_requests'), (req, res) => {
     SELECT id, request_number, request_type, requester_id, requester_name, department, priority, required_date,
            request_status, current_workflow_step, issue_warehouse_code, issue_warehouse_name,
            movement_type, movement_type_description, erp_reservation_number, erp_reference_number,
-           plant, storage_location, cost_center, wbs_element,
+           plant, storage_location, cost_center, wbs_element, subcontractor_id, subcontractor_name,
            total_lines, completed_lines, shortage_lines, created_at, submitted_at
     FROM material_request_headers ${where}
     ORDER BY id DESC LIMIT ? OFFSET ?
@@ -72,6 +73,19 @@ router.post('/', requirePermission('create_request'), withIdempotency('POST /api
       return res.status(400).json({ error: `Line ${i + 1}: quantity must be greater than zero.` });
     }
   }
+  // A request may be raised on behalf of a subcontractor. When it is, the
+  // approving authority changes (project management, not the warehouse) and the
+  // issue becomes attributable to the party whose material it is.
+  let subcontractor = null;
+  if (b.subcontractor_id !== undefined && b.subcontractor_id !== null && b.subcontractor_id !== '') {
+    if (!isId(b.subcontractor_id)) return res.status(400).json({ error: 'subcontractor_id is invalid.' });
+    subcontractor = db.prepare('SELECT id, name, is_active FROM subcontractors WHERE id=?').get(b.subcontractor_id);
+    if (!subcontractor) return res.status(404).json({ error: 'Subcontractor not found.' });
+    if (!subcontractor.is_active) {
+      return res.status(409).json({ error: `Subcontractor '${subcontractor.name}' is not active.` });
+    }
+  }
+
   const requestNumber = nextRequestNumber();
   const create = db.transaction(() => {
     const info = db.prepare(`
@@ -79,10 +93,11 @@ router.post('/', requirePermission('create_request'), withIdempotency('POST /api
         (request_number, request_type, requester_id, requester_name, employee_id, department, section,
          company, business_unit, plant, cost_center, wbs_element, internal_order, production_order,
          required_date, priority, purpose, delivery_location, request_status, current_workflow_step,
-         created_by, total_lines)
+         created_by, total_lines, subcontractor_id, subcontractor_name)
       VALUES (@rn, @request_type, @rid, @rname, @employee_id, @department, @section,
          @company, @business_unit, @plant, @cost_center, @wbs_element, @internal_order, @production_order,
-         @required_date, @priority, @purpose, @delivery_location, @status, @status, @rid, @total)
+         @required_date, @priority, @purpose, @delivery_location, @status, @status, @rid, @total,
+         @subcontractor_id, @subcontractor_name)
     `).run({
       rn: requestNumber,
       request_type: b.request_type || 'COST_CENTER',
@@ -94,6 +109,8 @@ router.post('/', requirePermission('create_request'), withIdempotency('POST /api
       required_date: b.required_date || null, priority: b.priority || 'NORMAL',
       purpose: (b.purpose || '').trim() || null, delivery_location: b.delivery_location || null,
       status: HEADER_STATUS.DRAFT, total: b.lines.length,
+      subcontractor_id: subcontractor ? subcontractor.id : null,
+      subcontractor_name: subcontractor ? subcontractor.name : null,
     });
     const requestId = info.lastInsertRowid;
     const insLine = db.prepare(`
@@ -117,7 +134,11 @@ router.post('/', requirePermission('create_request'), withIdempotency('POST /api
       });
     });
     audit.record({ entityType: 'MaterialRequestHeader', entityId: requestId, requestNumber,
-      action: 'CREATE', newValue: { lines: b.lines.length }, user: req.user, sourceScreen: 'Create Request' });
+      action: 'CREATE',
+      newValue: subcontractor
+        ? { lines: b.lines.length, subcontractor: subcontractor.name }
+        : { lines: b.lines.length },
+      user: req.user, sourceScreen: 'Create Request' });
     return requestId;
   });
   let id;

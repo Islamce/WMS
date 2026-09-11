@@ -53,6 +53,10 @@ run_suite reports_test.py
 run_suite p0_hardening_test.py
 run_suite p1_hardening_test.py
 run_suite quickwins_test.py
+# Drives the full return-to-owner workflow against the shared dataset.
+run_suite subcontractor_return_test.py
+# Subcontractor request attribution + the project-management quantity authority.
+run_suite subcontractor_request_test.py
 # Boots its own throwaway servers on separate ports; needs no shared dataset.
 run_suite autoseed_guard_test.py
 # Works on its own temporary databases; needs no server or shared dataset.
@@ -61,6 +65,9 @@ run_suite provisioning_test.py
 run_suite tenant_edition_test.py
 # Offline: migrated temp database; pins that ownership defaults leave live data alone.
 run_suite stock_ownership_test.py
+# LAST in this phase — it marks a batch as subcontractor-owned and depletes it,
+# so it must not run before suites that expect the seeded stock intact.
+run_suite subcontractor_report_test.py
 stop_server
 
 echo ""

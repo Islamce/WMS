@@ -57,6 +57,11 @@ const PROFILES = {
     modules: [
       ...CORE_MODULES,
       'subcontractor_admin', 'subcontractor_receiving', 'subcontractor_quality_inspection',
+      // Phase 2/3 authorities. They must be listed here or the edition gate
+      // would hide the return queue and the subcontractor approval step from a
+      // contracting tenant that has explicitly bought this edition — a user
+      // holding the permission would still see nothing.
+      'subcontractor_return_approval', 'project_management_approval',
       'quality',
       'reallocation', 'shipping', 'expiry_alerts',
     ],
