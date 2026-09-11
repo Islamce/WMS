@@ -188,9 +188,14 @@ Settlement differences live outside this system, per §1.1.
   to the company, so a live deployment is unchanged), subcontractor attribution
   on issues, engagement type on the subcontractor record, and the return movement
   type. Additive; no behaviour change.
-- **Phase 2 — workflow.** Subcontractor requests routed through approval with
-  project management as the approving authority on quantities; the separate
-  return-approval stage and its outbound movement (§4.1).
+- **Phase 2 — workflow.** *Done.* Subcontractor requests routed through approval
+  with project management as the approving authority on quantities
+  (`project_management_approval`, gating both the decision and any change to an
+  approved quantity — but deliberately not rejection); the separate
+  return-approval stage and its outbound movement under type 542 (§4.1).
+  Both authorities are seeded granted to no role, so an existing install is
+  unchanged until an administrator assigns them. Server-side only so far: no
+  screen yet exposes either, which is the first thing phase 3 needs.
 - **Phase 3 — reporting.** One consumption report per project/subcontractor,
   engagement type distinguished (§4.2), and reorder alerts extended to cover
   owned-by-subcontractor stock now that it is real inventory.

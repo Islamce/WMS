@@ -646,6 +646,46 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    id: '024_request_subcontractor_attribution',
+    description: 'Attribute a material request to the subcontractor it is raised for, and make project management the approving authority on quantities for those requests. See docs/CONTRACTING-EDITION-REQUIREMENTS.md §5 (phase 2).',
+    up(database) {
+      // Material is drawn on the subcontractor's request. Until now the request
+      // recorded who typed it and which cost object it hit, but never on whose
+      // behalf it was raised — so an issue could not be attributed to the party
+      // whose material it was. Nullable on purpose: a company-labour request has
+      // no subcontractor, and every existing row genuinely has none.
+      addColumnIfMissing(database, 'material_request_headers', 'subcontractor_id',
+        'INTEGER REFERENCES subcontractors(id)');
+      // Snapshot of the name at request time, matching how this table already
+      // keeps requester_name: a subcontractor can be renamed, and a historical
+      // request must keep reading the way it was approved.
+      addColumnIfMissing(database, 'material_request_headers', 'subcontractor_name', 'TEXT');
+      database.exec(`
+        CREATE INDEX IF NOT EXISTS idx_request_headers_subcontractor
+          ON material_request_headers(subcontractor_id, request_status);
+      `);
+
+      // The contractor was explicit: quantities and progress are set by project
+      // management and design, not by the stores. So on a request raised for a
+      // subcontractor, holding 'approvals' is no longer sufficient — the
+      // approver must also hold this authority. Kept separate from
+      // 'subcontractor_return_approval' because the two decisions differ in
+      // consequence: an issue is routine and reversible on paper, handing
+      // material back out of the company's custody is not. One organisation can
+      // still grant both to the same role; a split is only possible if the keys
+      // are.
+      //
+      // Seeded as a permission only: no role is granted it here, so on an
+      // existing install nothing changes for company requests and a
+      // subcontractor request starts admin-approvable until an administrator
+      // assigns it — fail-closed, and visible.
+      database.exec(`
+        INSERT OR IGNORE INTO permissions (key, label)
+        VALUES ('project_management_approval', 'Project Management Approval (subcontractor quantities)');
+      `);
+    },
+  },
 ];
 
 function ensureTable() {

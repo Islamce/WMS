@@ -19,6 +19,28 @@ router.use(authenticate, requirePermission('approvals'));
 
 const APPROVABLE = [HEADER_STATUS.PENDING_MANAGER_APPROVAL, HEADER_STATUS.UNDER_REVIEW];
 
+/**
+ * On a request raised for a subcontractor, quantities are project management's
+ * call, not the warehouse's — the contractor was explicit about that. Holding
+ * 'approvals' lets you see the request; deciding what quantity it may draw
+ * additionally needs this authority.
+ *
+ * Returns an error payload to send, or null when the user may act. Admins are
+ * exempt, as they are for the approval matrix: on a fresh install nobody holds
+ * this yet, and an administrator has to be able to assign it.
+ */
+function projectManagementGate(user, header) {
+  if (!header.subcontractor_id) return null;
+  if (user.role === 'admin') return null;
+  if (user.permissions.includes('project_management_approval')) return null;
+  return {
+    error: `Request ${header.request_number} is raised for subcontractor `
+      + `'${header.subcontractor_name || header.subcontractor_id}'. Quantities on a subcontractor `
+      + "request are approved by project management, which requires the 'project_management_approval' authority.",
+    required_permission: 'project_management_approval',
+  };
+}
+
 /** GET /api/approvals/matrix — the value-based approval authority table. */
 router.get('/matrix', (req, res) => {
   res.json({ thresholds: approvalMatrix.listThresholds() });
@@ -28,7 +50,8 @@ router.get('/matrix', (req, res) => {
 router.get('/', (req, res) => {
   const rows = db.prepare(`
     SELECT id, request_number, requester_name, department, priority, required_date,
-           request_status, total_lines, created_at, submitted_at
+           request_status, total_lines, created_at, submitted_at,
+           subcontractor_id, subcontractor_name
     FROM material_request_headers
     WHERE request_status IN (?, ?)
     ORDER BY CASE priority WHEN 'URGENT' THEN 0 WHEN 'HIGH' THEN 1 WHEN 'NORMAL' THEN 2 ELSE 3 END, submitted_at
@@ -89,6 +112,9 @@ router.patch('/:id/lines/:lineId', (req, res) => {
   const line = db.prepare('SELECT * FROM material_request_lines WHERE id=? AND request_id=?')
     .get(req.params.lineId, header.id);
   if (!line) return res.status(404).json({ error: 'Line not found.' });
+
+  const gate = projectManagementGate(req.user, header);
+  if (gate) return res.status(403).json(gate);
 
   const { approved_quantity, reason } = req.body || {};
   if (!isPositiveNumber(approved_quantity)) {
@@ -201,6 +227,14 @@ router.post('/:id/decision', (req, res) => {
     if (decision === 'partial' && approvedSet.size === 0) {
       return res.status(400).json({ error: 'Select at least one line to partially approve.' });
     }
+
+    // Project management owns the quantity decision on a subcontractor request.
+    // Deliberately not applied to 'reject' or 'return': refusing to release
+    // material is never the direction that needs the extra authority, and
+    // blocking a rejection would leave a request stuck with nobody able to
+    // close it.
+    const gate = projectManagementGate(req.user, header);
+    if (gate) return res.status(403).json(gate);
 
     // Approval matrix: a high-value request needs an approver holding the
     // required authority. Admins are exempt.
