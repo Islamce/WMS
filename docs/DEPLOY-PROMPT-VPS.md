@@ -37,14 +37,14 @@ If you find yourself typing any of these, you have misdiagnosed the problem.
 | | |
 |---|---|
 | Repository | `Islamce/WMS` |
-| Deploy commit | `bd3b5bc11f708cf2c9c61d1e54e542d75aabdaaf` on `main` |
+| Deploy commit | `a21df51af007931369b45225bbed3f5abd2b93d8` on `main` |
 | Host path | `/opt/apps/wms` |
 | Runtime | Docker Compose service `wms`, behind central Caddy at `/opt/proxy` on the external network `web` |
 | Database | `/opt/apps/wms/data/wms.db` (host) = `/app/data/wms.db` (container) |
 | Backups | `/opt/apps/wms/backups` (host) = `/app/backups` (container) |
 
-Production was last deployed **before PR #107**. Four merged pull requests are
-being deployed at once: #107, #116, #117, #118.
+Production was last deployed **before PR #107**. Six merged pull requests are
+being deployed at once: #107, #116, #117, #118, #120, #121.
 
 ### Schema change — read this before you start
 
@@ -64,6 +64,18 @@ behaves exactly as it does today.
 
 Migrations run automatically when the container starts (`server/index.js` line
 11 requires `./db/migrate`). You do not run them by hand.
+
+### Two behaviour changes worth knowing before you watch the logs
+
+**Goods receipt now asks who owns the material.** The field defaults to
+`COMPANY` and the batch column defaults to `'COMPANY'`, so an existing
+integration that posts a receipt without it behaves exactly as before. The
+screen only offers the choice when subcontractors are on file.
+
+**The industry editions do nothing on this install.** Production has no
+`tenant_profile` row, and no row means no edition restriction. All the edition
+work in these six pull requests is inert here until somebody deliberately runs
+`scripts/set-tenant-profile.js`. Do not run it as part of this deploy — see §6.
 
 ### Two new permissions are granted to NO role
 
@@ -130,8 +142,8 @@ during deployment is still recoverable.
 ```bash
 cd /opt/apps/wms
 git fetch origin main
-git log --oneline -1 origin/main          # expect bd3b5bc
-git checkout bd3b5bc11f708cf2c9c61d1e54e542d75aabdaaf
+git log --oneline -1 origin/main          # expect a21df51
+git checkout a21df51af007931369b45225bbed3f5abd2b93d8
 docker compose build
 docker compose up -d
 docker compose logs -f wms                # watch the migrations apply, then Ctrl-C
@@ -206,6 +218,19 @@ decide who gets them:
 | `subcontractor_return_approval` | Approves handing a subcontractor's own material back out of the store |
 
 Assign through the existing Permissions screen. Do not edit the database.
+
+### Do NOT set an industry edition as part of this deploy
+
+`scripts/set-tenant-profile.js` can put this install onto the Contracting or
+Manufacturing edition. Leave it alone here. Setting an edition **hides screens**
+from people who used them yesterday, and mixing that into a deploy makes the two
+changes impossible to tell apart when something looks wrong the next morning.
+
+When the owner does want it, that script dry-runs by default and prints exactly
+which modules would disappear and how many active users hold each one today.
+Read that output before using `--apply`. Clearing the edition
+(`--profile none --apply`) restores everything, because permissions are never
+revoked.
 
 ---
 
