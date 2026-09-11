@@ -328,6 +328,124 @@ router.get('/reconciliation', requirePermission(['subcontractor_receiving', 'sub
 });
 
 // ---------------------------------------------------------------------------
+// Owned-stock report (Contracting edition, phase 3)
+//
+// One report per subcontractor and material over the REAL inventory phase 1
+// created — batches carrying an owner — rather than over the older SAP-free
+// delivery/consumption stream that /reconciliation covers. The two answer
+// different questions and neither replaces the other.
+//
+// Every figure here is derived from receipt and issue quantities alone. That is
+// the deliberate constraint from §1.2 of the requirements: the contractor was
+// clear that a BOM/BOQ mapped to each WBS element is hard to establish on a
+// construction project and harder to keep accurate, so an indicator that needs
+// one is an indicator nobody can use. Received, issued, returned and on hand
+// need no such mapping and are correct from day one.
+//
+//   received = the quantity booked into the owned batches
+//   returned = what has actually been handed back under movement type 542
+//   on hand  = what is still physically in the store
+//   issued   = received - returned - on hand
+//
+// Issued is a RESIDUAL, not an independently posted figure: stock_transactions
+// carries no batch reference, so consumption cannot be attributed per batch from
+// the ledger. Calling it "issued" rather than "consumed" is deliberate — the
+// system knows the material left the store, not that it was built into the work.
+// Progress and execution rates belong to project management, not to the stores.
+// ---------------------------------------------------------------------------
+
+/**
+ * GET /api/subcontractor/owned-stock-report
+ *
+ * Query: subcontractor_id, warehouse_code, low_stock_percent (default 10).
+ *
+ * engagement_type rides along on every row so the client can present
+ * supply-only and supply-and-execute differently. Per §4.2 that distinction is
+ * PRESENTATIONAL only — both post through identical transactions, and nothing
+ * in this query branches on it.
+ */
+router.get('/owned-stock-report',
+  requirePermission(['subcontractor_admin', 'subcontractor_receiving',
+    'subcontractor_return_approval', 'project_management_approval', 'kpi_dashboard']),
+  (req, res) => {
+    const filters = ["b.owner_type = 'SUBCONTRACTOR'", 'b.owner_subcontractor_id IS NOT NULL'];
+    const params = [];
+    if (req.query.subcontractor_id) {
+      if (!isId(req.query.subcontractor_id)) return res.status(400).json({ error: 'subcontractor_id is invalid.' });
+      filters.push('b.owner_subcontractor_id = ?');
+      params.push(req.query.subcontractor_id);
+    }
+    if (req.query.warehouse_code) { filters.push('b.warehouse_code = ?'); params.push(req.query.warehouse_code); }
+
+    // A percentage rather than an absolute level, because no reorder point can
+    // exist for material the company neither buys nor owns. "Nearly finished"
+    // here means: little of what was delivered is left.
+    const lowStockPercent = req.query.low_stock_percent === undefined
+      ? 10 : Number(req.query.low_stock_percent);
+    if (!Number.isFinite(lowStockPercent) || lowStockPercent < 0 || lowStockPercent > 100) {
+      return res.status(400).json({ error: 'low_stock_percent must be between 0 and 100.' });
+    }
+
+    const rows = db.prepare(`
+      SELECT s.id AS subcontractor_id, s.name AS subcontractor_name,
+             s.engagement_type, s.trade_category,
+             b.warehouse_code, b.material_id, b.material_code, b.material_description,
+             m.unit AS uom,
+             SUM(b.received_quantity)  AS quantity_received,
+             SUM(b.remaining_quantity) AS quantity_on_hand,
+             SUM(b.reserved_quantity)  AS quantity_reserved,
+             COALESCE((
+               SELECT SUM(r.quantity_approved) FROM subcontractor_returns r
+               WHERE r.status = 'EXECUTED' AND r.batch_id IN (
+                 SELECT b2.id FROM batches b2
+                 WHERE b2.owner_subcontractor_id = b.owner_subcontractor_id
+                   AND b2.material_id = b.material_id
+                   AND b2.warehouse_code IS b.warehouse_code
+               )
+             ), 0) AS quantity_returned,
+             COUNT(*) AS batch_count
+      FROM batches b
+      JOIN subcontractors s ON s.id = b.owner_subcontractor_id
+      LEFT JOIN materials m ON m.id = b.material_id
+      WHERE ${filters.join(' AND ')}
+      GROUP BY b.owner_subcontractor_id, b.material_id, b.warehouse_code
+      ORDER BY s.name, b.material_code, b.warehouse_code
+    `).all(...params);
+
+    const report = rows.map((row) => {
+      const received = Number(row.quantity_received) || 0;
+      const onHand = Number(row.quantity_on_hand) || 0;
+      const returned = Number(row.quantity_returned) || 0;
+      // Clamped at zero: a negative residual would mean the books disagree, and
+      // a report is the wrong place to silently invent a correction. It is
+      // surfaced as a discrepancy instead so somebody looks at it.
+      const issued = Math.max(0, received - returned - onHand);
+      const percentRemaining = received > 0 ? (onHand / received) * 100 : 0;
+      return {
+        ...row,
+        quantity_received: received,
+        quantity_on_hand: onHand,
+        quantity_returned: returned,
+        quantity_issued: issued,
+        percent_remaining: Math.round(percentRemaining * 10) / 10,
+        // Depleted material is not "low" — there is nothing left to warn about,
+        // and a permanent alert on every finished line is how alerts get ignored.
+        low_stock: onHand > 0 && percentRemaining <= lowStockPercent,
+        discrepancy: received - returned - onHand < -0.001
+          ? 'On-hand plus returned exceeds what was received for this line.' : null,
+      };
+    });
+
+    res.json({
+      report,
+      low_stock_percent: lowStockPercent,
+      alerts: report.filter((r) => r.low_stock),
+      basis: 'Derived from receipt and issue quantities only; no BOQ or WBS mapping is required or assumed. '
+        + '"Issued" means the material left the store, not that it was installed in the works.',
+    });
+  });
+
+// ---------------------------------------------------------------------------
 // Return of subcontractor-owned material
 //
 // Leftover material in a site store still belongs to the subcontractor; we hold

@@ -196,6 +196,23 @@ Settlement differences live outside this system, per §1.1.
   Both authorities are seeded granted to no role, so an existing install is
   unchanged until an administrator assigns them. Server-side only so far: no
   screen yet exposes either, which is the first thing phase 3 needs.
-- **Phase 3 — reporting.** One consumption report per project/subcontractor,
-  engagement type distinguished (§4.2), and reorder alerts extended to cover
-  owned-by-subcontractor stock now that it is real inventory.
+- **Phase 3 — reporting.** *Server side done.* One report per
+  subcontractor/material/store over the real owned inventory
+  (`GET /api/subcontractor/owned-stock-report`): received, returned, issued and
+  on hand, with `engagement_type` carried on every row for presentation (§4.2)
+  and nothing branching on it. Depletion alerts are a percentage of what was
+  delivered, not a reorder point, because no reorder point can exist for
+  material the company neither buys nor owns; a fully depleted line is
+  deliberately not an alert.
+
+  Phase 1 turned out to have introduced a defect rather than left a gap here.
+  Replenishment summed batches without looking at the owner, so a
+  subcontractor's material counted as stock the company could draw on and
+  suppressed the reorder signal on the company's own. `current_stock` in
+  `services/analytics.js` now counts COMPANY-owned batches only, with
+  `subcontractor_stock` reported alongside so the quantity is never silently
+  missing. Every batch defaults to `COMPANY`, so an install with no owned stock
+  sees the identical number it saw before.
+
+  Still open: no screen exposes any of phases 2–3 — the subcontractor field on a
+  request, the return queue, or this report. That is the remaining work.

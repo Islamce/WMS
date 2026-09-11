@@ -65,6 +65,9 @@ run_suite provisioning_test.py
 run_suite tenant_edition_test.py
 # Offline: migrated temp database; pins that ownership defaults leave live data alone.
 run_suite stock_ownership_test.py
+# LAST in this phase — it marks a batch as subcontractor-owned and depletes it,
+# so it must not run before suites that expect the seeded stock intact.
+run_suite subcontractor_report_test.py
 stop_server
 
 echo ""
