@@ -99,7 +99,12 @@ try:
     check('E2 tenant name carried through', ctx['ctx']['name'] == 'Acme Contracting', ctx)
     check('E2 subcontractor custody INCLUDED', ctx['sub'] is True,
           'subcontractor reconciliation is this edition differentiator')
-    check('E2 quality module EXCLUDED', ctx['quality'] is False, ctx)
+    # Quality belongs to BOTH editions. A contractor confirmed that material
+    # received from a subcontractor is inspected by the company against project
+    # specifications and approved submittals — incoming inspection is not a
+    # manufacturing-only concern, and an earlier split that assumed so was wrong.
+    check('E2 quality module INCLUDED (incoming inspection against approvals)',
+          ctx['quality'] is True, ctx)
     check('E2 unknown module refused once an edition is configured',
           ctx['unknown'] is False, ctx)
 
@@ -121,8 +126,10 @@ try:
           con_mods & fac_mods)
     check('E4 contracting-only module is subcontractor custody',
           'subcontractor_admin' in (con_mods - fac_mods), con_mods - fac_mods)
-    check('E4 manufacturing-only module is quality',
-          'quality' in (fac_mods - con_mods), fac_mods - con_mods)
+    check('E4 quality is shared, not an edition differentiator',
+          'quality' in (con_mods & fac_mods), 'both editions inspect incoming material')
+    check('E4 manufacturing-only module is movement-type configuration',
+          'movement_types_master' in (fac_mods - con_mods), fac_mods - con_mods)
 
     # ===== 5. A corrupt/unknown profile key degrades to unrestricted =====
     # A hand-edited row or a downgrade must not take the deployment down, and

@@ -46,10 +46,18 @@ const PROFILES = {
      * Site stores issue material against a project/WBS, and a large share of
      * material is consumed by subcontractors whose custody must be reconciled.
      * That reconciliation is the differentiator for this edition.
+     *
+     * `quality` was briefly left out of this edition on the assumption that
+     * incoming inspection is a manufacturing concern. A contractor corrected
+     * that directly: material received from a subcontractor is inspected by the
+     * company against the project's specifications and approved submittals
+     * before it is accepted. Conformance-to-approvals IS the contracting
+     * inspection case, so the module belongs here.
      */
     modules: [
       ...CORE_MODULES,
       'subcontractor_admin', 'subcontractor_receiving', 'subcontractor_quality_inspection',
+      'quality',
       'reallocation', 'shipping', 'expiry_alerts',
     ],
     terminology: {
