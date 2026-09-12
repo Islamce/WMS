@@ -154,6 +154,18 @@ window.Lang = {
 Lang.applyDir();
 
 /**
+ * RULE FOR NEW CODE: write English directly. Do not wrap new strings in t().
+ *
+ * The product ships in English and is translated only when a customer asks for
+ * it as part of a deal (see ENABLED_LANGS above). With English the only enabled
+ * language and no `en` dictionary, this function returns its argument unchanged
+ * — it is an identity function today and cannot display anything but what you
+ * wrote. The existing t() calls are left alone because removing 286 of them
+ * across 11 working files would create risk, not remove it.
+ *
+ * Everything below is the machinery a translation deal needs on day one. It is
+ * dormant, not in use.
+ *
  * Translate an English string into the active language.
  *
  * The English string IS the key, so an untranslated string falls back to itself
