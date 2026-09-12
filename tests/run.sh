@@ -70,6 +70,9 @@ run_suite ledger_convergence_test.py
 # Offline: no screen may be unreachable on every edition — the control for the
 # erp_operator break, which dead-ended the request workflow on every tenant.
 if ! node tests/e2e/edition_route_coverage_test.js; then FAILED=1; fi
+# Offline: contracting approves straight to the store with no ERP reservation;
+# every other install keeps the SAP chain. Boots its own servers per edition.
+run_suite contracting_direct_issue_test.py
 # Offline: migrated temp database; pins that ownership defaults leave live data alone.
 run_suite stock_ownership_test.py
 # LAST in this phase — it marks a batch as subcontractor-owned and depletes it,

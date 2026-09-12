@@ -101,7 +101,18 @@ const HEADER_TRANSITIONS = {
     HEADER_STATUS.APPROVED, HEADER_STATUS.REJECTED, HEADER_STATUS.RETURNED_TO_REQUESTER,
   ],
   [HEADER_STATUS.RETURNED_TO_REQUESTER]: [HEADER_STATUS.SUBMITTED, HEADER_STATUS.CANCELLED],
-  [HEADER_STATUS.APPROVED]: [HEADER_STATUS.APPROVED_PENDING_ERP],
+  // APPROVED has two successors, and which one applies is an edition decision.
+  //
+  // APPROVED_PENDING_ERP is the SAP chain: an operator raises a reservation,
+  // assigns a movement type, and only then routes to a store. That is real work
+  // when SAP is the system of record.
+  //
+  // WAREHOUSE_ASSIGNED is the contracting chain, where there is no SAP and so no
+  // reservation to raise. The engineer approves and the store issues. The edge is
+  // declared here rather than bypassing the transition guard, because the guard
+  // is the workflow's written form: a path that is not in this table is a path
+  // nobody reviewed. See services/tenantProfile.js → erpStaging.
+  [HEADER_STATUS.APPROVED]: [HEADER_STATUS.APPROVED_PENDING_ERP, HEADER_STATUS.WAREHOUSE_ASSIGNED],
   [HEADER_STATUS.APPROVED_PENDING_ERP]: [HEADER_STATUS.PENDING_ERP_RESERVATION, HEADER_STATUS.ERP_RESERVATION_CREATED],
   [HEADER_STATUS.PENDING_ERP_RESERVATION]: [HEADER_STATUS.ERP_RESERVATION_CREATED, HEADER_STATUS.ON_HOLD],
   [HEADER_STATUS.ERP_RESERVATION_CREATED]: [HEADER_STATUS.MOVEMENT_TYPE_ASSIGNED],

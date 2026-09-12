@@ -13,6 +13,8 @@ const notify = require('./../services/notify');
 const approvalMatrix = require('./../services/approvalMatrix');
 const { setHeaderStatus, refreshRollups } = require('./../services/requests');
 const { HEADER_STATUS, LINE_STATUS } = require('./../workflow/states');
+const { getTenant } = require('./../services/tenant');
+const { usesErpStaging } = require('./../services/tenantProfile');
 
 const router = express.Router();
 router.use(authenticate, requirePermission('approvals'));
@@ -185,6 +187,80 @@ router.post('/:id/lines', (req, res) => {
   res.status(201).json({ message: 'Line added.' });
 });
 
+
+/**
+ * Route an approved request straight to the store, with no ERP reservation.
+ *
+ * The SAP chain this product was modelled on stages an approved request through
+ * a reservation raised by an ERP operator. On a construction site there is no
+ * SAP and no reservation: the engineer approves and the store issues. Requiring
+ * one there means asking a storekeeper to type a document number that does not
+ * exist.
+ *
+ * The stock movement is NOT skipped — that is the real event. What is skipped is
+ * the staging document in front of it. `stock_transactions.reservation_number`
+ * is required on every outbound movement, so a locally generated issue number
+ * takes the reservation's place: same ledger shape, same reports, and the number
+ * still answers "which document did this issue happen under". That is the same
+ * principle as a delivery note standing in for a purchase order on material the
+ * company did not buy.
+ *
+ * Returns null when the request can go straight through, or an error payload
+ * naming what is missing. Nothing is guessed: a site store that cannot be
+ * resolved is reported, never picked at random.
+ */
+function routeWithoutErp(header, user) {
+  const warehouse = header.issue_warehouse_code
+    ? db.prepare('SELECT * FROM warehouses WHERE warehouse_code=?').get(header.issue_warehouse_code)
+    : db.prepare('SELECT * FROM warehouses WHERE COALESCE(is_active,1)=1').all().length === 1
+      ? db.prepare('SELECT * FROM warehouses WHERE COALESCE(is_active,1)=1').get()
+      : null;
+
+  if (!warehouse) {
+    return { error: 'This request does not name a site store, and there is more than one to choose from. '
+      + 'Set the issue warehouse on the request before approving it.' };
+  }
+
+  // A movement type is still recorded, because every movement is categorised.
+  // It is defaulted rather than asked for: this edition does not include the
+  // movement-type master, so there is no screen on which to choose one.
+  const movementType = header.movement_type
+    || (db.prepare("SELECT code FROM movement_types WHERE direction='ISSUE' AND COALESCE(is_active,1)=1 ORDER BY code LIMIT 1").get() || {}).code
+    || null;
+  if (!movementType) return { error: 'No issue movement type is configured.' };
+
+  const year = new Date().getFullYear();
+  const seq = db.prepare(
+    "SELECT COUNT(*) AS n FROM material_request_headers WHERE erp_reservation_number LIKE ?"
+  ).get(`ISS-${year}-%`).n + 1;
+  const issueNumber = `ISS-${year}-${String(seq).padStart(5, '0')}`;
+
+  db.prepare(`
+    UPDATE material_request_headers
+    SET erp_reservation_number=?, movement_type=?, issue_warehouse_code=?, issue_warehouse_name=?,
+        storage_location=COALESCE(storage_location, ?), plant=COALESCE(plant, ?)
+    WHERE id=?
+  `).run(issueNumber, movementType, warehouse.warehouse_code, warehouse.warehouse_name,
+    warehouse.warehouse_code, header.plant, header.id);
+
+  const fresh = db.prepare('SELECT * FROM material_request_headers WHERE id=?').get(header.id);
+  db.prepare(`
+    UPDATE material_request_lines
+    SET warehouse_code=?, warehouse_name=?, storage_location=?, plant=?
+    WHERE request_id=? AND line_status NOT IN ('Rejected','Cancelled')
+  `).run(fresh.issue_warehouse_code, fresh.issue_warehouse_name, fresh.storage_location, fresh.plant, header.id);
+
+  setHeaderStatus(fresh, HEADER_STATUS.WAREHOUSE_ASSIGNED, { user, sourceScreen: 'Approval Detail' });
+  setHeaderStatus(fresh, HEADER_STATUS.PENDING_BIN_ASSIGNMENT, { user, sourceScreen: 'Approval Detail' });
+
+  audit.record({ entityType: 'MaterialRequestHeader', entityId: header.id, requestNumber: header.request_number,
+    action: 'ROUTED_WITHOUT_ERP',
+    newValue: { issue_number: issueNumber, warehouse: warehouse.warehouse_code, movement_type: movementType },
+    user, sourceScreen: 'Approval Detail' });
+
+  return null;
+}
+
 /**
  * POST /api/approvals/:id/decision — approve / partial / reject / return.
  * body: { decision: 'approve'|'partial'|'reject'|'return', comments, reason,
@@ -238,6 +314,8 @@ router.post('/:id/decision', (req, res) => {
 
     // Approval matrix: a high-value request needs an approver holding the
     // required authority. Admins are exempt.
+    const directIssue = !usesErpStaging(getTenant().profileKey);
+
     const value = approvalMatrix.requestValue(header.id);
     const requiredPerm = approvalMatrix.requiredPermissionFor(value);
     if (requiredPerm && req.user.role !== 'admin' && !req.user.permissions.includes(requiredPerm)) {
@@ -264,10 +342,20 @@ router.post('/:id/decision', (req, res) => {
         user: req.user, comments, sourceScreen: 'Approval Detail',
         set: { approved_at: new Date().toISOString(), approval_comments: comments || null },
       });
-      // auto-hand off to ERP operator queue
-      setHeaderStatus(header, HEADER_STATUS.APPROVED_PENDING_ERP, { user: req.user, sourceScreen: 'Approval Detail' });
-      db.prepare('UPDATE material_request_lines SET line_status=? WHERE request_id=? AND line_status=?')
-        .run(LINE_STATUS.PENDING_ERP_RESERVATION, header.id, LINE_STATUS.APPROVED);
+      if (directIssue) {
+        const problem = routeWithoutErp(header, req.user);
+        if (problem) { const e = new Error(problem.error); e.status = 400; throw e; }
+        // Lines stay APPROVED. In the SAP chain they move to
+        // PENDING_ERP_RESERVATION because a reservation is about to be raised
+        // against them; here none is, so any other status would describe a
+        // document that does not exist. The warehouse screen does not filter on
+        // line status, so APPROVED is both true and sufficient.
+      } else {
+        // auto-hand off to ERP operator queue
+        setHeaderStatus(header, HEADER_STATUS.APPROVED_PENDING_ERP, { user: req.user, sourceScreen: 'Approval Detail' });
+        db.prepare('UPDATE material_request_lines SET line_status=? WHERE request_id=? AND line_status=?')
+          .run(LINE_STATUS.PENDING_ERP_RESERVATION, header.id, LINE_STATUS.APPROVED);
+      }
       refreshRollups(header.id);
     })();
 
@@ -275,6 +363,15 @@ router.post('/:id/decision', (req, res) => {
       notificationType: 'REQUEST_APPROVED',
       title: `Request ${header.request_number} ${decision === 'partial' ? 'partially ' : ''}approved`,
       message: comments || 'Your request was approved and moved to ERP processing.', email: true });
+    if (directIssue) {
+      notify.notifyPermission('bin_batch_assignment', { requestNumber: header.request_number,
+        notificationType: 'WAREHOUSE_QUEUE', title: `Request ${header.request_number} approved and sent to the store`,
+        message: 'An approved request is waiting in the store.' });
+      return res.json({
+        message: `Request ${decision === 'partial' ? 'partially ' : ''}approved and sent to the store.`,
+        routed_without_erp: true,
+      });
+    }
     notify.notifyPermission('erp_operator', { requestNumber: header.request_number,
       notificationType: 'ERP_QUEUE', title: `Request ${header.request_number} ready for ERP processing`,
       message: 'An approved request is waiting in the ERP Operator queue.' });

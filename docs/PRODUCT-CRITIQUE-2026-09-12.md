@@ -119,7 +119,50 @@ yourself.
 
 Ordered by what unblocks a sale, not by what is interesting to build.
 
-### Phase A — a two-person mode (addresses §1)
+### Phase A — drop the SAP staging for Contracting (addresses §1)
+
+**Corrected after owner input, 2026-09-12.** The first draft of this phase framed
+the fix as a size rule — collapse steps for small tenants. That was the wrong
+axis. Size is a weak proxy for the real distinction, which the owner named:
+
+> The sequence is built on SAP. A worker requests, the manager approves, the
+> operator raises a reservation, the store posts a goods issue. On sites and for
+> contractors there is no such thing — a material request, the responsible
+> engineer approves it, and the store issues it, with no GI and no reservation.
+
+The reservation and the goods issue are **SAP documents**, present because SAP is
+the system of record and this system feeds it. A contractor has neither. The
+axis is therefore *is SAP the system of record*, which maps exactly onto the
+edition concept that already exists.
+
+**Done (first increment).** `erpStaging` on each profile: true for
+Manufacturing, false for Contracting, and **true for an unconfigured install**,
+so every existing deployment is unchanged. On Contracting, approval routes
+straight to the store.
+
+Three things this increment established that a plan alone would not have:
+
+- `stock_transactions.reservation_number` is **required on every OUT movement**.
+  Removing the reservation step without more would break the ledger. A locally
+  generated issue number (`ISS-YYYY-NNNNN`) takes its place — the same principle
+  as a delivery note standing in for a purchase order on material the company
+  did not buy. The ledger keeps one shape and every existing report still works.
+- The transition guard rejected `APPROVED → WAREHOUSE_ASSIGNED` until the edge
+  was declared. That guard is the workflow's written form, so the edge is
+  declared in `workflow/states.js` rather than bypassed: a path not in that
+  table is a path nobody reviewed.
+- Nothing is guessed. A request that cannot resolve a site store is refused with
+  a message naming what to set. A tenant with one store resolves it without
+  being asked; a tenant with several must say which.
+
+**Still open in this phase:** the goods-issue posting step itself, and bin and
+picker assignment. The GI step **cannot simply be deleted** — it is the call that
+actually moves the stock. What can go is its ERP dressing. Bin and picker
+assignment are not SAP artifacts and need their own justification, measured
+against a real site rather than assumed.
+
+The original framing is kept below because the collapse it describes is still
+the right treatment for the steps that are *not* SAP artifacts.
 
 The 40-state workflow is correct for a plant with segregated duties and wrong
 for a four-person store. Do **not** delete it; make it collapsible.
