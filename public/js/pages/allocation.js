@@ -27,7 +27,11 @@ Pages.allocation = {
           <td>${r.total_lines}</td>
           <td><button class="btn sm" data-alloc="${r.id}">Allocate</button>
               <button class="btn secondary sm" data-view="${r.id}">View</button></td>
-        </tr>`).join('') || `<tr><td colspan="9">${UI.meaningfulEmptyState({ title: 'Nothing awaiting allocation', description: 'Approved requests routed to the warehouse will appear here for bin/batch allocation.' })}</td></tr>`}
+        </tr>`).join('') || `<tr><td colspan="9">${UI.meaningfulEmptyState(App.routesStraightToStore()
+      ? { title: 'Allocation runs automatically on this edition',
+          description: 'Bins and batches are chosen at approval under the same FIFO/FEFO rules, so requests do not '
+            + 'wait here. Use this screen to re-run allocation on a request when stock arrives after it was approved.' }
+      : { title: 'Nothing awaiting allocation', description: 'Approved requests routed to the warehouse will appear here for bin/batch allocation.' })}</td></tr>`}
       </tbody></table>`;
     tbl.querySelectorAll('[data-alloc]').forEach((b) => b.addEventListener('click', () => this.allocate(b.dataset.alloc)));
     tbl.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => this.view(b.dataset.view)));

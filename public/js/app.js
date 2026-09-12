@@ -191,6 +191,25 @@ const App = {
    * level, so a module the tenant does not have must be invisible to everyone
    * including the administrator.
    */
+  /**
+   * True when approval routes straight to the store — no ERP reservation, no
+   * bin-assignment screen, no picker assignment.
+   *
+   * Three screens are still REACHABLE on such an edition and their queues are
+   * normally empty, which reads as a broken screen unless they say why. They
+   * are deliberately not hidden: a tenant switched from an ERP edition can have
+   * requests already sitting in those queues, and hiding the screens would
+   * strand them with no way to finish. So the screens stay and explain
+   * themselves instead.
+   *
+   * Keyed on the capability rather than the profile name, so a future edition
+   * gets this by declaring erpStaging rather than by being added to a list of
+   * names here. Defaults to "has ERP staging" when unknown, matching the server.
+   */
+  routesStraightToStore() {
+    return !!(this.tenant && this.tenant.erpStaging === false);
+  },
+
   tenantHasModule(moduleKey) {
     const modules = this.tenant && this.tenant.modules;
     if (!modules) return true;

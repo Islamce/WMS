@@ -26,7 +26,11 @@ Pages.erpOperator = {
           <td>${UI.esc(r.movement_type || '—')}</td><td>${r.erp_reservation_number || r.erp_reference_number ? `<span class="chip">${UI.esc(r.erp_reservation_number || r.erp_reference_number)}</span>` : '—'}</td>
           <td>${UI.esc(r.issue_warehouse_code || '—')}</td>
         </tr>`).join('')}
-      </tbody></table>` : UI.meaningfulEmptyState({ title: 'Queue is empty', description: 'Approved requests awaiting ERP reservation and routing to a warehouse will appear here.' });
+      </tbody></table>` : UI.meaningfulEmptyState(App.routesStraightToStore()
+      ? { title: 'Nothing passes through here on this edition',
+          description: 'Approved requests go straight to the site store — there is no ERP reservation to raise. '
+            + 'This queue stays available for requests raised before the edition changed, and is otherwise empty by design.' }
+      : { title: 'Queue is empty', description: 'Approved requests awaiting ERP reservation and routing to a warehouse will appear here.' });
     UI.makeRowsActionable(tbl.querySelectorAll('tr[data-id]'), (tr) => this.openDetail(tr.dataset.id));
   },
 

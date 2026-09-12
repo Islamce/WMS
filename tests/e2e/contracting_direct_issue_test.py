@@ -203,6 +203,66 @@ check('D6 a single site store is resolved without being named',
 check('D6 and the request still went straight to the store',
       r.get('header', {}).get('request_status') == 'Pending Picker Assignment', r)
 
+# ===== 7. The client is told the CAPABILITY, not the brand name =====
+# Three screens stay reachable on a no-ERP edition and explain themselves rather
+# than being hidden — hiding them would strand requests left in those queues by
+# a tenant that switched editions. The frontend keys that off erpStaging, so a
+# future edition gets the same behaviour by declaring the capability instead of
+# being added to a list of profile names in the browser.
+import importlib.util
+
+
+def tenant_payload(path, port, profile=None):
+    if profile:
+        set_edition(path, profile)
+    env = dict(os.environ, DB_PATH=path, NODE_ENV='test', SKIP_AUTO_SEED='1',
+               JWT_SECRET='k' * 48, PORT=str(port))
+    server = subprocess.Popen(['node', 'index.js'], cwd=ROOT, env=env,
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    base = f'http://localhost:{port}'
+    try:
+        for _ in range(60):
+            try:
+                urllib.request.urlopen(base + '/healthz', timeout=2).read()
+                break
+            except Exception:
+                time.sleep(0.5)
+        else:
+            return {}
+        rq = urllib.request.Request(base + '/api/auth/login', method='POST',
+                                    data=json.dumps({'email': 'manager@example.com',
+                                                     'password': 'Passw0rd!'}).encode())
+        rq.add_header('Content-Type', 'application/json')
+        return json.loads(urllib.request.urlopen(rq, timeout=15).read() or '{}')
+    finally:
+        server.terminate()
+        try:
+            server.wait(timeout=10)
+        except Exception:
+            server.kill()
+
+
+plain2 = build_db(tmp, 'plain2.db')
+body = tenant_payload(plain2, 3406)
+check('D7 an unconfigured install reports ERP staging (unchanged)',
+      (body.get('tenant') or {}).get('erpStaging') is True, body.get('tenant'))
+
+mfg2 = build_db(tmp, 'mfg2.db')
+body = tenant_payload(mfg2, 3407, 'manufacturing')
+check('D7 manufacturing reports ERP staging',
+      (body.get('tenant') or {}).get('erpStaging') is True, body.get('tenant'))
+
+con2 = build_db(tmp, 'con2.db')
+body = tenant_payload(con2, 3408, 'contracting')
+check('D7 contracting reports no ERP staging',
+      (body.get('tenant') or {}).get('erpStaging') is False, body.get('tenant'))
+
+# The screens stay REACHABLE. Hiding them would strand in-flight requests.
+modules = (body.get('tenant') or {}).get('modules') or []
+check('D7 and the routed-past screens are still reachable, not hidden',
+      all(m in modules for m in ('erp_operator', 'bin_batch_assignment', 'picker_assignment')),
+      [m for m in ('erp_operator', 'bin_batch_assignment', 'picker_assignment') if m not in modules])
+
 print(f"\n===== RESULT: {passed} passed, {failed} failed =====")
 if fails:
     print("Failed:", fails)

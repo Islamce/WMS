@@ -1,5 +1,7 @@
 /**
- * Browser regression for the first-run setup guide on the home screen.
+ * Browser regression for what a brand-new CONTRACTING tenant is shown:
+ * the first-run setup guide, and the three screens the collapsed workflow
+ * routes past.
  *
  * The server test already proves the steps and their order. What only a browser
  * can prove is the part that decides whether this is useful or clutter:
@@ -165,6 +167,31 @@ async function stopServer(server) {
     await page.waitForSelector('.launchpad', { timeout: 15000 });
     check('and the guide disappears — it cannot become permanent furniture',
       await page.locator('.setup-guide').count() === 0);
+
+    // The collapsed workflow left three screens reachable but no longer on the
+    // path. They are deliberately NOT hidden — a tenant switched from an ERP
+    // edition can have requests already sitting in those queues, and hiding the
+    // screens would strand them. So each must say what it is instead of looking
+    // like a screen that is simply broken.
+    await page.evaluate(() => { window.location.hash = '#/erp-operator'; });
+    await page.waitForSelector('#eo-table', { timeout: 15000 });
+    await page.waitForFunction(() => !document.querySelector('#eo-table .loading'), { timeout: 15000 });
+    const erpText = await page.locator('#eo-table').innerText();
+    check('the ERP queue explains that nothing passes through it here',
+      /straight to the site store/i.test(erpText), erpText.slice(0, 200));
+
+    await page.evaluate(() => { window.location.hash = '#/allocation'; });
+    await page.waitForSelector('#al-table', { timeout: 15000 });
+    await page.waitForFunction(() => !document.querySelector('#al-table .loading'), { timeout: 15000 });
+    const allocText = await page.locator('#al-table').innerText();
+    check('bin and batch assignment explains that allocation is automatic',
+      /runs automatically/i.test(allocText), allocText.slice(0, 200));
+
+    await page.evaluate(() => { window.location.hash = '#/picker-assign'; });
+    await page.waitForSelector('#pa-list', { timeout: 15000 });
+    const pickerText = await page.locator('.card').first().innerText();
+    check('picker assignment says the store claims its own work',
+      /claims its own work/i.test(pickerText), pickerText.slice(0, 200));
 
     check('no uncaught page errors', pageErrors.length === 0, pageErrors.join(' | '));
   } catch (err) {
