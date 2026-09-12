@@ -78,6 +78,7 @@ if ! node tests/i18n_coverage_test.js; then FAILED=1; fi
 run_suite contracting_direct_issue_test.py
 run_suite contracting_collapsed_chain_test.py
 run_suite first_hour_test.py
+run_suite import_examples_test.py
 # Offline: migrated temp database; pins that ownership defaults leave live data alone.
 run_suite stock_ownership_test.py
 # LAST in this phase — it marks a batch as subcontractor-owned and depletes it,
