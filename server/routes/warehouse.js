@@ -13,7 +13,7 @@ const notify = require('./../services/notify');
 const { allocateLines } = require('./../services/autoAllocate');
 const { activeFreeze, freezeMessage } = require('./../services/freeze');
 const { setHeaderStatus, getHeaderOr404, releaseOpenAllocations, sweepReservations } = require('./../services/requests');
-const { HEADER_STATUS, LINE_STATUS, TASK_STATUS } = require('./../workflow/states');
+const { HEADER_STATUS, TASK_STATUS } = require('./../workflow/states');
 const { withExecutionContexts } = require('./../services/workflowContext');
 
 const router = express.Router();

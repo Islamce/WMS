@@ -39,11 +39,11 @@ function targetFiles() {
 // Shapes that are code, data or markup rather than something a person reads.
 const NOT_A_LABEL = [
   /^[\d.\s,MLHVCZAmlhvcza+-]+$/,               // SVG path data
-  /^[a-z0-9-]+(\s+[a-z0-9-]+)*$/,              // css class lists, enum-ish tokens
-  /^[a-z]+([A-Z][a-z0-9]*)+$/,                 // camelCase identifiers
+  /^[a-z0-9 -]+$/,                             // css class lists, enum-ish tokens
+  /^[a-z]+[A-Z][A-Za-z0-9]*$/,                 // camelCase identifiers
   /^[a-z0-9_]+$/,                              // snake_case / single tokens
   /^[A-Z0-9_]+$/,                              // SCREAMING enums: URGENT, HIGH
-  /^(https?:)?\/\//,                           // urls
+  /^https?:\/\//,                             // urls (bare // is caught by the selector rule)
   /^[/#.]/,                                    // routes, selectors, anchors
   /^\w+\/[\w.+-]+$/,                           // mime types
   /^(GET|POST|PUT|PATCH|DELETE|OPTIONS)$/,
