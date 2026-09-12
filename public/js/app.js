@@ -11,6 +11,10 @@
 window.Pages = window.Pages || {};
 
 // --- Inline icon set (feather-style, stroke = currentColor) ----------------
+// Display names for the language picker, which only appears once more than one
+// language is finished. See i18n.js -> ENABLED_LANGS.
+const LANG_NAMES = { en: 'EN', ar: 'عربي', fr: 'FR' };
+
 const ICONS = {
   grid: '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>',
   'bar-chart': '<line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/>',
@@ -383,11 +387,10 @@ const App = {
               <button class="icon-btn" id="topbar-search" aria-label="${t('Search')}">${svg('search')}</button>
               ${this.can('notifications') ? `<a class="icon-btn" id="topbar-bell" href="#/notifications" aria-label="${t('Notifications')}">${svg('bell')}</a>` : ''}
               <button class="icon-btn" id="theme-toggle" aria-label="${t('Theme')}">${svg(Theme.current === 'dark' ? 'sun' : 'moon')}</button>
+              ${Lang.available.length > 1 ? `
               <select id="lang-select" class="lang-select" title="${UI.esc(t('Language'))}">
-                <option value="en" ${Lang.current === 'en' ? 'selected' : ''}>EN</option>
-                <option value="ar" ${Lang.current === 'ar' ? 'selected' : ''}>عربي</option>
-                <option value="fr" ${Lang.current === 'fr' ? 'selected' : ''}>FR</option>
-              </select>
+                ${Lang.available.map((l) => `<option value="${l}" ${Lang.current === l ? 'selected' : ''}>${LANG_NAMES[l] || l.toUpperCase()}</option>`).join('')}
+              </select>` : ''}
               <div class="user-menu">
                 <button class="user-trigger" id="user-trigger">
                   <span class="avatar">${UI.esc(initials)}</span>
@@ -446,7 +449,8 @@ const App = {
 
     // Topbar controls.
     document.getElementById('theme-toggle').addEventListener('click', () => Theme.toggle());
-    document.getElementById('lang-select').addEventListener('change', (e) => Lang.set(e.target.value));
+    const langSelect = document.getElementById('lang-select');
+    if (langSelect) langSelect.addEventListener('change', (e) => Lang.set(e.target.value));
     document.getElementById('nav-search').addEventListener('click', () => this.openSearch());
     document.getElementById('topbar-search').addEventListener('click', () => this.openSearch());
 

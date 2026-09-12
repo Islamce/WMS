@@ -241,25 +241,36 @@ What landed:
 - Four pages had shadowed `t` with a local variable and would have thrown the
   moment anyone translated them. Renamed, and the gate bans it recurring.
 
-**Deferred by the owner, 2026-09-12.** Translating the product is not a
-prerequisite for the pilot and is not being funded now. The decision is sound:
-it is 30-40 person-days, no customer is waiting on it, and the pilot runs in a
-company that reads English. So the ratchet is **report-only** — it prints the
-number and does not fail the build. Making unrelated feature work pay for a job
-nobody is doing is how a quality gate turns into something people route around.
-`I18N_ENFORCE=1` turns it into a gate on the day translation starts, from
-whatever the number is that day; nothing has to be rebuilt to switch it on.
+**Decided by the owner, 2026-09-12: English-only, translate on demand.** The
+product is finished in English in full; Arabic is built when a customer asks for
+it as part of a deal. No translation work is funded ahead of that.
+
+This is a defensible position and it is how most vertical software is sold into
+this region. What makes it work is committing to it:
+
+- The **language picker is hidden**. It offered عربي and FR over dictionaries
+  covering a fraction of the screens, on every screen, including a demo. A
+  prospect who clicks it learns exactly how far the translation goes. A product
+  that says it is English is coherent; one that offers Arabic and half-delivers
+  is not. `ENABLED_LANGS` in `public/js/i18n.js` is the single place to change,
+  and the picker returns on its own when a second language is finished.
+- Nothing is deleted. `t()`, the dictionaries, the RTL handling and the coverage
+  report all stay. The cost of keeping them is zero and they are exactly what a
+  translation deal needs on day one.
+- The coverage check is **report-only**. Enforcing it would tax every feature
+  for a job nobody is doing. `I18N_ENFORCE=1` turns it into a per-file ratchet
+  on the day translation starts.
 
 One check stays fatal because it is not about translation: a local variable
-shadowing `t()` crashes the page it is on the moment that page is translated.
+shadowing `t()` crashes the page it is on.
 
-**What this costs if it is never done:** the §3 objection stands in full. A
-contractor in Egypt or the Gulf whose storekeeper does not read English will not
-buy this, and it is the first thing they notice. Deferring is a decision to sell
-to buyers whose staff read English, which in this market is the larger
-contractors — not the small and medium ones named as the target. That is a
-narrower market, not a smaller feature list, and it is worth revisiting before
-the first serious sales push rather than after.
+**What this costs, stated plainly so the decision can be revisited with open
+eyes:** the §3 objection stands. Selling to buyers whose staff read English
+means the larger contractors, not the small and medium ones named as the target
+in `docs/CONTRACTING-EDITION-REQUIREMENTS.md`. That is a narrower market, not a
+smaller feature list. The measured cost of changing course later is 30-40
+person-days, and it does not grow much with time because the tooling is built —
+so deferring is cheap, and the decision stays reversible.
 
 **Still open:** the server. Status names are stored as English display text and
 compared as literals by the frontend, so translating them needs a display-layer

@@ -119,9 +119,28 @@ const I18N = {
 
 const RTL_LANGS = ['ar'];
 
+/**
+ * Languages offered in the UI.
+ *
+ * English only, deliberately. The product is being finished in English and
+ * translated when a customer asks for it, so the Arabic and French dictionaries
+ * below cover a fraction of the screens. Offering a language picker in that
+ * state is worse than not offering one: a prospect clicks عربي during a demo,
+ * gets an Arabic menu wrapped around English screens, and learns exactly how
+ * far the translation goes. A product that says it is English is coherent; one
+ * that offers Arabic and half-delivers it is not.
+ *
+ * Nothing is deleted — the dictionaries, t(), the RTL handling and the coverage
+ * report all stay. Add a language here when it is actually finished, and the
+ * picker comes back on its own.
+ */
+const ENABLED_LANGS = ['en'];
+
 window.Lang = {
-  current: localStorage.getItem('wms_lang') || 'en',
+  available: ENABLED_LANGS,
+  current: ENABLED_LANGS.includes(localStorage.getItem('wms_lang')) ? localStorage.getItem('wms_lang') : 'en',
   set(lang) {
+    if (!ENABLED_LANGS.includes(lang)) return;
     this.current = lang;
     localStorage.setItem('wms_lang', lang);
     this.applyDir();
