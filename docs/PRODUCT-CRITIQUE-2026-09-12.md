@@ -63,10 +63,16 @@ first receipt posted in ten minutes.
 | Measured | |
 |---|---|
 | Screens | 43 |
-| Translation keys in `public/js/i18n.js` | **28** |
+| Arabic translation keys in `public/js/i18n.js` (as first written) | **87** |
+| Untranslated user-facing strings, measured | **~1,335** |
+| Pages in `public/js/pages/` that never call `t()` | **25 of 33** |
 
-Fewer translation keys exist than there are screens. Arabic support is a toggle
-over a mostly-English product. For a contractor in Egypt or the Gulf whose
+**Correction, same day.** The first draft of this table said 28 keys. The real
+figure was 87, counted from the `ar` block. The verdict does not change — 87
+against ~1,335 hardcoded strings is still a disqualification — but a critique
+that gets its own evidence wrong is worth less than one that admits it.
+
+Arabic support is a toggle over a mostly-English product. For a contractor in Egypt or the Gulf whose
 storekeeper does not read English, this is not a polish item — it is a
 disqualification, and it is the first thing they will notice.
 
@@ -155,11 +161,31 @@ Three things this increment established that a plan alone would not have:
   a message naming what to set. A tenant with one store resolves it without
   being asked; a tenant with several must say which.
 
-**Still open in this phase:** the goods-issue posting step itself, and bin and
-picker assignment. The GI step **cannot simply be deleted** — it is the call that
-actually moves the stock. What can go is its ERP dressing. Bin and picker
-assignment are not SAP artifacts and need their own justification, measured
-against a real site rather than assumed.
+**Done (second increment).** The remaining three steps were measured rather than
+assumed, and they did not turn out alike.
+
+- **Picker assignment was ceremony** and is now a single claim. Assign, accept
+  and start are one person telling himself three times to do the thing he is
+  standing in front of, and the escalation sweep would escalate him to himself.
+  The attribution survives: the claim records who physically pulled the stock,
+  set by that person at the moment of doing it.
+- **Bin and batch assignment was not ceremony**, and this is the finding that
+  changed the plan. Picking refuses a line whose reserved quantity is zero, and
+  with no allocation rows a confirmed pick records a movement while the batch it
+  came from keeps its quantity — the ledger and the stock would disagree
+  permanently. It also carries FEFO and the exclusion of expired, blocked and
+  quality-hold batches, which a contractor holding cement and sealants needs as
+  much as a plant does. So the work stays and runs automatically at approval;
+  what goes is the operator and the screen.
+- **Goods issue stays**, because it is the call that moves the stock. Its ERP
+  dressing goes: the connector refused to post without a document number, which
+  on a contractor means typing a reference to a system they do not own, so the
+  number is minted locally.
+
+Separation of duties is kept: the approver still cannot post the issue. With two
+staff that is the one control the owner actually cares about.
+
+**Result:** six authorities become three human actions — approve, pick, issue.
 
 The original framing is kept below because the collapse it describes is still
 the right treatment for the steps that are *not* SAP artifacts.
@@ -193,11 +219,34 @@ is easier.
 
 ### Phase C — finish the Arabic (addresses §3)
 
-- Extract every user-facing string; measure coverage as a number and gate it in
-  CI the way `edition_route_coverage_test.js` gates edition reachability.
-- The terminology map already proves the mechanism works; it needs breadth, not
-  a new design.
-- Success test: a screen with an untranslated string **fails CI**.
+**Mechanism and gate: done.** Translating everything: not done, and it is a real
+project — roughly 30 to 40 person-days, most of it wrapping ~1,335 call sites
+rather than translating, plus per-screen right-to-left review.
+
+What landed:
+
+- `t()` now records every miss and fills `{name}` placeholders, so a sentence
+  with a count in it can be one key instead of fragments English happens to
+  order correctly.
+- `scripts/i18n-extract.js` lists what is left, by file, with a `--stubs` mode
+  for a translator handoff.
+- `tests/i18n_coverage_test.js` is a **ratchet, not a wall**: per file, against
+  a checked-in baseline, failing on any increase. A gate demanding zero would
+  have to be switched off the day it was written, and a gate that is off proves
+  nothing. This one was adoptable immediately at ~1,335 and only lets the number
+  fall.
+- The navigation was a live regression: the newer nav that replaced the
+  translated one rendered raw English. It goes through `t()` again, and the
+  whole nav frame — every group heading and every screen name — is now Arabic.
+- Four pages had shadowed `t` with a local variable and would have thrown the
+  moment anyone translated them. Renamed, and the gate bans it recurring.
+
+**Still open:** the server. Status names are stored as English display text and
+compared as literals by the frontend, so translating them needs a display-layer
+map rather than a schema change; API error sentences are shown to users
+verbatim. Roughly 290 more strings.
+
+Success test, now in CI: a screen that adds an untranslated string **fails**.
 
 ### Phase D — make it sellable (addresses §4)
 

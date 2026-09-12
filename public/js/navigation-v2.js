@@ -148,7 +148,10 @@
     head.className = 'nav-group-head';
     head.setAttribute('aria-expanded', String(isOpen));
     head.innerHTML = `<span class="kynox-module-mark" aria-hidden="true"></span><span class="lbl"></span><svg class="ico chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>`;
-    head.querySelector('.lbl').textContent = def.label;
+    // The nav this replaced translated every label (app.js wraps them in t()).
+    // Going through t() here is what stops the frame around all 43 screens from
+    // being the one part of the app that is permanently English.
+    head.querySelector('.lbl').textContent = t(def.label);
 
     const body = document.createElement('div');
     body.className = 'nav-group-body';
@@ -156,8 +159,9 @@
       const link = links.get(route);
       if (!link) return;
       const label = link.querySelector('.lbl');
-      if (label && LABELS[route] && label.textContent !== LABELS[route]) label.textContent = LABELS[route];
-      const nextTitle = LABELS[route] || link.title;
+      const routeLabel = LABELS[route] ? t(LABELS[route]) : null;
+      if (label && routeLabel && label.textContent !== routeLabel) label.textContent = routeLabel;
+      const nextTitle = routeLabel || link.title;
       if (link.title !== nextTitle) link.title = nextTitle;
       body.appendChild(link);
     });

@@ -11,9 +11,9 @@ Pages.giPosting = {
   },
 
   async loadQueue() {
-    const t = this.el.querySelector('#gi-table');
+    const tbl = this.el.querySelector('#gi-table');
     const { requests } = await Api.get('/api/gi');
-    t.innerHTML = requests.length ? `<table><thead><tr><th>Request #</th><th>Requester</th><th>Department</th><th>Project</th><th>Warehouse</th><th>Movement</th><th>Reservation</th><th>Status</th><th></th></tr></thead>
+    tbl.innerHTML = requests.length ? `<table><thead><tr><th>Request #</th><th>Requester</th><th>Department</th><th>Project</th><th>Warehouse</th><th>Movement</th><th>Reservation</th><th>Status</th><th></th></tr></thead>
       <tbody>${requests.map((r) => `
         <tr data-id="${r.id}">
           <td><span class="chip accent">${UI.esc(r.request_number)}</span></td>
@@ -24,7 +24,7 @@ Pages.giPosting = {
           <td><button class="btn sm" data-open="${r.id}">Review</button></td>
         </tr>`).join('')}
       </tbody></table>` : UI.meaningfulEmptyState({ title: 'Queue is empty', description: 'Picked requests ready for Goods Issue posting will appear here.' });
-    t.querySelectorAll('[data-open]').forEach((b) => b.addEventListener('click', () => this.openDetail(b.dataset.open)));
+    tbl.querySelectorAll('[data-open]').forEach((b) => b.addEventListener('click', () => this.openDetail(b.dataset.open)));
   },
 
   async openDetail(id) {

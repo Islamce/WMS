@@ -12,12 +12,12 @@ Pages.allocation = {
   },
 
   async loadQueue() {
-    const t = this.el.querySelector('#al-table');
+    const tbl = this.el.querySelector('#al-table');
     const { requests } = await Api.get('/api/warehouse/queue');
     // Show only requests still awaiting allocation; once allocated they move on
     // to picker assignment and disappear from this queue.
     const pending = requests.filter((r) => ['Pending Bin Location Assignment', 'Warehouse Assigned'].includes(r.request_status));
-    t.innerHTML = `<table><thead><tr><th>Request #</th><th>Requester</th><th>Department</th><th>Project</th><th>Warehouse</th><th>Movement</th><th>Status</th><th>Lines</th><th></th></tr></thead>
+    tbl.innerHTML = `<table><thead><tr><th>Request #</th><th>Requester</th><th>Department</th><th>Project</th><th>Warehouse</th><th>Movement</th><th>Status</th><th>Lines</th><th></th></tr></thead>
       <tbody>${pending.map((r) => `
         <tr data-id="${r.id}">
           <td><span class="chip accent">${UI.esc(r.request_number)}</span></td>
@@ -29,8 +29,8 @@ Pages.allocation = {
               <button class="btn secondary sm" data-view="${r.id}">View</button></td>
         </tr>`).join('') || `<tr><td colspan="9">${UI.meaningfulEmptyState({ title: 'Nothing awaiting allocation', description: 'Approved requests routed to the warehouse will appear here for bin/batch allocation.' })}</td></tr>`}
       </tbody></table>`;
-    t.querySelectorAll('[data-alloc]').forEach((b) => b.addEventListener('click', () => this.allocate(b.dataset.alloc)));
-    t.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => this.view(b.dataset.view)));
+    tbl.querySelectorAll('[data-alloc]').forEach((b) => b.addEventListener('click', () => this.allocate(b.dataset.alloc)));
+    tbl.querySelectorAll('[data-view]').forEach((b) => b.addEventListener('click', () => this.view(b.dataset.view)));
   },
 
   async allocate(id) {
