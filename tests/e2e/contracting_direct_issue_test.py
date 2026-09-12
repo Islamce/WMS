@@ -160,8 +160,8 @@ check('D2 manufacturing still stages through ERP',
 con_db = build_db(tmp, 'con.db')
 set_edition(con_db, 'contracting')
 r = approve_on_own_server(con_db, 3403, warehouse='WH01')
-check('D3 contracting skips the ERP operator',
-      r.get('header', {}).get('request_status') == 'Pending Bin Location Assignment', r)
+check('D3 contracting skips the ERP operator and the bin-assignment screen',
+      r.get('header', {}).get('request_status') == 'Pending Picker Assignment', r)
 check('D3 the response says so', (r.get('body') or {}).get('routed_without_erp') is True, r.get('body'))
 
 # ===== 4. The ledger keeps its shape =====
@@ -201,7 +201,7 @@ r = approve_on_own_server(single, 3405)
 check('D6 a single site store is resolved without being named',
       r.get('header', {}).get('issue_warehouse_code') == 'WH01', r)
 check('D6 and the request still went straight to the store',
-      r.get('header', {}).get('request_status') == 'Pending Bin Location Assignment', r)
+      r.get('header', {}).get('request_status') == 'Pending Picker Assignment', r)
 
 print(f"\n===== RESULT: {passed} passed, {failed} failed =====")
 if fails:

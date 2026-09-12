@@ -12,6 +12,7 @@ const audit = require('./../services/audit');
 const notify = require('./../services/notify');
 const approvalMatrix = require('./../services/approvalMatrix');
 const { setHeaderStatus, refreshRollups } = require('./../services/requests');
+const { allocateLines } = require('./../services/autoAllocate');
 const { HEADER_STATUS, LINE_STATUS } = require('./../workflow/states');
 const { getTenant } = require('./../services/tenant');
 const { usesErpStaging } = require('./../services/tenantProfile');
@@ -253,9 +254,21 @@ function routeWithoutErp(header, user) {
   setHeaderStatus(fresh, HEADER_STATUS.WAREHOUSE_ASSIGNED, { user, sourceScreen: 'Approval Detail' });
   setHeaderStatus(fresh, HEADER_STATUS.PENDING_BIN_ASSIGNMENT, { user, sourceScreen: 'Approval Detail' });
 
+  // Bin and batch selection is NOT ERP dressing and is not skipped: picking
+  // refuses a line with no allocation, and without one the pick would record a
+  // movement while the batch it came from kept its quantity. What this edition
+  // removes is the operator and the screen, not the work — the same FIFO/FEFO
+  // rules run here, at approval, and the store sees a request that is already
+  // ready to pick. See services/autoAllocate.js.
+  allocateLines({ header: fresh, user, sourceScreen: 'Approval Detail', action: 'AUTO_ALLOCATE' });
+  setHeaderStatus(fresh, HEADER_STATUS.LOCATION_ASSIGNED, { user, sourceScreen: 'Approval Detail' });
+  setHeaderStatus(fresh, HEADER_STATUS.BATCH_ASSIGNED, { user, sourceScreen: 'Approval Detail' });
+  setHeaderStatus(fresh, HEADER_STATUS.PENDING_PICKER_ASSIGNMENT, { user, sourceScreen: 'Approval Detail' });
+
   audit.record({ entityType: 'MaterialRequestHeader', entityId: header.id, requestNumber: header.request_number,
     action: 'ROUTED_WITHOUT_ERP',
-    newValue: { issue_number: issueNumber, warehouse: warehouse.warehouse_code, movement_type: movementType },
+    newValue: { issue_number: issueNumber, warehouse: warehouse.warehouse_code, movement_type: movementType,
+      auto_allocated: true },
     user, sourceScreen: 'Approval Detail' });
 
   return null;
