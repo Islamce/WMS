@@ -130,6 +130,10 @@ stop_server
 echo ""
 if [ "$FAILED" -eq 0 ]; then
   echo "✅ ALL TEST SUITES PASSED"
+  # CI runs the browser smoke tests as a separate step, so a green run here is
+  # not a green CI. This has now cost two red pushes; the reminder is cheaper
+  # than a third.
+  echo "   NOTE: this does not include the browser tests. Run 'npm run test:smoke' before pushing."
 else
   echo "❌ TEST FAILURES — see output above"
 fi

@@ -89,12 +89,17 @@ function check(name, cond, detail) {
 
     await page.goto(BASE_URL, { waitUntil: 'networkidle' });
     check('public landing page renders', await page.locator('#wms-landing').count() === 1);
-    check('landing page offers English and Arabic', await page.locator('[data-landing-language]').count() === 1);
-    await page.locator('[data-landing-language]').click();
-    check('landing language switch updates copy and RTL direction',
-      await page.locator('html').getAttribute('dir') === 'rtl' &&
-      (await page.locator('.wl-hero h1').innerText()).includes('مساحة واحدة'));
-    await page.locator('[data-landing-language]').click();
+    // The product ships in English and is translated when a customer asks. The
+    // marketing page has a complete Arabic copy deck, kept dormant on purpose:
+    // an Arabic page leading into an English app sets an expectation the product
+    // breaks in the first minute. What is asserted here is COHERENCE — no offer
+    // of a language the app cannot deliver, and no dead button, which is what
+    // the half-done state actually produced.
+    check('landing offers no language the product cannot deliver',
+      await page.locator('[data-landing-language]').count() === 0);
+    check('and the page reads as English, left to right',
+      await page.locator('html').getAttribute('dir') === 'ltr' &&
+      !(await page.locator('.wl-hero h1').innerText()).match(/[\u0600-\u06FF]/));
     await page.locator('[data-scroll="demo"]').first().click();
     check('landing section navigation does not collide with the SPA hash router',
       await page.locator('#wms-landing').count() === 1 && !page.url().includes('#/login'));
