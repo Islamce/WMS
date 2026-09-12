@@ -1,5 +1,19 @@
 /**
- * The Arabic gate: untranslated strings may go down, never up.
+ * The Arabic measurement, and one real bug guard.
+ *
+ * REPORT-ONLY BY DEFAULT, deliberately. Translating the product is deferred —
+ * the owner's call, and the right one: it is 30-40 person-days and no customer
+ * is waiting on it yet. A gate that fails the build over a deferred decision
+ * would tax every unrelated feature for a job nobody is doing, which is how a
+ * quality gate turns into something people route around.
+ *
+ * So the count is printed, not enforced. Set I18N_ENFORCE=1 to make it fail —
+ * do that on the day translation starts, and the ratchet below does its job
+ * from whatever the number is that day.
+ *
+ * One check stays FATAL regardless, because it is not about translation: a
+ * local variable named `t` shadows the translation function and throws at
+ * runtime the moment that page is translated. That is a crash, not a policy.
  *
  * The product is sold into a market whose storekeepers do not read English, and
  * it is currently ~1,300 hardcoded English strings deep. A gate that demanded
@@ -28,9 +42,18 @@ let passed = 0;
 let failed = 0;
 const fails = [];
 
-function check(name, cond, detail) {
-  if (cond) { passed += 1; console.log('PASS:', name); }
-  else { failed += 1; fails.push(name); console.log('FAIL:', name, detail === undefined ? '' : detail); }
+const ENFORCE = process.env.I18N_ENFORCE === '1';
+
+/** `fatal: false` reports without failing the build unless I18N_ENFORCE=1. */
+function check(name, cond, detail, { fatal = true } = {}) {
+  if (cond) { passed += 1; console.log('PASS:', name); return; }
+  if (fatal || ENFORCE) {
+    failed += 1;
+    fails.push(name);
+    console.log('FAIL:', name, detail === undefined ? '' : detail);
+  } else {
+    console.log('NOTE:', name, detail === undefined ? '' : detail);
+  }
 }
 
 const baseline = JSON.parse(fs.readFileSync(BASELINE_FILE, 'utf8'));
@@ -54,7 +77,7 @@ for (const [file, rows] of Object.entries(byFile)) {
   }
 }
 check('no file added an untranslated user-facing string', regressions.length === 0,
-  regressions.length ? '\n  ' + regressions.join('\n  ') : '');
+  regressions.length ? '\n  ' + regressions.join('\n  ') : '', { fatal: false });
 
 // A file that disappeared from the findings is fully translated (or deleted).
 for (const file of Object.keys(baseline.files)) {
@@ -66,7 +89,7 @@ if (improvements.length) {
 }
 
 // ===== 2. The total may not drift up either =====
-check('the total did not rise', total <= baseline.total, `${total} > ${baseline.total}`);
+check('the total did not rise', total <= baseline.total, `${total} > ${baseline.total}`, { fatal: false });
 
 // ===== 3. t() must not be shadowed =====
 const shadowed = [];
@@ -80,8 +103,12 @@ check('nothing shadows the translation function t()', shadowed.length === 0, sha
 
 // ===== 4. The escape hatch stays rare =====
 check('i18n-ignore is not being used as the default', ignored <= baseline.maxIgnored,
-  `${ignored} > ${baseline.maxIgnored}`);
+  `${ignored} > ${baseline.maxIgnored}`, { fatal: false });
 
+if (!ENFORCE) {
+  console.log('\nTranslation is deferred, so the count above is reported, not enforced.');
+  console.log('Set I18N_ENFORCE=1 to make it a gate when translation starts.');
+}
 console.log(`\n===== RESULT: ${passed} passed, ${failed} failed =====`);
 if (fails.length) console.log('Failed:', fails.join(', '));
 process.exit(failed ? 1 : 0);

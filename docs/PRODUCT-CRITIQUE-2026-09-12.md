@@ -241,6 +241,26 @@ What landed:
 - Four pages had shadowed `t` with a local variable and would have thrown the
   moment anyone translated them. Renamed, and the gate bans it recurring.
 
+**Deferred by the owner, 2026-09-12.** Translating the product is not a
+prerequisite for the pilot and is not being funded now. The decision is sound:
+it is 30-40 person-days, no customer is waiting on it, and the pilot runs in a
+company that reads English. So the ratchet is **report-only** — it prints the
+number and does not fail the build. Making unrelated feature work pay for a job
+nobody is doing is how a quality gate turns into something people route around.
+`I18N_ENFORCE=1` turns it into a gate on the day translation starts, from
+whatever the number is that day; nothing has to be rebuilt to switch it on.
+
+One check stays fatal because it is not about translation: a local variable
+shadowing `t()` crashes the page it is on the moment that page is translated.
+
+**What this costs if it is never done:** the §3 objection stands in full. A
+contractor in Egypt or the Gulf whose storekeeper does not read English will not
+buy this, and it is the first thing they notice. Deferring is a decision to sell
+to buyers whose staff read English, which in this market is the larger
+contractors — not the small and medium ones named as the target. That is a
+narrower market, not a smaller feature list, and it is worth revisiting before
+the first serious sales push rather than after.
+
 **Still open:** the server. Status names are stored as English display text and
 compared as literals by the frontend, so translating them needs a display-layer
 map rather than a schema change; API error sentences are shown to users
