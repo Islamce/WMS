@@ -11,6 +11,10 @@
 window.Pages = window.Pages || {};
 
 // --- Inline icon set (feather-style, stroke = currentColor) ----------------
+// Display names for the language picker, which only appears once more than one
+// language is finished. See i18n.js -> ENABLED_LANGS.
+const LANG_NAMES = { en: 'EN', ar: 'عربي', fr: 'FR' };
+
 const ICONS = {
   grid: '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>',
   'bar-chart': '<line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/>',
@@ -64,56 +68,56 @@ const MODULES = [
     { route: 'ai', label: 'AI Stock Analytics', icon: 'cpu', permission: 'ai_analytics' },
     { route: 'notifications', label: 'Notifications', icon: 'bell', permission: 'notifications' },
   ] },
-  { key: 'requests', label: 'Material Requests', icon: 'file-text', items: [
-    { route: 'create-request', label: 'Create Request', icon: 'file-plus', permission: 'create_request' },
-    { route: 'requests', label: 'Requests', icon: 'list', permission: 'material_requests' },
+  { key: 'requests', label: 'Demand & Requests', icon: 'file-text', items: [
+    { route: 'create-request', label: 'Create Material Request', icon: 'file-plus', permission: 'create_request' },
+    { route: 'requests', label: 'Material Requests', icon: 'list', permission: 'material_requests' },
     { route: 'approvals', label: 'Approvals', icon: 'check-circle', permission: 'approvals' },
-    { route: 'erp-operator', label: 'ERP Operator', icon: 'link', permission: 'erp_operator' },
+    { route: 'erp-operator', label: 'ERP Processing Queue', icon: 'link', permission: 'erp_operator' },
   ] },
   { key: 'warehouse', label: 'Warehouse Execution', icon: 'truck', items: [
     { route: 'warehouse', label: 'Warehouse Dashboard', icon: 'home', permission: 'warehouse_dashboard' },
-    { route: 'allocation', label: 'Bin & Batch Assign', icon: 'compass', permission: 'bin_batch_assignment' },
+    { route: 'allocation', label: 'Bin & Batch Assignment', icon: 'compass', permission: 'bin_batch_assignment' },
     { route: 'picker-assign', label: 'Picker Assignment', icon: 'user-plus', permission: 'picker_assignment' },
     { route: 'picking', label: 'My Picking Tasks', icon: 'smartphone', permission: 'picking' },
     { route: 'gi-posting', label: 'Goods Issue Posting', icon: 'send', permission: 'gi_posting' },
     { route: 'reallocation', label: 'Stock Reallocation', icon: 'shuffle', permission: ['reallocation', 'bin_batch_assignment'] },
   ] },
   { key: 'outbound', label: 'Shipping & Outbound', icon: 'truck', items: [
-    { route: 'shipping', label: 'Delivery & Dispatch', icon: 'truck', permission: ['shipping', 'gi_posting'] },
+    { route: 'shipping', label: 'Packing & Dispatch', icon: 'truck', permission: ['shipping', 'gi_posting'] },
   ] },
   { key: 'subcontractor', label: 'Subcontractor Materials', icon: 'user-plus', items: [
     { route: 'subcontractor-quality', label: 'Deliveries & Quality', icon: 'shield', permission: ['subcontractor_receiving', 'subcontractor_quality_inspection'] },
-    { route: 'subcontractor-stock', label: 'On-Hand Stock', icon: 'archive', permission: ['subcontractor_receiving', 'subcontractor_quality_inspection', 'subcontractor_admin'] },
-    { route: 'subcontractor-reconciliation', label: 'Reconciliation', icon: 'bar-chart', permission: ['subcontractor_receiving', 'subcontractor_quality_inspection', 'subcontractor_admin'] },
+    { route: 'subcontractor-stock', label: 'Subcontractor Stock', icon: 'archive', permission: ['subcontractor_receiving', 'subcontractor_quality_inspection', 'subcontractor_admin'] },
+    { route: 'subcontractor-reconciliation', label: 'Subcontractor Reconciliation', icon: 'bar-chart', permission: ['subcontractor_receiving', 'subcontractor_quality_inspection', 'subcontractor_admin'] },
     { route: 'subcontractor-returns', label: 'Returns to Owner', icon: 'corner-up-left', permission: ['subcontractor_admin', 'subcontractor_receiving', 'subcontractor_return_approval'] },
-    { route: 'subcontractor-owned-stock', label: 'Owned Stock Report', icon: 'pie-chart', permission: ['subcontractor_admin', 'subcontractor_receiving', 'subcontractor_return_approval', 'project_management_approval', 'kpi_dashboard'] },
+    { route: 'subcontractor-owned-stock', label: 'Subcontractor-Owned Stock', icon: 'pie-chart', permission: ['subcontractor_admin', 'subcontractor_receiving', 'subcontractor_return_approval', 'project_management_approval', 'kpi_dashboard'] },
     { route: 'subcontractors', label: 'Subcontractors & Categories', icon: 'users', permission: 'subcontractor_admin' },
   ] },
   { key: 'receiving', label: 'Receiving & Quality', icon: 'download', items: [
-    { route: 'receiving', label: 'Goods Receipt & QR', icon: 'download', permission: ['goods_receipt', 'erp_operator', 'picking'] },
-    { route: 'qr-printing', label: 'QR Label Printing', icon: 'printer', permission: ['qr_printing', 'goods_receipt'] },
-    { route: 'batches', label: 'Batch Tracking', icon: 'layers', permission: 'batch_tracking' },
-    { route: 'expiry', label: 'Expiry Alerts', icon: 'clock', permission: 'expiry_alerts' },
+    { route: 'receiving', label: 'Goods Receipt', icon: 'download', permission: ['goods_receipt', 'erp_operator', 'picking'] },
+    { route: 'qr-printing', label: 'QR & Label Printing', icon: 'printer', permission: ['qr_printing', 'goods_receipt'] },
+    { route: 'batches', label: 'Batch Traceability', icon: 'layers', permission: 'batch_tracking' },
+    { route: 'expiry', label: 'Expiry & Shelf Life', icon: 'clock', permission: 'expiry_alerts' },
     { route: 'cycle-count', label: 'Cycle Counting', icon: 'clipboard', permission: 'cycle_count' },
-    { route: 'quality', label: 'Quality', icon: 'shield', permission: 'quality' },
+    { route: 'quality', label: 'Quality Inspection', icon: 'shield', permission: 'quality' },
   ] },
   { key: 'inventory', label: 'Inventory', icon: 'map', items: [
     { route: 'physical-inventory', label: 'Physical Inventory', icon: 'clipboard', permission: ['inventory_count', 'cycle_count'] },
-    { route: 'all-locations', label: 'All Locations', icon: 'map', permission: 'all_locations' },
+    { route: 'all-locations', label: 'Stock by Location', icon: 'map', permission: 'all_locations' },
     { route: 'empty-locations', label: 'Empty Locations', icon: 'square', permission: 'empty_locations' },
   ] },
-  { key: 'master', label: 'Master Data', icon: 'database', items: [
-    { route: 'materials', label: 'Materials', icon: 'box', permission: 'materials' },
-    { route: 'locations', label: 'Locations', icon: 'pin', permission: 'locations' },
+  { key: 'master', label: 'Master Data & Integration', icon: 'database', items: [
+    { route: 'materials', label: 'Material Master', icon: 'box', permission: 'materials' },
+    { route: 'locations', label: 'Storage Locations', icon: 'pin', permission: 'locations' },
     { route: 'warehouses-master', label: 'Warehouses', icon: 'home', permission: 'warehouses_master' },
     { route: 'bins-master', label: 'Bin Locations', icon: 'archive', permission: 'bins_master' },
     { route: 'movement-types', label: 'Movement Types', icon: 'shuffle', permission: 'movement_types_master' },
     { route: 'import', label: 'Import Data', icon: 'download', permission: ['materials', 'locations', 'warehouses_master', 'bins_master', 'movement_types_master', 'goods_receipt'] },
   ] },
-  { key: 'admin', label: 'Administration', icon: 'shield', items: [
+  { key: 'admin', label: 'Governance & Administration', icon: 'shield', items: [
     { route: 'audit', label: 'Audit Trail', icon: 'file-text', permission: 'audit_trail' },
     { route: 'users', label: 'Users', icon: 'users', permission: 'users_management' },
-    { route: 'permissions', label: 'Permissions', icon: 'lock', permission: 'permissions_management' },
+    { route: 'permissions', label: 'Roles & Permissions', icon: 'lock', permission: 'permissions_management' },
   ] },
 ];
 
@@ -187,6 +191,25 @@ const App = {
    * level, so a module the tenant does not have must be invisible to everyone
    * including the administrator.
    */
+  /**
+   * True when approval routes straight to the store — no ERP reservation, no
+   * bin-assignment screen, no picker assignment.
+   *
+   * Three screens are still REACHABLE on such an edition and their queues are
+   * normally empty, which reads as a broken screen unless they say why. They
+   * are deliberately not hidden: a tenant switched from an ERP edition can have
+   * requests already sitting in those queues, and hiding the screens would
+   * strand them with no way to finish. So the screens stay and explain
+   * themselves instead.
+   *
+   * Keyed on the capability rather than the profile name, so a future edition
+   * gets this by declaring erpStaging rather than by being added to a list of
+   * names here. Defaults to "has ERP staging" when unknown, matching the server.
+   */
+  routesStraightToStore() {
+    return !!(this.tenant && this.tenant.erpStaging === false);
+  },
+
   tenantHasModule(moduleKey) {
     const modules = this.tenant && this.tenant.modules;
     if (!modules) return true;
@@ -383,11 +406,10 @@ const App = {
               <button class="icon-btn" id="topbar-search" aria-label="${t('Search')}">${svg('search')}</button>
               ${this.can('notifications') ? `<a class="icon-btn" id="topbar-bell" href="#/notifications" aria-label="${t('Notifications')}">${svg('bell')}</a>` : ''}
               <button class="icon-btn" id="theme-toggle" aria-label="${t('Theme')}">${svg(Theme.current === 'dark' ? 'sun' : 'moon')}</button>
+              ${Lang.available.length > 1 ? `
               <select id="lang-select" class="lang-select" title="${UI.esc(t('Language'))}">
-                <option value="en" ${Lang.current === 'en' ? 'selected' : ''}>EN</option>
-                <option value="ar" ${Lang.current === 'ar' ? 'selected' : ''}>عربي</option>
-                <option value="fr" ${Lang.current === 'fr' ? 'selected' : ''}>FR</option>
-              </select>
+                ${Lang.available.map((l) => `<option value="${l}" ${Lang.current === l ? 'selected' : ''}>${LANG_NAMES[l] || l.toUpperCase()}</option>`).join('')}
+              </select>` : ''}
               <div class="user-menu">
                 <button class="user-trigger" id="user-trigger">
                   <span class="avatar">${UI.esc(initials)}</span>
@@ -446,7 +468,8 @@ const App = {
 
     // Topbar controls.
     document.getElementById('theme-toggle').addEventListener('click', () => Theme.toggle());
-    document.getElementById('lang-select').addEventListener('change', (e) => Lang.set(e.target.value));
+    const langSelect = document.getElementById('lang-select');
+    if (langSelect) langSelect.addEventListener('change', (e) => Lang.set(e.target.value));
     document.getElementById('nav-search').addEventListener('click', () => this.openSearch());
     document.getElementById('topbar-search').addEventListener('click', () => this.openSearch());
 

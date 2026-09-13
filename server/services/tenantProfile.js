@@ -79,6 +79,26 @@ const PROFILES = {
       'ERP Operator': 'Procurement Officer',
       'Movement Type': 'Issue Category',
     },
+    /**
+     * The request workflow in this product was modelled on SAP: a worker
+     * requests, a manager approves, an ERP operator raises a RESERVATION, and
+     * the store posts a GOODS ISSUE against it. Those two documents exist
+     * because SAP is the system of record and this system is feeding it.
+     *
+     * On a construction site there is no SAP and no such documents. The
+     * responsible engineer approves the request and the store issues the
+     * material. Making a contractor raise a reservation is making them type a
+     * number that does not exist, for a system they do not own.
+     *
+     * So this edition has no ERP staging step. The stock movement itself is
+     * NOT removed — that is the real event, and deleting it would delete the
+     * inventory effect. What is removed is its ERP dressing: no reservation to
+     * raise, no reservation number to invent, no ERP operator in the chain.
+     * A locally generated issue number takes the reservation's place in the
+     * ledger, which is the same principle as a delivery note taking the place
+     * of a purchase order for material the company did not buy.
+     */
+    erpStaging: false,
     /** Project attribution is the whole point of a site store — enforce it. */
     requiredRequestFields: ['wbs_element', 'plant'],
   },
@@ -97,6 +117,9 @@ const PROFILES = {
       'movement_types_master',
     ],
     terminology: {},
+    /** SAP is the system of record here, so the reservation and the goods
+     *  issue mirror real documents and the ERP operator step is real work. */
+    erpStaging: true,
     requiredRequestFields: ['cost_center', 'plant'],
   },
 };
@@ -135,6 +158,23 @@ function getProfile(key) {
  * @param {string} moduleKey permission key
  * @returns {boolean}
  */
+/**
+ * Does this deployment stage requests through an ERP reservation?
+ *
+ * Defaults to TRUE for an unconfigured install, because that is what every
+ * existing deployment does today. An edition can only ever turn it off, and
+ * only a tenant that explicitly opted into Contracting does.
+ *
+ * @param {string|null} profileKey profile key, or null on an unconfigured install
+ * @returns {boolean}
+ */
+function usesErpStaging(profileKey) {
+  if (!profileKey) return true;
+  const profile = PROFILES[String(profileKey).trim().toLowerCase()];
+  if (!profile) return true;
+  return profile.erpStaging !== false;
+}
+
 function profileHasModule(profileKey, moduleKey) {
   return getProfile(profileKey).modules.includes(moduleKey);
 }
@@ -155,6 +195,7 @@ module.exports = {
   PROFILES,
   DEFAULT_PROFILE,
   profileKeys,
+  usesErpStaging,
   getProfile,
   profileHasModule,
   term,

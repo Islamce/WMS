@@ -71,47 +71,17 @@
     admin: { label: 'Admin / System workspace', groups: null, defaultOpen: GROUPS.map((group) => group.key) },
   };
 
-  const LABELS = {
-    dashboard: 'Operations Overview',
-    kpi: 'Performance Cockpit',
-    notifications: 'Alerts & Notifications',
-    'create-request': 'Create Material Request',
-    requests: 'Request Work Queue',
-    approvals: 'Approval Work Queue',
-    'erp-operator': 'ERP Processing Queue',
-    receiving: 'Goods Receipt & Identification',
-    'qr-printing': 'QR & Label Printing',
-    quality: 'Quality Inspection',
-    batches: 'Batch Traceability',
-    expiry: 'Shelf-life & Expiry Control',
-    warehouse: 'Execution Control Board',
-    allocation: 'Bin & Batch Allocation',
-    'picker-assign': 'Work Assignment',
-    picking: 'Picking Tasks',
-    reallocation: 'Stock Reallocation',
-    'gi-posting': 'Goods Issue Posting',
-    shipping: 'Packing, Dispatch & Shipping',
-    'physical-inventory': 'Physical Inventory',
-    'cycle-count': 'Cycle Counting',
-    'all-locations': 'Stock by Location',
-    'empty-locations': 'Available Locations',
-    ai: 'AI Inventory Intelligence',
-    materials: 'Material Master',
-    locations: 'Storage Location Master',
-    'warehouses-master': 'Warehouse Master',
-    'bins-master': 'Bin Master',
-    'movement-types': 'Movement Type Configuration',
-    import: 'Data Integration Center',
-    audit: 'Audit & Traceability',
-    users: 'User Administration',
-    permissions: 'Roles & Permissions',
-    'subcontractor-quality': 'Deliveries & Quality Inspection',
-    'subcontractor-stock': 'Subcontractor On-Hand Stock',
-    'subcontractor-reconciliation': 'Subcontractor Reconciliation',
-    'subcontractor-returns': 'Returns to Owner',
-    'subcontractor-owned-stock': 'Subcontractor-Owned Stock',
-    subcontractors: 'Subcontractors & Categories',
-  };
+  // There is deliberately NO label table here.
+  //
+  // This file used to carry its own name for every screen, and 33 of the 39
+  // disagreed with the names app.js renders — so the sidebar called a screen one
+  // thing and the tile below it another, both visible on the home screen at
+  // once. Two vocabularies for one product is not a wording problem, it is the
+  // product looking like it was built twice.
+  //
+  // app.js MODULES is the single source. This file groups and orders those
+  // links; it does not rename them. If a screen needs a better name, change it
+  // there and it changes everywhere.
 
   function routeOf(link) {
     const href = link.getAttribute('href') || '';
@@ -148,17 +118,16 @@
     head.className = 'nav-group-head';
     head.setAttribute('aria-expanded', String(isOpen));
     head.innerHTML = `<span class="kynox-module-mark" aria-hidden="true"></span><span class="lbl"></span><svg class="ico chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="9 18 15 12 9 6"></polyline></svg>`;
-    head.querySelector('.lbl').textContent = def.label;
+    // The nav this replaced translated every label (app.js wraps them in t()).
+    // Going through t() here is what stops the frame around all 43 screens from
+    // being the one part of the app that is permanently English.
+    head.querySelector('.lbl').textContent = t(def.label);
 
     const body = document.createElement('div');
     body.className = 'nav-group-body';
     def.routes.forEach((route) => {
       const link = links.get(route);
       if (!link) return;
-      const label = link.querySelector('.lbl');
-      if (label && LABELS[route] && label.textContent !== LABELS[route]) label.textContent = LABELS[route];
-      const nextTitle = LABELS[route] || link.title;
-      if (link.title !== nextTitle) link.title = nextTitle;
       body.appendChild(link);
     });
 

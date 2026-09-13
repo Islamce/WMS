@@ -10,10 +10,10 @@ const { isId, isPositiveNumber } = require('./../utils/validate');
 const { sendError } = require('./../utils/errors');
 const audit = require('./../services/audit');
 const notify = require('./../services/notify');
-const allocation = require('./../services/allocation');
+const { allocateLines } = require('./../services/autoAllocate');
 const { activeFreeze, freezeMessage } = require('./../services/freeze');
 const { setHeaderStatus, getHeaderOr404, releaseOpenAllocations, sweepReservations } = require('./../services/requests');
-const { HEADER_STATUS, LINE_STATUS, TASK_STATUS } = require('./../workflow/states');
+const { HEADER_STATUS, TASK_STATUS } = require('./../workflow/states');
 const { withExecutionContexts } = require('./../services/workflowContext');
 
 const router = express.Router();
@@ -114,62 +114,11 @@ router.post('/:id/allocate', requirePermission('bin_batch_assignment'), (req, re
       throw err;
     }
 
-    const lines = db.prepare(
-      "SELECT * FROM material_request_lines WHERE request_id=? AND line_status NOT IN ('Rejected','Cancelled')"
-    ).all(header.id);
-
     releaseOpenAllocations(header.id);
     db.prepare("DELETE FROM picking_allocations WHERE request_id=? AND status='CANCELLED'").run(header.id);
 
-    for (const line of lines) {
-      const qty = line.approved_quantity ?? line.requested_quantity;
-      const plan = allocation.propose({
-        materialId: line.material_id, warehouseCode: header.issue_warehouse_code,
-        quantity: qty, isExpiryManaged: !!line.is_expiry_managed,
-      });
-
-      let seq = 1;
-      plan.allocations.forEach((a) => {
-        db.prepare(`
-          INSERT INTO picking_allocations
-            (request_id, request_number, line_id, line_number, material_id, batch_id, batch_number,
-             warehouse_code, bin_location, qr_code_id, proposed_quantity, allocation_method, sequence, status)
-          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?, 'PROPOSED')
-        `).run(header.id, header.request_number, line.id, line.line_number, line.material_id,
-          a.batch_id, a.batch_number, a.warehouse_code, a.bin_location, a.qr_code_id,
-          a.proposed_quantity, a.allocation_method, seq++);
-        db.prepare('UPDATE batches SET reserved_quantity = reserved_quantity + ? WHERE id=?')
-          .run(a.proposed_quantity, a.batch_id);
-      });
-
-      const primary = plan.allocations[0];
-      db.prepare(`
-        UPDATE material_request_lines
-        SET bin_location=?, batch_number=?, batch_id=?, qr_code_id=?, reserved_quantity=?,
-            fifo_sequence=?, fefo_sequence=?, line_status=?, updated_at=datetime('now')
-        WHERE id=?
-      `).run(
-        primary ? primary.bin_location : null,
-        primary ? primary.batch_number : null,
-        primary ? primary.batch_id : null,
-        primary ? primary.qr_code_id : null,
-        plan.allocatedQty,
-        plan.method === 'FIFO' ? 1 : null,
-        plan.method === 'FEFO' ? 1 : null,
-        primary ? LINE_STATUS.BATCH_ASSIGNED : LINE_STATUS.NOT_AVAILABLE,
-        line.id
-      );
-
-      audit.record({ entityType: 'MaterialRequestLine', entityId: line.id, requestNumber: header.request_number,
-        lineNumber: line.line_number, action: forceReallocate ? 'REALLOCATE' : 'ALLOCATE', newValue: {
-          method: plan.method, allocated: plan.allocatedQty, shortfall: plan.shortfall,
-          batches: plan.allocations.map((a) => `${a.batch_number}:${a.proposed_quantity}`),
-        }, user: req.user, sourceScreen: 'Bin & Batch Assignment' });
-
-      results.push({ line_number: line.line_number, material_code: line.material_code, method: plan.method,
-        allocated: plan.allocatedQty, requested: qty, shortfall: plan.shortfall,
-        allocations: plan.allocations });
-    }
+    results.push(...allocateLines({ header, user: req.user, sourceScreen: 'Bin & Batch Assignment',
+      action: forceReallocate ? 'REALLOCATE' : 'ALLOCATE' }));
 
     setHeaderStatus(header, HEADER_STATUS.LOCATION_ASSIGNED, { user: req.user, sourceScreen: 'Bin & Batch Assignment' });
     setHeaderStatus(header, HEADER_STATUS.BATCH_ASSIGNED, { user: req.user, sourceScreen: 'Bin & Batch Assignment' });

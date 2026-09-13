@@ -70,6 +70,18 @@ run_suite ledger_convergence_test.py
 # Offline: no screen may be unreachable on every edition — the control for the
 # erp_operator break, which dead-ended the request workflow on every tenant.
 if ! node tests/e2e/edition_route_coverage_test.js; then FAILED=1; fi
+
+echo "========== screen naming =========="
+if ! node tests/e2e/screen_naming_test.js; then FAILED=1; fi
+
+echo "========== i18n coverage ratchet =========="
+if ! node tests/i18n_coverage_test.js; then FAILED=1; fi
+# Offline: contracting approves straight to the store with no ERP reservation;
+# every other install keeps the SAP chain. Boots its own servers per edition.
+run_suite contracting_direct_issue_test.py
+run_suite contracting_collapsed_chain_test.py
+run_suite first_hour_test.py
+run_suite import_examples_test.py
 # Offline: migrated temp database; pins that ownership defaults leave live data alone.
 run_suite stock_ownership_test.py
 # LAST in this phase — it marks a batch as subcontractor-owned and depletes it,
@@ -123,6 +135,10 @@ stop_server
 echo ""
 if [ "$FAILED" -eq 0 ]; then
   echo "✅ ALL TEST SUITES PASSED"
+  # CI runs the browser smoke tests as a separate step, so a green run here is
+  # not a green CI. This has now cost two red pushes; the reminder is cheaper
+  # than a third.
+  echo "   NOTE: this does not include the browser tests. Run 'npm run test:smoke' before pushing."
 else
   echo "❌ TEST FAILURES — see output above"
 fi

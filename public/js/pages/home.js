@@ -38,6 +38,16 @@ Pages.home = {
     if (!this.focusGroups.length) this.focusGroups = this.allGroups;
     this.showAll = !this.profile.modules || this.focusGroups.length === this.allGroups.length;
     this.notifications = [];
+    this.setup = null;
+
+    // Server-authorised, and quiet once the tenant is running: the endpoint
+    // reports complete as soon as material has been issued once, so an
+    // established tenant never sees this and it cannot become permanent
+    // furniture. A failure here must not cost the user their home screen.
+    try {
+      const status = await Api.get('/api/setup/status');
+      if (status && !status.complete) this.setup = status;
+    } catch { /* Home remains useful when the optional check fails. */ }
 
     if (App.can('notifications')) {
       try {
@@ -49,6 +59,42 @@ Pages.home = {
   },
 
   visibleGroups() { return this.showAll ? this.allGroups : this.focusGroups; },
+
+  /**
+   * The first-hour checklist. Shown only while setup is unfinished.
+   *
+   * The order is not advice, it is how the product works: stock arrives on
+   * quality hold in no bin, and cannot be allocated until both are dealt with.
+   * A customer who does not know that raises a request, finds nothing can be
+   * picked, and concludes the product is broken.
+   */
+  setupHtml() {
+    if (!this.setup) return '';
+    const next = this.setup.next_step;
+    return `
+      <div class="card setup-guide">
+        <div class="lp-process-head">
+          <div>
+            <h2>Finish setting up</h2>
+            <p class="muted">${this.setup.completed_steps} of ${this.setup.total_steps} done.
+              These are in order because the product depends on it — stock arrives on quality
+              hold and in no bin, and cannot be issued until both are handled.</p>
+          </div>
+          ${next ? `<a class="btn sm" href="${next.route}">${UI.esc(next.title)}</a>` : ''}
+        </div>
+        <ol class="setup-steps">
+          ${this.setup.steps.map((s) => `
+            <li class="${s.done ? 'done' : ''}${s === next ? ' next' : ''}">
+              <span class="setup-mark" aria-hidden="true">${s.done ? '✓' : '○'}</span>
+              <div>
+                <a href="${s.route}">${UI.esc(s.title)}</a>
+                <p class="muted">${UI.esc(s.detail)}</p>
+              </div>
+              <span class="sr-only">${s.done ? 'Done' : 'Not done yet'}</span>
+            </li>`).join('')}
+        </ol>
+      </div>`;
+  },
 
   renderLaunchpad() {
     const hour = new Date().getHours();
@@ -69,6 +115,7 @@ Pages.home = {
             <input type="text" id="lp-filter" placeholder="${t('Filter processes…')}" autocomplete="off" aria-label="${t('Filter processes')}">
           </div>
         </div>
+        ${this.setupHtml()}
         ${this.alertPreviewHtml()}
         <div class="lp-process-head">
           <div><h2>${hasFocusedView ? `${UI.esc(this.profile.label)} processes` : t('All permitted processes')}</h2>

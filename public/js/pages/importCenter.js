@@ -166,7 +166,13 @@ Pages.importCenter = {
 
   downloadTemplate(key) {
     const cols = this.columnsFor(key);
-    const csv = cols.join(',') + '\n';
+    // A header row alone leaves the customer guessing what a valid value looks
+    // like, and finding out by failed upload. The example comes from the server
+    // beside the column list, so it cannot drift from what the importer accepts.
+    const example = (this.entities.find((e) => e.key === key) || {}).example;
+    const cell = (v) => (/[",\n]/.test(v) ? `"${String(v).replace(/"/g, '""')}"` : v);
+    const csv = cols.join(',') + '\n'
+      + (example ? cols.map((c) => cell(example[c] === undefined ? '' : example[c])).join(',') + '\n' : '');
     const blob = new Blob([csv], { type: 'text/csv' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);

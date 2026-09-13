@@ -17,6 +17,8 @@ const { recordMovement } = require('./../services/ledger');
 const { setHeaderStatus, refreshRollups, getHeaderOr404, reopenForRepick } = require('./../services/requests');
 const { HEADER_STATUS, LINE_STATUS } = require('./../workflow/states');
 const { withExecutionContext, withExecutionContexts } = require('./../services/workflowContext');
+const { getTenant } = require('./../services/tenant');
+const { usesErpStaging } = require('./../services/tenantProfile');
 
 const router = express.Router();
 router.use(authenticate, requirePermission('gi_posting'));
@@ -122,11 +124,26 @@ router.post('/:id/post', (req, res) => {
       batch: l.batch_number, bin: l.bin_location })),
   };
 
+  // A contractor has no SAP, so there is no GI document number to copy from one
+  // — and demanding one means inventing a reference to a system the customer
+  // does not own. The number is minted locally instead, exactly as the issue
+  // number replaces the reservation at routes/approvals.js -> routeWithoutErp.
+  // The posting itself is unchanged: the ledger row, the issued quantities and
+  // the reversal path all still key on this number.
+  let giDocumentNumber = b.gi_document_number;
+  if (!giDocumentNumber && !usesErpStaging(getTenant().profileKey)) {
+    const year = new Date().getFullYear();
+    const seq = db.prepare(
+      'SELECT COUNT(*) AS n FROM material_request_headers WHERE gi_document_number LIKE ?'
+    ).get(`GI-${year}-%`).n + 1;
+    giDocumentNumber = `GI-${year}-${String(seq).padStart(5, '0')}`;
+  }
+
   let result;
   try {
     result = erp.connector().postGoodsIssue({
       requestNumber: header.request_number, payload,
-      giDocumentNumber: b.gi_document_number, fiscalYear: b.fiscal_year,
+      giDocumentNumber, fiscalYear: b.fiscal_year,
       simulateError: !!b.simulate_error, user: req.user,
     });
   } catch (err) {

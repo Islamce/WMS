@@ -515,6 +515,34 @@ router.post('/stock/reconcile-dates', (req, res) => {
   });
 });
 
+/**
+ * One filled-in row per import type, keyed by column.
+ *
+ * A template that is only a header row tells you the column names and nothing
+ * about what goes in them: `direction` accepts four values and no others,
+ * `full_bin_location` has a shape, dates have a format, and a customer filling
+ * their first CSV has to guess all of it and find out by upload. The example is
+ * defined next to the columns so the two cannot drift apart, and it is served
+ * from the same endpoint the template is built from.
+ *
+ * These are examples, not defaults: nothing here is ever imported.
+ */
+const EXAMPLES = {
+  materials: { item_code: 'CEM-OPC-50', description: 'Portland cement OPC 42.5, 50 kg bag', unit: 'BAG',
+    plant: 'P100', material_type: 'Construction material', material_group: 'Cement & binders',
+    price: '0', currency: 'USD' },
+  locations: { code: 'SITE-YARD' },
+  warehouses: { warehouse_code: 'SITE-01', warehouse_name: 'Main Site Store', plant: 'P100',
+    storage_location: 'SITE-01', warehouse_type: 'Site store' },
+  bins: { warehouse_code: 'SITE-01', bin_code: 'RACK-01', full_bin_location: 'SITE-01-RACK-01',
+    zone: 'Covered store', rack: '01', level: '1', column_number: '1', capacity: '0' },
+  'movement-types': { code: '261', description: 'Goods issue to project', direction: 'ISSUE',
+    cost_object: 'WBS' },
+  stock: { material_code: 'CEM-OPC-50', warehouse_code: 'SITE-01', batch_number: 'OPEN-0001',
+    quantity: '100', bin_location: 'SITE-01-RACK-01', receiving_date: '2026-01-31',
+    expiry_date: '', manufacturing_date: '', quality_status: 'RELEASED', po_number: 'PO-0001' },
+};
+
 const ENTITIES = {
   materials: {
     permission: 'materials', columns: ['item_code', 'description', 'unit', 'plant', 'material_type', 'material_group', 'price', 'currency'],
@@ -659,7 +687,7 @@ function applyRows(rows, handler) {
   return { created, updated, skipped, errors, results };
 }
 
-router.get('/meta', (req, res) => { const entities = Object.entries(ENTITIES).filter(([, d]) => req.user.role === 'admin' || req.user.permissions.includes(d.permission)).map(([key, d]) => ({ key, columns: d.columns })); res.json({ entities }); });
+router.get('/meta', (req, res) => { const entities = Object.entries(ENTITIES).filter(([, d]) => req.user.role === 'admin' || req.user.permissions.includes(d.permission)).map(([key, d]) => ({ key, columns: d.columns, example: EXAMPLES[key] || null })); res.json({ entities }); });
 router.post('/:entity', (req, res) => { const def = ENTITIES[req.params.entity]; if (!def) return res.status(404).json({ error: 'Unknown import type.' }); if (req.user.role !== 'admin' && !req.user.permissions.includes(def.permission)) return res.status(403).json({ error: 'You do not have permission to import this data.' }); const rows = Array.isArray(req.body.rows) ? req.body.rows : []; if (!rows.length) return res.status(400).json({ error: 'No rows to import.' }); if (rows.length > MAX_ROWS) return res.status(400).json({ error: `Maximum ${MAX_ROWS} rows per import.` }); try { const result = def.run(rows, req.user); audit.record({ entityType: 'Import', action: `IMPORT_${req.params.entity.toUpperCase()}`, newValue: { created: result.created, updated: result.updated, skipped: result.skipped, errors: result.errors, rows: rows.length }, user: req.user, sourceScreen: 'Import Center' }); res.json({ message: `${result.created} created, ${result.updated} updated, ${result.skipped} skipped, ${result.errors} errors.`, ...result }); } catch (err) { res.status(500).json({ error: err.message }); } });
 
 module.exports = router;

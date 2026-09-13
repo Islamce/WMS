@@ -101,7 +101,18 @@ const HEADER_TRANSITIONS = {
     HEADER_STATUS.APPROVED, HEADER_STATUS.REJECTED, HEADER_STATUS.RETURNED_TO_REQUESTER,
   ],
   [HEADER_STATUS.RETURNED_TO_REQUESTER]: [HEADER_STATUS.SUBMITTED, HEADER_STATUS.CANCELLED],
-  [HEADER_STATUS.APPROVED]: [HEADER_STATUS.APPROVED_PENDING_ERP],
+  // APPROVED has two successors, and which one applies is an edition decision.
+  //
+  // APPROVED_PENDING_ERP is the SAP chain: an operator raises a reservation,
+  // assigns a movement type, and only then routes to a store. That is real work
+  // when SAP is the system of record.
+  //
+  // WAREHOUSE_ASSIGNED is the contracting chain, where there is no SAP and so no
+  // reservation to raise. The engineer approves and the store issues. The edge is
+  // declared here rather than bypassing the transition guard, because the guard
+  // is the workflow's written form: a path that is not in this table is a path
+  // nobody reviewed. See services/tenantProfile.js → erpStaging.
+  [HEADER_STATUS.APPROVED]: [HEADER_STATUS.APPROVED_PENDING_ERP, HEADER_STATUS.WAREHOUSE_ASSIGNED],
   [HEADER_STATUS.APPROVED_PENDING_ERP]: [HEADER_STATUS.PENDING_ERP_RESERVATION, HEADER_STATUS.ERP_RESERVATION_CREATED],
   [HEADER_STATUS.PENDING_ERP_RESERVATION]: [HEADER_STATUS.ERP_RESERVATION_CREATED, HEADER_STATUS.ON_HOLD],
   [HEADER_STATUS.ERP_RESERVATION_CREATED]: [HEADER_STATUS.MOVEMENT_TYPE_ASSIGNED],
@@ -113,7 +124,13 @@ const HEADER_TRANSITIONS = {
   [HEADER_STATUS.BATCH_ASSIGNED]: [HEADER_STATUS.PENDING_PICKER_ASSIGNMENT],
   // LOCATION_ASSIGNED is allowed backwards so the supervisor can safely
   // re-run allocation (e.g. new stock received) before a picker is assigned.
-  [HEADER_STATUS.PENDING_PICKER_ASSIGNMENT]: [HEADER_STATUS.ASSIGNED_TO_PICKER, HEADER_STATUS.LOCATION_ASSIGNED],
+  // PICKING_IN_PROGRESS is the collapsed edition's edge: the storekeeper claims
+  // the request and starts picking in one action, because there is no picker
+  // pool to assign from and nobody else to accept it. The assign/accept/start
+  // handshake stays for tenants that have those roles.
+  // See routes/picking.js -> POST /requests/:id/claim.
+  [HEADER_STATUS.PENDING_PICKER_ASSIGNMENT]: [HEADER_STATUS.ASSIGNED_TO_PICKER, HEADER_STATUS.LOCATION_ASSIGNED,
+    HEADER_STATUS.PICKING_IN_PROGRESS],
   [HEADER_STATUS.ASSIGNED_TO_PICKER]: [HEADER_STATUS.PENDING_PICKER_ACCEPTANCE],
   [HEADER_STATUS.PENDING_PICKER_ACCEPTANCE]: [
     HEADER_STATUS.REMINDER_SENT, HEADER_STATUS.ESCALATED_TO_SUPERVISOR, HEADER_STATUS.ACCEPTED_BY_PICKER,
