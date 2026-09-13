@@ -218,6 +218,34 @@ async function stopServer(server) {
     check('the sidebar and the launchpad call every screen the same thing',
       mismatched.length === 0, mismatched.join(' | '));
 
+    // The subscription banner must be ABSENT on a deployment with no
+    // subscription — which is every existing one, production included. A
+    // licensing notice that shows up uninvited on a customer who was never sold
+    // a subscription is worse than having no notice at all.
+    check('no subscription notice on an unlicensed deployment',
+      await page.locator('.subscription-notice').count() === 0);
+
+    // Now give it one that is about to expire. The warning has to appear well
+    // before anything stops working, or expiry arrives as a surprise.
+    const soon = new Date(Date.now() + 9 * 86400000).toISOString().slice(0, 10);
+    spawnSync('node', ['scripts/set-subscription.js', '--db', dbPath, '--plan', 'standard',
+      '--expires', soon, '--apply'], { cwd: ROOT, stdio: 'ignore' });
+    await stopServer(server);
+    server = spawn('node', ['index.js'], {
+      cwd: ROOT,
+      env: { ...process.env, DB_PATH: dbPath, NODE_ENV: 'test', SKIP_AUTO_SEED: '1',
+        JWT_SECRET: 'k'.repeat(48), PORT: String(PORT) },
+      stdio: 'ignore',
+    });
+    await waitForHealth();
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForSelector('.subscription-notice', { timeout: 15000 });
+    const notice = await page.locator('.subscription-notice').innerText();
+    check('an expiring subscription warns before anything stops working',
+      /expires on/i.test(notice) && notice.includes(soon), notice);
+    check('and it is a warning, not an error, while the system still works',
+      await page.locator('.subscription-notice.error').count() === 0, notice);
+
     check('no uncaught page errors', pageErrors.length === 0, pageErrors.join(' | '));
   } catch (err) {
     check('first-run guide smoke completed', false, err.message);

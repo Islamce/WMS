@@ -423,11 +423,40 @@ const App = {
               </div>
             </div>
           </header>
-          <main class="content" id="main-content" role="main"><div id="page-content" tabindex="-1"><div class="loading">${t('Loading…')}</div></div></main>
+          <main class="content" id="main-content" role="main">
+            <div id="subscription-banner"></div>
+            <div id="page-content" tabindex="-1"><div class="loading">${t('Loading…')}</div></div>
+          </main>
         </div>
       </div>`;
 
     this.wireLayout(activeRoute);
+    this.showSubscriptionNotice();
+  },
+
+  /**
+   * Say that the subscription is ending, well before it does.
+   *
+   * The point of this banner is that expiry is never a surprise: it appears
+   * thirty days out, stays through the grace period, and only then does the
+   * system stop accepting writes. A warehouse that goes read-only without
+   * warning is a support call and a lost customer; one that was told for a
+   * month is an invoice.
+   *
+   * Nothing is shown on an unlicensed or healthy deployment, so the banner
+   * cannot become furniture, and a failure here must never cost anyone their
+   * screen.
+   */
+  async showSubscriptionNotice() {
+    const host = document.getElementById('subscription-banner');
+    if (!host) return;
+    try {
+      const sub = await Api.get('/api/subscription/status');
+      if (!sub || !sub.message) { host.innerHTML = ''; return; }
+      const severe = sub.state === 'READ_ONLY' || sub.state === 'SUSPENDED';
+      host.innerHTML = `<div class="inline-alert ${severe ? 'error' : 'warning'} subscription-notice" role="status">
+        <strong>${severe ? 'Read-only' : 'Subscription'}</strong> ${UI.esc(sub.message)}</div>`;
+    } catch { host.innerHTML = ''; }
   },
 
   wireLayout(activeRoute) {

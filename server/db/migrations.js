@@ -723,6 +723,36 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    id: '026_tenant_subscription',
+    description: 'Flat subscription for the deployment: plan, term and grace period. Created EMPTY on purpose. No row means no licence restriction — the same rule tenant_profile already follows — so this migration cannot change how any running deployment behaves, and a lost or corrupt row can never take a warehouse offline.',
+    up(database) {
+      // Singleton, like tenant_profile: one deployment is one customer.
+      //
+      // The absence of a row is meaningful and deliberate. A licence check that
+      // failed CLOSED would turn a missing row, a failed restore or a botched
+      // migration into a stopped warehouse — a far worse outcome than one tenant
+      // running unpaid for a week. The commercial risk is recoverable; a store
+      // that cannot issue material to a site is not.
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS tenant_subscription (
+          id           INTEGER PRIMARY KEY CHECK (id = 1),
+          plan         TEXT NOT NULL,
+          status       TEXT NOT NULL DEFAULT 'ACTIVE'
+                         CHECK (status IN ('ACTIVE', 'SUSPENDED')),
+          starts_on    TEXT NOT NULL,
+          expires_on   TEXT NOT NULL,
+          -- Days after expiry during which the system still writes. This is
+          -- what stops a renewal that is three days late from stranding a
+          -- storekeeper mid-shift with material on a forklift.
+          grace_days   INTEGER NOT NULL DEFAULT 14 CHECK (grace_days >= 0),
+          reference    TEXT,
+          updated_at   TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_by   TEXT
+        );
+      `);
+    },
+  },
 ];
 
 function ensureTable() {

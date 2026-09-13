@@ -724,3 +724,8 @@ a.request-card-number:hover, a.request-card-number:focus-visible { color: var(--
 .setup-guide .setup-steps li.done > div > a { text-decoration: line-through; opacity: 0.6; }
 .setup-guide .setup-steps li.done .setup-mark { opacity: 1; }
 .setup-guide .setup-steps li.next > div > a { font-weight: 700; }
+
+/* Subscription notice. Sits above the page rather than inside it, so it is
+   visible on every screen for the thirty days before expiry. Absent entirely on
+   an unlicensed or healthy deployment — it cannot become furniture. */
+.subscription-notice { margin: 0 0 14px; }

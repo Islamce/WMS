@@ -281,11 +281,40 @@ Success test, now in CI: a screen that adds an untranslated string **fails**.
 
 ### Phase D — make it sellable (addresses §4)
 
-- A tenant record that carries plan, seat count, start and expiry.
-- Enforcement that degrades honestly: read-only past expiry, never data loss,
-  never a silent lockout of a warehouse mid-shift.
-- Decide deliberately whether editions are licensing or configuration. Today
-  they are configuration wearing a licensing costume.
+**Done. Flat subscription**, chosen by the owner on 2026-09-13 over per-user and
+per-site pricing: one deployment, one customer, one term. No seat counting, so
+nothing has to be metered, audited or argued about at renewal.
+
+The three decisions that make it safe enough to ship:
+
+- **It fails OPEN.** No `tenant_subscription` row means no restriction — the
+  same rule `tenant_profile` already follows. A licence check that failed closed
+  would turn a lost row, a half-restored backup or a botched migration into a
+  stopped warehouse. One tenant running unpaid for a week is recoverable by an
+  invoice; a site store that cannot issue material to a crew is not. Every
+  existing deployment, production included, has no row and is untouched.
+- **Expiry is a ramp, not a switch.** Thirty days of warning on every screen,
+  then a grace period that still writes, and only then read-only. The grace
+  period exists for one specific failure: a renewal three days late must not
+  strand a storekeeper halfway through a pick with material already on a
+  forklift.
+- **Read-only means read-only, not locked out.** Reads, exports, reports and
+  login all keep working. The customer's stock records are theirs; non-payment
+  is a reason to stop them adding to the system, never a reason to take away the
+  record of what is in their store. Holding data hostage is how a supplier gets
+  sued rather than paid.
+
+Renewal is `scripts/set-subscription.js` on the host, dry-run by default. There
+is deliberately no endpoint for it: an administrator who could extend their own
+term would make the whole mechanism decorative. `--remove` returns a deployment
+to unrestricted, which is the escape hatch if licensing itself ever misbehaves
+on a live site — one command, and not one row of customer stock is touched.
+
+**Still open:** editions remain configuration rather than licensing. A tenant
+profile is a row an administrator can edit, so the Contracting feature set is
+not commercially protected by anything. That is a deliberate deferral, not an
+oversight — it only starts to matter when a customer is sold one edition and
+wants another.
 
 ### Phase E — then market the moat (§5)
 
