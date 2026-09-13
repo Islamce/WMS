@@ -71,6 +71,9 @@ run_suite ledger_convergence_test.py
 # erp_operator break, which dead-ended the request workflow on every tenant.
 if ! node tests/e2e/edition_route_coverage_test.js; then FAILED=1; fi
 
+echo "========== screen naming =========="
+if ! node tests/e2e/screen_naming_test.js; then FAILED=1; fi
+
 echo "========== i18n coverage ratchet =========="
 if ! node tests/i18n_coverage_test.js; then FAILED=1; fi
 # Offline: contracting approves straight to the store with no ERP reservation;

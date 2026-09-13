@@ -193,6 +193,31 @@ async function stopServer(server) {
     check('picker assignment says the store claims its own work',
       /claims its own work/i.test(pickerText), pickerText.slice(0, 200));
 
+    // The sidebar and the launchpad tiles used to carry different names for the
+    // same screen, both on this page at once. Whatever the names are, they must
+    // now be the same names.
+    await page.evaluate(() => { window.location.hash = '#/home'; });
+    await page.waitForSelector('.launchpad', { timeout: 15000 });
+    const mismatched = await page.evaluate(() => {
+      const sidebar = new Map();
+      document.querySelectorAll('.nav-item').forEach((a) => {
+        const label = a.querySelector('.lbl');
+        const route = (a.getAttribute('href') || '').replace('#/', '');
+        if (label && route) sidebar.set(route, label.textContent.trim());
+      });
+      const bad = [];
+      document.querySelectorAll('.lp-tile[href^="#/"]').forEach((a) => {
+        const route = a.getAttribute('href').replace('#/', '');
+        const labelEl = a.querySelector('.lp-label');
+        const tile = (labelEl ? labelEl.textContent : '').replace(/\s+/g, ' ').trim();
+        const nav = sidebar.get(route);
+        if (nav && tile && nav !== tile) bad.push(`${route}: sidebar "${nav}" vs tile "${tile}"`);
+      });
+      return bad;
+    });
+    check('the sidebar and the launchpad call every screen the same thing',
+      mismatched.length === 0, mismatched.join(' | '));
+
     check('no uncaught page errors', pageErrors.length === 0, pageErrors.join(' | '));
   } catch (err) {
     check('first-run guide smoke completed', false, err.message);
