@@ -753,6 +753,42 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    id: '027_document_sequences',
+    description: 'Reserved counters for locally minted document numbers. The previous scheme derived the next number from COUNT(*) of existing ones, which hands out a number a second time as soon as a numbered request is cancelled or deleted, and hands the same number to two concurrent approvals. Those numbers are the document reference the outbound ledger and the reversal path key on. Seeded from existing numbers so nothing already issued can be repeated.',
+    up(database) {
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS document_sequences (
+          scope      TEXT NOT NULL,
+          period     TEXT NOT NULL,
+          next_value INTEGER NOT NULL,
+          PRIMARY KEY (scope, period)
+        );
+      `);
+
+      // Seed from what has already been issued. Without this the sequence would
+      // start at 1 on a tenant that already minted ISS-2026-00007 under the old
+      // scheme and immediately re-issue numbers 1 to 7.
+      const seed = (scope, column, prefix) => {
+        const rows = database.prepare(
+          `SELECT ${column} AS v FROM material_request_headers WHERE ${column} LIKE ?`
+        ).all(`${prefix}-%`);
+        const byPeriod = new Map();
+        for (const r of rows) {
+          const m = /^[A-Z]+-(\d{4})-(\d+)$/.exec(r.v || '');
+          if (!m) continue;
+          const n = Number(m[2]);
+          if (!byPeriod.has(m[1]) || byPeriod.get(m[1]) < n) byPeriod.set(m[1], n);
+        }
+        const ins = database.prepare(
+          'INSERT OR REPLACE INTO document_sequences (scope, period, next_value) VALUES (?,?,?)'
+        );
+        for (const [period, max] of byPeriod) ins.run(scope, period, max + 1);
+      };
+      seed('ISS', 'erp_reservation_number', 'ISS');
+      seed('GI', 'gi_document_number', 'GI');
+    },
+  },
 ];
 
 function ensureTable() {

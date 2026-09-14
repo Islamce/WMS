@@ -54,16 +54,25 @@ subscription.
 
 ### Schema change — read this before you start
 
-Production last reported **25 applied migrations**. This deploy adds **one**:
+Production last reported **25 applied migrations**. This deploy adds **two**:
 
 | Migration | What it does |
 |---|---|
 | `026_tenant_subscription` | Creates an **empty** `tenant_subscription` table |
+| `027_document_sequences` | Creates a counter table and seeds it from document numbers already issued |
 
-It is additive and it creates its table empty **on purpose**. No subscription row
-means no licence restriction, exactly as `tenant_profile` works for editions, so
-this deploy cannot cause production to refuse a write. Nothing is dropped, no row
-is rewritten, no default changes an existing value.
+Both are additive. 026 creates its table empty **on purpose**: no subscription
+row means no licence restriction, exactly as `tenant_profile` works for editions,
+so this deploy cannot cause production to refuse a write.
+
+027 writes rows, and that is worth understanding before you run it. It reads the
+`ISS-`/`GI-` numbers already in `material_request_headers` and records the
+highest of each so the counter continues past them. On production it will find
+**none** — those numbers are only minted on a no-ERP edition, which this install
+is not — so it creates an empty table there too. It reads the request headers and
+writes only to its own new table; no existing row is touched.
+
+Nothing is dropped, no row is rewritten, no default changes an existing value.
 
 Migrations run automatically when the container starts. You do not run them by
 hand.
@@ -237,7 +246,7 @@ curl -sS -o /dev/null -w '%{http_code}\n' https://wms.kynox.io/healthz
 
 Pass criteria, all of them:
 
-1. `migrations` is now **26**.
+1. `migrations` is now **27**.
 2. `users`, `materials`, `batches`, `requests` are **identical** to §2. A
    schema migration must not change a single row count.
 3. `integrity` is `ok`.
@@ -352,10 +361,10 @@ docker compose build
 docker compose up -d
 ```
 
-**The database does not roll back with the code.** The one new migration is
-additive and creates an empty table, so the previous application version runs
-fine against the new schema — it simply ignores a table it does not know about.
-Reverting the code is therefore enough for an application fault.
+**The database does not roll back with the code.** Both new migrations are
+additive and create tables the previous application version does not know about,
+so it runs fine against the new schema and simply ignores them. Reverting the
+code is therefore enough for an application fault.
 
 Restore the database from §3's backup **only** if §5 showed data loss or a
 failed integrity check, and only with explicit approval from the owner. Follow

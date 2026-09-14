@@ -13,6 +13,7 @@ const notify = require('./../services/notify');
 const approvalMatrix = require('./../services/approvalMatrix');
 const { setHeaderStatus, refreshRollups } = require('./../services/requests');
 const { allocateLines } = require('./../services/autoAllocate');
+const { nextNumber } = require('./../services/documentNumber');
 const { HEADER_STATUS, LINE_STATUS } = require('./../workflow/states');
 const { getTenant } = require('./../services/tenant');
 const { usesErpStaging } = require('./../services/tenantProfile');
@@ -230,11 +231,10 @@ function routeWithoutErp(header, user) {
     || null;
   if (!movementType) return { error: 'No issue movement type is configured.' };
 
-  const year = new Date().getFullYear();
-  const seq = db.prepare(
-    "SELECT COUNT(*) AS n FROM material_request_headers WHERE erp_reservation_number LIKE ?"
-  ).get(`ISS-${year}-%`).n + 1;
-  const issueNumber = `ISS-${year}-${String(seq).padStart(5, '0')}`;
+  // Reserved, not counted. See services/documentNumber.js — this number is the
+  // document reference every outbound movement carries, so it must never be
+  // handed out twice.
+  const issueNumber = nextNumber('ISS');
 
   db.prepare(`
     UPDATE material_request_headers

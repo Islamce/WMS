@@ -19,6 +19,7 @@ const { HEADER_STATUS, LINE_STATUS } = require('./../workflow/states');
 const { withExecutionContext, withExecutionContexts } = require('./../services/workflowContext');
 const { getTenant } = require('./../services/tenant');
 const { usesErpStaging } = require('./../services/tenantProfile');
+const { nextNumber } = require('./../services/documentNumber');
 
 const router = express.Router();
 router.use(authenticate, requirePermission('gi_posting'));
@@ -132,11 +133,7 @@ router.post('/:id/post', (req, res) => {
   // the reversal path all still key on this number.
   let giDocumentNumber = b.gi_document_number;
   if (!giDocumentNumber && !usesErpStaging(getTenant().profileKey)) {
-    const year = new Date().getFullYear();
-    const seq = db.prepare(
-      'SELECT COUNT(*) AS n FROM material_request_headers WHERE gi_document_number LIKE ?'
-    ).get(`GI-${year}-%`).n + 1;
-    giDocumentNumber = `GI-${year}-${String(seq).padStart(5, '0')}`;
+    giDocumentNumber = nextNumber('GI');
   }
 
   let result;
