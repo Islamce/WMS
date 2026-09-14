@@ -11,10 +11,10 @@ Pages.approvals = {
   },
 
   async loadInbox() {
-    const t = this.el.querySelector('#ap-table');
+    const tbl = this.el.querySelector('#ap-table');
     try {
       const { requests } = await Api.get('/api/approvals');
-      t.innerHTML = requests.length ? `
+      tbl.innerHTML = requests.length ? `
         <table><thead><tr><th>Request #</th><th>Requester</th><th>Dept</th><th>Priority</th><th>Status</th><th>Lines</th><th>Submitted</th></tr></thead>
         <tbody>${requests.map((r) => `
           <tr class="row-link" data-id="${r.id}" role="button" tabindex="0" aria-label="Review request ${UI.esc(r.request_number)}">
@@ -26,8 +26,8 @@ Pages.approvals = {
             <td>${r.total_lines}</td><td>${UI.fmtDate(r.submitted_at)}</td>
           </tr>`).join('')}
         </tbody></table>` : UI.meaningfulEmptyState({ title: 'No requests awaiting approval', description: 'Submitted requests that need your decision will appear here.' });
-      UI.makeRowsActionable(t.querySelectorAll('tr[data-id]'), (tr) => this.openDetail(tr.dataset.id));
-    } catch (err) { t.innerHTML = `<div class="inline-alert error">${UI.esc(err.message)}</div>`; }
+      UI.makeRowsActionable(tbl.querySelectorAll('tr[data-id]'), (tr) => this.openDetail(tr.dataset.id));
+    } catch (err) { tbl.innerHTML = `<div class="inline-alert error">${UI.esc(err.message)}</div>`; }
   },
 
   async openDetail(id) {

@@ -8,9 +8,9 @@ WMS - a warehouse management system with a Node.js backend, a browser client, an
 - Default branch: `main`
 - KAAF phase: 7
 - Modules: 7 declared, 0 discovered only
-- Drift: 5 error, 0 warning, 0 info
+- Drift: 0 error, 0 warning, 0 info
 - Generator: `kaaf` v0.7.0
-- Input digest: `8f5f19c1b46bdc9b…`
+- Input digest: `08dbe39622731cf6…`
 
 ## Modules
 
@@ -24,7 +24,7 @@ check against, `derived` = discovered with no declaration.
 | `wms-kaaf-tooling` | `scripts/architecture` | DevOps | Generate and validate this repository's KAAF architecture context. Vendored from Islamce/KAAF; see VENDORED.md before changing anything here. | `verified` |
 | `wms-mobile` | `wms flutter application` | Mobile | Provide the Flutter mobile client (wms_mobile) for warehouse floor operations - scanning, picking, counting, requests and approvals - against the WMS API. | `verified` |
 | `wms-ops-scripts` | `scripts` | DevOps | Operational and maintenance scripts. Several are destructive or production-affecting; CLAUDE.md forbids running seed, reset or fresh-start operations in production and is authoritative over this manifest. | `verified` |
-| `wms-runtime-entry` | `.` | DevOps | Boot the production process under the managed host. Production path, runtime path and required environment flags are defined in CLAUDE.md and are authoritative over this manifest. | `verified` |
+| `wms-runtime-entry` | `.` | DevOps | Boot the production process. Production runs under Docker Compose on a VPS since 2026-09-06; the managed-host process manager named below is history, not current. Production path, runtime path and required environment flags are defined in CLAUDE.md and are authoritative over this manifest. | `verified` |
 | `wms-tests` | `tests` | QA | End-to-end, smoke and load suites, including the executable regression tests that pin the fail-closed auto-seed rule established after the 2026-07-25 production database incident. | `verified` |
 | `wms-web` | `public` | Frontend | Present the warehouse operations interface in the browser, served as static assets by the API process. | `verified` |
 
@@ -39,10 +39,10 @@ graph LR
   wms_runtime_entry["wms-runtime-entry"]
   wms_tests["wms-tests"]
   wms_web["wms-web"]
-  wms_api -.-> wms_ops_scripts
-  wms_ops_scripts -.-> wms_api
-  wms_ops_scripts -.-> wms_runtime_entry
-  wms_runtime_entry -.-> wms_api
+  wms_ops_scripts --> wms_api
+  wms_runtime_entry --> wms_api
+  wms_tests --> wms_api
+  wms_tests --> wms_ops_scripts
 ```
 
 Solid edges are declared in the manifests. Dotted edges were discovered from real
@@ -126,17 +126,7 @@ imports but are not declared — see the drift section below.
 
 ## Drift — declared versus discovered
 
-5 error, 0 warning, 0 info. Errors block CI; warnings and information do not.
-
-| Severity | Type | Module | Finding |
-|---|---|---|---|
-| `error` | `discovered-import-cycle` | `wms-api` | Discovered imports form a cycle: wms-api -> wms-ops-scripts -> wms-api |
-| `error` | `undeclared-dependency` | `wms-api` | 'wms-api' imports 'wms-ops-scripts' but does not declare the dependency. |
-| `error` | `undeclared-dependency` | `wms-ops-scripts` | 'wms-ops-scripts' imports 'wms-api' but does not declare the dependency. |
-| `error` | `undeclared-dependency` | `wms-ops-scripts` | 'wms-ops-scripts' imports 'wms-runtime-entry' but does not declare the dependency. |
-| `error` | `undeclared-dependency` | `wms-runtime-entry` | 'wms-runtime-entry' imports 'wms-api' but does not declare the dependency. |
-
-Full detail, with evidence and recommendations, in `.ai/drift.json`.
+No drift: every declaration matches what discovery found in the source.
 
 ## How to use this
 
@@ -149,4 +139,4 @@ Full detail, with evidence and recommendations, in `.ai/drift.json`.
 Declarations come from `kaaf.repo.json` and `kaaf.module.json`. Discovery is a static
 read of the source: dynamic imports and runtime wiring are invisible to it, so the
 absence of a drift finding is not proof that none exists.
-<!-- kaaf:bodyDigest=2e5590c62c92b32ac97b73bdb1b970b7d0e4ac19d3aa1871ef509881bf2f0ce1 -->
+<!-- kaaf:bodyDigest=e0c18a10276370e07eaa2928713ef425ea0dab5d3021d07ade71fc1ce7772741 -->

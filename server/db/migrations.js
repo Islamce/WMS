@@ -723,6 +723,72 @@ const MIGRATIONS = [
       `);
     },
   },
+  {
+    id: '026_tenant_subscription',
+    description: 'Flat subscription for the deployment: plan, term and grace period. Created EMPTY on purpose. No row means no licence restriction — the same rule tenant_profile already follows — so this migration cannot change how any running deployment behaves, and a lost or corrupt row can never take a warehouse offline.',
+    up(database) {
+      // Singleton, like tenant_profile: one deployment is one customer.
+      //
+      // The absence of a row is meaningful and deliberate. A licence check that
+      // failed CLOSED would turn a missing row, a failed restore or a botched
+      // migration into a stopped warehouse — a far worse outcome than one tenant
+      // running unpaid for a week. The commercial risk is recoverable; a store
+      // that cannot issue material to a site is not.
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS tenant_subscription (
+          id           INTEGER PRIMARY KEY CHECK (id = 1),
+          plan         TEXT NOT NULL,
+          status       TEXT NOT NULL DEFAULT 'ACTIVE'
+                         CHECK (status IN ('ACTIVE', 'SUSPENDED')),
+          starts_on    TEXT NOT NULL,
+          expires_on   TEXT NOT NULL,
+          -- Days after expiry during which the system still writes. This is
+          -- what stops a renewal that is three days late from stranding a
+          -- storekeeper mid-shift with material on a forklift.
+          grace_days   INTEGER NOT NULL DEFAULT 14 CHECK (grace_days >= 0),
+          reference    TEXT,
+          updated_at   TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_by   TEXT
+        );
+      `);
+    },
+  },
+  {
+    id: '027_document_sequences',
+    description: 'Reserved counters for locally minted document numbers. The previous scheme derived the next number from COUNT(*) of existing ones, which hands out a number a second time as soon as a numbered request is cancelled or deleted, and hands the same number to two concurrent approvals. Those numbers are the document reference the outbound ledger and the reversal path key on. Seeded from existing numbers so nothing already issued can be repeated.',
+    up(database) {
+      database.exec(`
+        CREATE TABLE IF NOT EXISTS document_sequences (
+          scope      TEXT NOT NULL,
+          period     TEXT NOT NULL,
+          next_value INTEGER NOT NULL,
+          PRIMARY KEY (scope, period)
+        );
+      `);
+
+      // Seed from what has already been issued. Without this the sequence would
+      // start at 1 on a tenant that already minted ISS-2026-00007 under the old
+      // scheme and immediately re-issue numbers 1 to 7.
+      const seed = (scope, column, prefix) => {
+        const rows = database.prepare(
+          `SELECT ${column} AS v FROM material_request_headers WHERE ${column} LIKE ?`
+        ).all(`${prefix}-%`);
+        const byPeriod = new Map();
+        for (const r of rows) {
+          const m = /^[A-Z]+-(\d{4})-(\d+)$/.exec(r.v || '');
+          if (!m) continue;
+          const n = Number(m[2]);
+          if (!byPeriod.has(m[1]) || byPeriod.get(m[1]) < n) byPeriod.set(m[1], n);
+        }
+        const ins = database.prepare(
+          'INSERT OR REPLACE INTO document_sequences (scope, period, next_value) VALUES (?,?,?)'
+        );
+        for (const [period, max] of byPeriod) ins.run(scope, period, max + 1);
+      };
+      seed('ISS', 'erp_reservation_number', 'ISS');
+      seed('GI', 'gi_document_number', 'GI');
+    },
+  },
 ];
 
 function ensureTable() {

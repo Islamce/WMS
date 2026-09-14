@@ -283,9 +283,7 @@
   ],
   "confidence": "verified",
   "consumes": [],
-  "dependsOn": [
-    "wms-ops-scripts"
-  ],
+  "dependsOn": [],
   "externalIntegrations": [
     {
       "criticality": "required",

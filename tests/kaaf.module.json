@@ -2,7 +2,10 @@
   "apis": [],
   "confidence": "verified",
   "consumes": [],
-  "dependsOn": [],
+  "dependsOn": [
+    "wms-api",
+    "wms-ops-scripts"
+  ],
   "externalIntegrations": [],
   "flows": [],
   "id": "wms-tests",

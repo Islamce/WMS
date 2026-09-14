@@ -1,12 +1,12 @@
 {
   "_meta": {
     "artifact": "architecture.json",
-    "bodyDigest": "6bf28a98b3ebdc873ffef29aaf84315ccd2226fc2081a33552f1f8b461653f95",
+    "bodyDigest": "409d964e7bad9c26dc29f935d9e45ce883ecad05ddf34a47b9535d80f9d34c60",
     "confidence": "verified",
     "doNotEdit": true,
     "generator": "kaaf",
     "generatorVersion": "0.7.0",
-    "inputDigest": "8f5f19c1b46bdc9b7c02c7f28e3524288722198142d16464698ebe1eb0598902",
+    "inputDigest": "08dbe39622731cf6bcf716f0978412da723de618164887ad98f86f6d6edbb85b",
     "provenanceNote": "Generated from the declared kaaf.repo.json and kaaf.module.json manifests. No wall-clock time or commit SHA is embedded: both would break byte-identical regeneration. Use git history for when and from which commit.",
     "schemaVersion": "1.0.0"
   },
@@ -377,46 +377,84 @@
     }
   ],
   "dependencies": {
-    "declaredEdges": [],
-    "discoveredEdges": [
+    "declaredEdges": [
       {
-        "declared": false,
-        "evidence": [
-          "server/index.js"
-        ],
-        "from": "wms-api",
-        "to": "wms-ops-scripts"
+        "from": "wms-ops-scripts",
+        "to": "wms-api"
       },
       {
-        "declared": false,
+        "from": "wms-runtime-entry",
+        "to": "wms-api"
+      },
+      {
+        "from": "wms-tests",
+        "to": "wms-api"
+      },
+      {
+        "from": "wms-tests",
+        "to": "wms-ops-scripts"
+      }
+    ],
+    "discoveredEdges": [
+      {
+        "declared": true,
         "evidence": [
           "scripts/backup.js",
           "scripts/fresh-start.js",
+          "scripts/provision-tenant.js",
           "scripts/reset-admin.js",
+          "scripts/set-tenant-profile.js",
           "scripts/validate-opening-stock.js"
         ],
         "from": "wms-ops-scripts",
         "to": "wms-api"
       },
       {
-        "declared": false,
-        "evidence": [
-          "scripts/backup.js"
-        ],
-        "from": "wms-ops-scripts",
-        "to": "wms-runtime-entry"
-      },
-      {
-        "declared": false,
+        "declared": true,
         "evidence": [
           "app.js",
           "index.js"
         ],
         "from": "wms-runtime-entry",
         "to": "wms-api"
+      },
+      {
+        "declared": true,
+        "evidence": [
+          "tests/e2e/document_number_test.js",
+          "tests/e2e/edition_route_coverage_test.js",
+          "tests/e2e/operational_semantics_migration_test.js"
+        ],
+        "from": "wms-tests",
+        "to": "wms-api"
+      },
+      {
+        "declared": true,
+        "evidence": [
+          "tests/i18n_coverage_test.js"
+        ],
+        "from": "wms-tests",
+        "to": "wms-ops-scripts"
       }
     ],
-    "edges": [],
+    "edges": [
+      {
+        "from": "wms-ops-scripts",
+        "to": "wms-api"
+      },
+      {
+        "from": "wms-runtime-entry",
+        "to": "wms-api"
+      },
+      {
+        "from": "wms-tests",
+        "to": "wms-api"
+      },
+      {
+        "from": "wms-tests",
+        "to": "wms-ops-scripts"
+      }
+    ],
     "hasCycles": false,
     "note": "'edges' and 'declaredEdges' come from the manifests; cycles there are rejected at scan time (KAAF-E004). 'discoveredEdges' come from real imports — see drift.json where the two disagree."
   },
@@ -424,16 +462,16 @@
     "environments": [
       "production"
     ],
-    "note": "Managed Hostinger Node.js under Passenger at ~/domains/wms.kynox.io/nodejs with a SQLite database at data/wms.db. Production safety invariants are defined in CLAUDE.md and docs/WMS-PRODUCTION-RUNBOOK.md and are authoritative over this note."
+    "note": "Hostinger VPS under Docker Compose at /opt/apps/wms since 2026-09-06, with a SQLite database bind-mounted at /opt/apps/wms/data/wms.db. The Passenger shared-hosting layout this field described until 2026-09-14 no longer exists; commands written against it would fail or act on the wrong path. Production safety invariants are defined in CLAUDE.md and docs/WMS-PRODUCTION-RUNBOOK.md and are authoritative over this note."
   },
   "drift": {
     "counts": {
-      "error": 5,
+      "error": 0,
       "info": 0,
       "warning": 0
     },
     "detail": ".ai/drift.json",
-    "hasErrors": true
+    "hasErrors": false
   },
   "externalIntegrations": [
     {
@@ -485,13 +523,17 @@
   "modules": [
     {
       "confidence": "verified",
-      "confidenceReason": "Declared and corroborated by 63 discovered code file(s).",
+      "confidenceReason": "Declared and corroborated by 78 discovered code file(s).",
       "declared": true,
       "declaredConfidence": "verified",
-      "dependedOnBy": [],
+      "dependedOnBy": [
+        "wms-ops-scripts",
+        "wms-runtime-entry",
+        "wms-tests"
+      ],
       "dependsOn": [],
       "discovery": {
-        "codeFileCount": 63,
+        "codeFileCount": 78,
         "discovered": true,
         "entryPoints": [
           "server/index.js"
@@ -502,7 +544,7 @@
         ],
         "parseErrors": [],
         "publicSymbols": [],
-        "sourceFileCount": 64
+        "sourceFileCount": 79
       },
       "id": "wms-api",
       "ownedEntities": [
@@ -574,6 +616,7 @@
         ],
         "languages": [
           "json",
+          "markdown",
           "python",
           "shell"
         ],
@@ -584,7 +627,7 @@
           "main",
           "write"
         ],
-        "sourceFileCount": 32
+        "sourceFileCount": 33
       },
       "id": "wms-kaaf-tooling",
       "ownedEntities": [
@@ -601,13 +644,13 @@
     },
     {
       "confidence": "verified",
-      "confidenceReason": "Declared and corroborated by 38 discovered code file(s).",
+      "confidenceReason": "Declared and corroborated by 46 discovered code file(s).",
       "declared": true,
       "declaredConfidence": "verified",
       "dependedOnBy": [],
       "dependsOn": [],
       "discovery": {
-        "codeFileCount": 38,
+        "codeFileCount": 46,
         "discovered": true,
         "entryPoints": [
           "wms flutter application/lib/main.dart",
@@ -624,7 +667,7 @@
           "SessionScope",
           "WmsApp"
         ],
-        "sourceFileCount": 46
+        "sourceFileCount": 54
       },
       "id": "wms-mobile",
       "ownedEntities": [
@@ -643,19 +686,29 @@
     },
     {
       "confidence": "verified",
-      "confidenceReason": "Declared and corroborated by 8 discovered code file(s).",
+      "confidenceReason": "Declared and corroborated by 15 discovered code file(s).",
       "declared": true,
       "declaredConfidence": "verified",
-      "dependedOnBy": [],
-      "dependsOn": [],
+      "dependedOnBy": [
+        "wms-tests"
+      ],
+      "dependsOn": [
+        "wms-api"
+      ],
       "discovery": {
-        "codeFileCount": 8,
+        "codeFileCount": 15,
         "discovered": true,
         "entryPoints": [
           "scripts/backup-retention.js",
           "scripts/backup-select.js",
           "scripts/backup.js",
+          "scripts/converge-subcontractor-ledger.js",
+          "scripts/i18n-extract.js",
+          "scripts/install-starter-data.js",
           "scripts/monitor.sh",
+          "scripts/provision-tenant.js",
+          "scripts/set-subscription.js",
+          "scripts/set-tenant-profile.js",
           "scripts/validate-opening-stock.js",
           "scripts/verify-backup.js"
         ],
@@ -666,7 +719,7 @@
         ],
         "parseErrors": [],
         "publicSymbols": [],
-        "sourceFileCount": 9
+        "sourceFileCount": 16
       },
       "id": "wms-ops-scripts",
       "ownedEntities": [
@@ -682,13 +735,15 @@
     },
     {
       "confidence": "verified",
-      "confidenceReason": "Declared and corroborated by 3 discovered code file(s).",
+      "confidenceReason": "Declared and corroborated by 4 discovered code file(s).",
       "declared": true,
       "declaredConfidence": "verified",
       "dependedOnBy": [],
-      "dependsOn": [],
+      "dependsOn": [
+        "wms-api"
+      ],
       "discovery": {
-        "codeFileCount": 3,
+        "codeFileCount": 4,
         "discovered": true,
         "entryPoints": [],
         "languages": [
@@ -699,7 +754,7 @@
         ],
         "parseErrors": [],
         "publicSymbols": [],
-        "sourceFileCount": 46
+        "sourceFileCount": 70
       },
       "id": "wms-runtime-entry",
       "ownedEntities": [
@@ -712,21 +767,28 @@
         "ecosystem.config.js",
         "index.js"
       ],
-      "purpose": "Boot the production process under the managed host. Production path, runtime path and required environment flags are defined in CLAUDE.md and are authoritative over this manifest.",
+      "purpose": "Boot the production process. Production runs under Docker Compose on a VPS since 2026-09-06; the managed-host process manager named below is history, not current. Production path, runtime path and required environment flags are defined in CLAUDE.md and are authoritative over this manifest.",
       "sourceManifest": "kaaf.module.json"
     },
     {
       "confidence": "verified",
-      "confidenceReason": "Declared and corroborated by 26 discovered code file(s).",
+      "confidenceReason": "Declared and corroborated by 53 discovered code file(s).",
       "declared": true,
       "declaredConfidence": "verified",
       "dependedOnBy": [],
-      "dependsOn": [],
+      "dependsOn": [
+        "wms-api",
+        "wms-ops-scripts"
+      ],
       "discovery": {
-        "codeFileCount": 26,
+        "codeFileCount": 53,
         "discovered": true,
         "entryPoints": [
+          "tests/e2e/edition_route_coverage_test.js",
+          "tests/e2e/operational_semantics_migration_test.js",
+          "tests/load/seed-scale.js",
           "tests/load/smoke-load.js",
+          "tests/load/write-contention.js",
           "tests/run.sh"
         ],
         "languages": [
@@ -737,7 +799,7 @@
         ],
         "parseErrors": [],
         "publicSymbols": [],
-        "sourceFileCount": 27
+        "sourceFileCount": 55
       },
       "id": "wms-tests",
       "ownedEntities": [
@@ -753,13 +815,13 @@
     },
     {
       "confidence": "verified",
-      "confidenceReason": "Declared and corroborated by 35 discovered code file(s).",
+      "confidenceReason": "Declared and corroborated by 38 discovered code file(s).",
       "declared": true,
       "declaredConfidence": "verified",
       "dependedOnBy": [],
       "dependsOn": [],
       "discovery": {
-        "codeFileCount": 35,
+        "codeFileCount": 38,
         "discovered": true,
         "entryPoints": [],
         "languages": [
@@ -768,7 +830,7 @@
         ],
         "parseErrors": [],
         "publicSymbols": [],
-        "sourceFileCount": 36
+        "sourceFileCount": 39
       },
       "id": "wms-web",
       "ownedEntities": [

@@ -129,7 +129,7 @@ Pages.landing = {
             <button type="button" data-scroll="solution">${c.nav[0]}</button><button type="button" data-scroll="journey">${c.nav[1]}</button><button type="button" data-scroll="demo">${c.nav[2]}</button>
           </nav>
           <div class="wl-header-actions">
-            <button class="wl-language" type="button" data-landing-language aria-label="${locale === 'ar' ? 'Switch to English' : 'التبديل إلى العربية'}"><span class="${locale === 'ar' ? 'active' : ''}">AR</span><i></i><span class="${locale === 'en' ? 'active' : ''}">EN</span></button>
+            ${Lang.available.includes('ar') ? `<button class="wl-language" type="button" data-landing-language aria-label="${locale === 'ar' ? 'Switch to English' : 'التبديل إلى العربية'}"><span class="${locale === 'ar' ? 'active' : ''}">AR</span><i></i><span class="${locale === 'en' ? 'active' : ''}">EN</span></button>` : ''}
             <a class="wl-button wl-button-secondary wl-signin" href="#/login"><i class="ph ph-sign-in" aria-hidden="true"></i>${c.signIn}</a>
           </div>
         </header>
@@ -155,7 +155,14 @@ Pages.landing = {
         <footer class="wl-footer"><div class="wl-brand"><strong>WMS</strong><span>/</span><b>KYNOX</b></div><p>${c.footer}</p></footer>
       </main>`;
 
-    document.querySelector('[data-landing-language]').addEventListener('click', () => Lang.set(locale === 'ar' ? 'en' : 'ar'));
+    // The marketing page follows the product: it offers a language only when the
+    // app can actually deliver it. Its Arabic copy deck is complete and stays in
+    // this file, dormant — an Arabic page that leads into an English app sets an
+    // expectation the product breaks in the first minute, which is the same
+    // reason the in-app picker is hidden. Enabling 'ar' in i18n.js brings both
+    // back together. See services note in docs/PRODUCT-CRITIQUE-2026-09-12.md.
+    const langBtn = document.querySelector('[data-landing-language]');
+    if (langBtn) langBtn.addEventListener('click', () => Lang.set(locale === 'ar' ? 'en' : 'ar'));
     document.querySelectorAll('[data-scroll]').forEach((button) => button.addEventListener('click', () => {
       document.getElementById(button.dataset.scroll).scrollIntoView({ behavior: 'smooth', block: 'start' });
     }));

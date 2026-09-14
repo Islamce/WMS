@@ -11,6 +11,11 @@ Pages.pickerAssign = {
           <div class="spacer"></div>
           <button class="btn secondary sm" id="pa-sweep">Run reminder sweep</button>
         </div>
+        ${App.routesStraightToStore() ? `
+        <p class="muted" style="margin: 10px 0 0;">On this edition the store claims its own work from My Picking Tasks, so
+          assignment is optional — a request listed here can simply be picked up by whoever is in the store.
+          Assign someone from here only when a specific person has to do it. Assigning also brings back the
+          accept-and-start steps, which claiming does not.</p>` : ''}
       </div>
       <div id="pa-list"><div class="loading">Loading picker assignments…</div></div>`;
     try { ({ pickers: this.pickers } = await Api.get('/api/warehouse/pickers')); } catch { this.pickers = []; }

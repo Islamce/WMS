@@ -13,9 +13,9 @@ Pages.erpOperator = {
   },
 
   async loadQueue() {
-    const t = this.el.querySelector('#eo-table');
+    const tbl = this.el.querySelector('#eo-table');
     const { requests } = await Api.get('/api/erp-operator');
-    t.innerHTML = requests.length ? `<table><thead><tr><th>Request #</th><th>Requester</th><th>Department</th><th>Project</th><th>Cost Center</th><th>Priority</th><th>Required</th><th>Status</th><th>Movement</th><th>Reservation</th><th>Warehouse</th></tr></thead>
+    tbl.innerHTML = requests.length ? `<table><thead><tr><th>Request #</th><th>Requester</th><th>Department</th><th>Project</th><th>Cost Center</th><th>Priority</th><th>Required</th><th>Status</th><th>Movement</th><th>Reservation</th><th>Warehouse</th></tr></thead>
       <tbody>${requests.map((r) => `
         <tr class="row-link" data-id="${r.id}" role="button" tabindex="0" aria-label="Process request ${UI.esc(r.request_number)}">
           <td><span class="chip accent">${UI.esc(r.request_number)}</span></td><td>${UI.esc(r.requester_name || '')}</td>
@@ -26,8 +26,12 @@ Pages.erpOperator = {
           <td>${UI.esc(r.movement_type || '—')}</td><td>${r.erp_reservation_number || r.erp_reference_number ? `<span class="chip">${UI.esc(r.erp_reservation_number || r.erp_reference_number)}</span>` : '—'}</td>
           <td>${UI.esc(r.issue_warehouse_code || '—')}</td>
         </tr>`).join('')}
-      </tbody></table>` : UI.meaningfulEmptyState({ title: 'Queue is empty', description: 'Approved requests awaiting ERP reservation and routing to a warehouse will appear here.' });
-    UI.makeRowsActionable(t.querySelectorAll('tr[data-id]'), (tr) => this.openDetail(tr.dataset.id));
+      </tbody></table>` : UI.meaningfulEmptyState(App.routesStraightToStore()
+      ? { title: 'Nothing passes through here on this edition',
+          description: 'Approved requests go straight to the site store — there is no ERP reservation to raise. '
+            + 'This queue stays available for requests raised before the edition changed, and is otherwise empty by design.' }
+      : { title: 'Queue is empty', description: 'Approved requests awaiting ERP reservation and routing to a warehouse will appear here.' });
+    UI.makeRowsActionable(tbl.querySelectorAll('tr[data-id]'), (tr) => this.openDetail(tr.dataset.id));
   },
 
   renderMaterialLines(lines) {

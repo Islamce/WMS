@@ -111,6 +111,12 @@ app.use((err, req, res, next) => {
 });
 
 // --- API routes -----------------------------------------------------------
+// Subscription enforcement sits in front of every route. It refuses writes only
+// once the term AND the grace period have passed, and never blocks a read, a
+// login or an export — see middleware/subscription.js for why each exemption
+// exists. A deployment with no subscription row is unrestricted.
+app.use('/api', require('./middleware/subscription').enforceSubscription);
+
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/permissions', require('./routes/permissions'));
@@ -128,6 +134,8 @@ app.use('/api/warehouse', require('./routes/warehouse'));
 app.use('/api/picking', require('./routes/picking'));
 app.use('/api/gi', require('./routes/gi'));
 app.use('/api/receiving', require('./routes/receiving'));
+app.use('/api/setup', require('./routes/setup'));
+app.use('/api/subscription', require('./routes/subscription'));
 app.use('/api/master', require('./routes/masterdata'));
 // Mount the safety-scoped reconciliation endpoint before the general import router.
 app.use('/api/import/stock/reconcile-dates', require('./routes/openingStockReconcile'));

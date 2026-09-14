@@ -16,6 +16,8 @@ const qrService = require('./../services/qr');
 const { setHeaderStatus, refreshRollups } = require('./../services/requests');
 const { HEADER_STATUS, LINE_STATUS, TASK_STATUS } = require('./../workflow/states');
 const { withExecutionContext, withExecutionContexts } = require('./../services/workflowContext');
+const { getTenant } = require('./../services/tenant');
+const { usesErpStaging } = require('./../services/tenantProfile');
 
 const router = express.Router();
 router.use(authenticate);
@@ -52,6 +54,74 @@ router.get('/tasks/:id', requirePermission('picking'), (req, res) => {
   const lines = db.prepare("SELECT * FROM material_request_lines WHERE request_id=? AND line_status NOT IN ('Rejected','Cancelled') ORDER BY line_number").all(task.request_id);
   const allocations = db.prepare('SELECT * FROM picking_allocations WHERE request_id=? ORDER BY line_number, sequence').all(task.request_id);
   res.json({ task, request: withExecutionContext(header), lines, allocations });
+});
+
+/**
+ * POST /api/picking/requests/:id/claim — the storekeeper takes the request and
+ * starts picking it, in one action.
+ *
+ * On an ERP-staged tenant a supervisor assigns a picker, the picker accepts, and
+ * the picker starts: three steps, because a warehouse has a pool of pickers and
+ * the assignment is a real allocation of somebody's shift. A site store has one
+ * storekeeper. There, assign-accept-start is one person telling himself three
+ * times to do the thing he is standing in front of, and the escalation sweep
+ * would escalate him to himself.
+ *
+ * What is NOT dropped is the attribution: picking_tasks.assigned_picker_id is
+ * the only record of who physically pulled the stock, and a claim records it
+ * truthfully — set by the person doing the work, at the moment of doing it,
+ * rather than guessed at approval time by someone who will not be there.
+ */
+router.post('/requests/:id/claim', requirePermission('picking'), (req, res) => {
+  if (usesErpStaging(getTenant().profileKey)) {
+    return res.status(400).json({ error: 'This tenant assigns pickers through the picker-assignment screen.' });
+  }
+  const header = db.prepare('SELECT * FROM material_request_headers WHERE id=?').get(req.params.id);
+  if (!header) return res.status(404).json({ error: 'Request not found.' });
+  if (header.request_status !== HEADER_STATUS.PENDING_PICKER_ASSIGNMENT) {
+    return res.status(400).json({ error: `Request is not ready to pick (status '${header.request_status}').` });
+  }
+
+  const lineCount = db.prepare(
+    "SELECT COUNT(*) AS n FROM material_request_lines WHERE request_id=? AND line_status NOT IN ('Rejected','Cancelled')"
+  ).get(header.id).n;
+  const binCount = db.prepare(
+    "SELECT COUNT(DISTINCT bin_location) AS n FROM picking_allocations WHERE request_id=? AND status='PROPOSED'"
+  ).get(header.id).n;
+
+  let taskId;
+  try {
+    db.transaction(() => {
+      // An atomic claim: two storekeepers hitting this at once must not both get
+      // the request. The status guard inside the transaction is what decides.
+      const fresh = db.prepare('SELECT * FROM material_request_headers WHERE id=?').get(header.id);
+      if (fresh.request_status !== HEADER_STATUS.PENDING_PICKER_ASSIGNMENT) {
+        const err = new Error('This request has already been claimed.');
+        err.status = 409;
+        throw err;
+      }
+      const info = db.prepare(`
+        INSERT INTO picking_tasks
+          (request_id, request_number, assigned_picker_id, assigned_picker_name, assigned_by,
+           assigned_at, accepted_at, started_at, task_status, priority, warehouse_code,
+           total_lines, total_bin_locations)
+        VALUES (?,?,?,?,?, datetime('now'), datetime('now'), datetime('now'), ?,?,?,?,?)
+      `).run(fresh.id, fresh.request_number, req.user.id, req.user.name, req.user.id,
+        TASK_STATUS.IN_PROGRESS, fresh.priority || 'NORMAL', fresh.issue_warehouse_code,
+        lineCount, binCount);
+      taskId = info.lastInsertRowid;
+
+      setHeaderStatus(fresh, HEADER_STATUS.PICKING_IN_PROGRESS, { user: req.user, sourceScreen: 'Picker Task' });
+      db.prepare("UPDATE material_request_lines SET line_status=? WHERE request_id=? AND line_status IN (?,?)")
+        .run(LINE_STATUS.PICKING_IN_PROGRESS, fresh.id, LINE_STATUS.BATCH_ASSIGNED, LINE_STATUS.RESERVED);
+      audit.record({ entityType: 'PickingTask', entityId: taskId, requestNumber: fresh.request_number,
+        action: 'TASK_CLAIMED', newValue: { picker: req.user.name }, user: req.user, sourceScreen: 'Picker Task' });
+    })();
+  } catch (err) {
+    return res.status(err.status || 500).json({ error: err.message });
+  }
+
+  res.json({ message: 'Picking started.', task_id: taskId });
 });
 
 /** POST /api/picking/tasks/:id/accept — picker accepts; task -> Accepted. */

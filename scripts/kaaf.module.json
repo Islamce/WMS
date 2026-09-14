@@ -3,8 +3,7 @@
   "confidence": "verified",
   "consumes": [],
   "dependsOn": [
-    "wms-api",
-    "wms-runtime-entry"
+    "wms-api"
   ],
   "externalIntegrations": [],
   "flows": [],

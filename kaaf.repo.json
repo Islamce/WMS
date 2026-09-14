@@ -8,7 +8,7 @@
   "defaultBranch": "main",
   "deployment": {
     "environments": ["production"],
-    "note": "Managed Hostinger Node.js under Passenger at ~/domains/wms.kynox.io/nodejs with a SQLite database at data/wms.db. Production safety invariants are defined in CLAUDE.md and docs/WMS-PRODUCTION-RUNBOOK.md and are authoritative over this note."
+    "note": "Hostinger VPS under Docker Compose at /opt/apps/wms since 2026-09-06, with a SQLite database bind-mounted at /opt/apps/wms/data/wms.db. The Passenger shared-hosting layout this field described until 2026-09-14 no longer exists; commands written against it would fail or act on the wrong path. Production safety invariants are defined in CLAUDE.md and docs/WMS-PRODUCTION-RUNBOOK.md and are authoritative over this note."
   },
   "description": "WMS - a warehouse management system with a Node.js backend, a browser client, and a Flutter mobile application.",
   "kaafPhase": 7,

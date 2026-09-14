@@ -23,7 +23,7 @@
  * before — the two are independent gates and neither replaces the other.
  */
 const db = require('./../db/connection');
-const { getProfile } = require('./tenantProfile');
+const { getProfile, usesErpStaging } = require('./tenantProfile');
 
 /**
  * Cached because it is read on every authenticated request and changes only
@@ -43,6 +43,7 @@ function tableExists(name) {
  *   configured: boolean,       false on a pre-editions install (no row)
  *   name: string|null,
  *   profileKey: string|null,
+ *   erpStaging: boolean,       false means approval routes straight to the store
  *   modules: string[]|null,    null means "unrestricted", NOT "no modules"
  * }}
  */
@@ -56,7 +57,7 @@ function getTenant() {
     : null;
 
   if (!row) {
-    cached = { configured: false, name: null, profileKey: null, modules: null };
+    cached = { configured: false, name: null, profileKey: null, erpStaging: true, modules: null };
     return cached;
   }
 
@@ -67,7 +68,7 @@ function getTenant() {
     // An unrecognised profile key (a downgrade, or a hand-edited row) must not
     // take the deployment down or silently restrict it. Stay unrestricted and
     // keep the name, so the misconfiguration is visible without being fatal.
-    cached = { configured: false, name: row.tenant_name, profileKey: null, modules: null };
+    cached = { configured: false, name: row.tenant_name, profileKey: null, erpStaging: true, modules: null };
     return cached;
   }
 
@@ -75,6 +76,11 @@ function getTenant() {
     configured: true,
     name: row.tenant_name,
     profileKey: profile.key,
+    // The CAPABILITY, not the brand name. Screens that behave differently
+    // without ERP staging key off this rather than testing for 'contracting',
+    // so a future edition gets the same behaviour by declaring erpStaging
+    // rather than by being added to a list of profile names in the frontend.
+    erpStaging: usesErpStaging(profile.key),
     modules: profile.modules,
   };
   return cached;

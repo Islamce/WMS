@@ -1,30 +1,41 @@
 {
   "_meta": {
     "artifact": "modules/wms-ops-scripts.json",
-    "bodyDigest": "2023cfba1e439858f33d06eaab64dbd5a675e42cae7917087f854aeb0a5a0e94",
+    "bodyDigest": "4e3c014757768d928549d5d5083f8955c270f0ed8c76691a1421a392e6af9cc3",
     "confidence": "verified",
     "doNotEdit": true,
     "generator": "kaaf",
     "generatorVersion": "0.7.0",
-    "inputDigest": "8f5f19c1b46bdc9b7c02c7f28e3524288722198142d16464698ebe1eb0598902",
+    "inputDigest": "08dbe39622731cf6bcf716f0978412da723de618164887ad98f86f6d6edbb85b",
     "provenanceNote": "Generated from the declared kaaf.repo.json and kaaf.module.json manifests. No wall-clock time or commit SHA is embedded: both would break byte-identical regeneration. Use git history for when and from which commit.",
     "schemaVersion": "1.0.0"
   },
   "apis": [],
   "confidence": "verified",
-  "confidenceReason": "Declared and corroborated by 8 discovered code file(s).",
+  "confidenceReason": "Declared and corroborated by 15 discovered code file(s).",
   "declared": true,
   "declaredConfidence": "verified",
-  "dependedOnBy": [],
-  "dependsOn": [],
+  "dependedOnBy": [
+    "wms-tests"
+  ],
+  "dependsOn": [
+    "wms-api"
+  ],
   "discovery": {
     "codeFiles": [
       "scripts/backup-retention.js",
       "scripts/backup-select.js",
       "scripts/backup.js",
+      "scripts/converge-subcontractor-ledger.js",
       "scripts/fresh-start.js",
+      "scripts/i18n-extract.js",
+      "scripts/i18n-scan.js",
+      "scripts/install-starter-data.js",
       "scripts/monitor.sh",
+      "scripts/provision-tenant.js",
       "scripts/reset-admin.js",
+      "scripts/set-subscription.js",
+      "scripts/set-tenant-profile.js",
       "scripts/validate-opening-stock.js",
       "scripts/verify-backup.js"
     ],
@@ -33,7 +44,13 @@
       "scripts/backup-retention.js",
       "scripts/backup-select.js",
       "scripts/backup.js",
+      "scripts/converge-subcontractor-ledger.js",
+      "scripts/i18n-extract.js",
+      "scripts/install-starter-data.js",
       "scripts/monitor.sh",
+      "scripts/provision-tenant.js",
+      "scripts/set-subscription.js",
+      "scripts/set-tenant-profile.js",
       "scripts/validate-opening-stock.js",
       "scripts/verify-backup.js"
     ],
@@ -48,39 +65,22 @@
       "scripts/backup-retention.js",
       "scripts/backup-select.js",
       "scripts/backup.js",
+      "scripts/converge-subcontractor-ledger.js",
       "scripts/fresh-start.js",
+      "scripts/i18n-extract.js",
+      "scripts/i18n-scan.js",
+      "scripts/install-starter-data.js",
       "scripts/kaaf.module.json",
       "scripts/monitor.sh",
+      "scripts/provision-tenant.js",
       "scripts/reset-admin.js",
+      "scripts/set-subscription.js",
+      "scripts/set-tenant-profile.js",
       "scripts/validate-opening-stock.js",
       "scripts/verify-backup.js"
     ]
   },
-  "driftFindings": [
-    {
-      "evidence": [
-        "scripts/backup.js",
-        "scripts/fresh-start.js",
-        "scripts/reset-admin.js",
-        "scripts/validate-opening-stock.js"
-      ],
-      "module": "wms-ops-scripts",
-      "recommendation": "Add 'wms-api' to dependsOn in scripts/kaaf.module.json, or remove the import (docs/kaaf/STANDARDS.md §1).",
-      "severity": "error",
-      "summary": "'wms-ops-scripts' imports 'wms-api' but does not declare the dependency.",
-      "type": "undeclared-dependency"
-    },
-    {
-      "evidence": [
-        "scripts/backup.js"
-      ],
-      "module": "wms-ops-scripts",
-      "recommendation": "Add 'wms-runtime-entry' to dependsOn in scripts/kaaf.module.json, or remove the import (docs/kaaf/STANDARDS.md §1).",
-      "severity": "error",
-      "summary": "'wms-ops-scripts' imports 'wms-runtime-entry' but does not declare the dependency.",
-      "type": "undeclared-dependency"
-    }
-  ],
+  "driftFindings": [],
   "externalIntegrations": [],
   "id": "wms-ops-scripts",
   "ownedEntities": [

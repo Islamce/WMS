@@ -45,7 +45,41 @@ const I18N = {
     'Reverse Goods Issue': 'عكس صرف البضائع', 'High-Value Approvals': 'موافقات عالية القيمة',
     'Counted quantity': 'الكمية المعدودة', 'Variance': 'الفرق', 'System quantity': 'كمية النظام',
     'Upload file': 'رفع ملف', 'No attachments': 'لا توجد مرفقات',
-  },
+      // navigation-v2 group headings and route labels — the frame around every
+    // screen. These are the first thing a storekeeper reads and the last thing
+    // that should be in English.
+    'Command Center': 'مركز التحكم', 'Demand & Requests': 'الطلبات',
+    'Inbound Operations': 'عمليات الاستلام', 'Outbound Operations': 'عمليات الصرف',
+    'Inventory Control': 'مراقبة المخزون', 'Intelligence & Analytics': 'التحليلات',
+    'Master Data & Integration': 'البيانات الرئيسية والتكامل',
+    'Governance & Administration': 'الحوكمة والإدارة',
+    'Subcontractor Materials': 'مواد مقاولي الباطن',
+    'Operations Overview': 'نظرة عامة على العمليات', 'Performance Cockpit': 'مؤشرات الأداء',
+    'Alerts & Notifications': 'التنبيهات والإشعارات',
+    'Request Work Queue': 'قائمة الطلبات',
+    'Approval Work Queue': 'قائمة الموافقات', 'ERP Processing Queue': 'قائمة معالجة ERP',
+    'Goods Receipt & Identification': 'استلام المواد وترميزها', 'QR & Label Printing': 'طباعة الباركود',
+    'Quality Inspection': 'فحص الجودة', 'Batch Traceability': 'تتبع الدفعات',
+    'Shelf-life & Expiry Control': 'الصلاحية وتواريخ الانتهاء',
+    'Execution Control Board': 'لوحة تنفيذ المستودع', 'Bin & Batch Allocation': 'تخصيص الموقع والدفعة',
+    'Work Assignment': 'توزيع المهام', 'Picking Tasks': 'مهام الصرف',
+    'Stock Reallocation': 'إعادة تخصيص المخزون',
+    'Packing, Dispatch & Shipping': 'التعبئة والشحن',
+    'Physical Inventory': 'الجرد الفعلي',
+    'Stock by Location': 'المخزون حسب الموقع', 'Available Locations': 'المواقع المتاحة',
+    'AI Inventory Intelligence': 'تحليلات المخزون الذكية',
+    'Material Master': 'أصناف المواد', 'Storage Location Master': 'مواقع التخزين',
+    'Bin Master': 'المواقع داخل المستودع',
+    'Movement Type Configuration': 'إعداد أنواع الحركة', 'Data Integration Center': 'مركز استيراد البيانات',
+    'Audit & Traceability': 'سجل التدقيق والتتبع', 'User Administration': 'إدارة المستخدمين',
+    'Roles & Permissions': 'الأدوار والصلاحيات',
+    'Deliveries & Quality Inspection': 'التوريدات وفحص الجودة',
+    'Subcontractor On-Hand Stock': 'أرصدة مقاولي الباطن',
+    'Subcontractor Reconciliation': 'تسوية مقاولي الباطن',
+    'Returns to Owner': 'المرتجعات للمالك',
+    'Subcontractor-Owned Stock': 'المواد المملوكة لمقاولي الباطن',
+    'Subcontractors & Categories': 'مقاولو الباطن والتصنيفات',
+},
   fr: {
     'General': 'Général', 'Material Requests': 'Demandes de matériel', 'Warehouse Execution': 'Exécution entrepôt',
     'Receiving & Quality': 'Réception et qualité', 'Inventory': 'Inventaire', 'Master Data': 'Données de base',
@@ -85,9 +119,28 @@ const I18N = {
 
 const RTL_LANGS = ['ar'];
 
+/**
+ * Languages offered in the UI.
+ *
+ * English only, deliberately. The product is being finished in English and
+ * translated when a customer asks for it, so the Arabic and French dictionaries
+ * below cover a fraction of the screens. Offering a language picker in that
+ * state is worse than not offering one: a prospect clicks عربي during a demo,
+ * gets an Arabic menu wrapped around English screens, and learns exactly how
+ * far the translation goes. A product that says it is English is coherent; one
+ * that offers Arabic and half-delivers it is not.
+ *
+ * Nothing is deleted — the dictionaries, t(), the RTL handling and the coverage
+ * report all stay. Add a language here when it is actually finished, and the
+ * picker comes back on its own.
+ */
+const ENABLED_LANGS = ['en'];
+
 window.Lang = {
-  current: localStorage.getItem('wms_lang') || 'en',
+  available: ENABLED_LANGS,
+  current: ENABLED_LANGS.includes(localStorage.getItem('wms_lang')) ? localStorage.getItem('wms_lang') : 'en',
   set(lang) {
+    if (!ENABLED_LANGS.includes(lang)) return;
     this.current = lang;
     localStorage.setItem('wms_lang', lang);
     this.applyDir();
@@ -100,10 +153,43 @@ window.Lang = {
 };
 Lang.applyDir();
 
-/** Translate an English string into the active language (fallback: as-is). */
-function t(s) {
+/**
+ * RULE FOR NEW CODE: write English directly. Do not wrap new strings in t().
+ *
+ * The product ships in English and is translated only when a customer asks for
+ * it as part of a deal (see ENABLED_LANGS above). With English the only enabled
+ * language and no `en` dictionary, this function returns its argument unchanged
+ * — it is an identity function today and cannot display anything but what you
+ * wrote. The existing t() calls are left alone because removing 286 of them
+ * across 11 working files would create risk, not remove it.
+ *
+ * Everything below is the machinery a translation deal needs on day one. It is
+ * dormant, not in use.
+ *
+ * Translate an English string into the active language.
+ *
+ * The English string IS the key, so an untranslated string falls back to itself
+ * and the page still renders. That fallback is why the gap grew unnoticed: an
+ * Arabic user saw English and nothing anywhere said so. Every miss is now
+ * recorded in window.__i18nMisses, which is what turns silent degradation into
+ * a number a test can assert on.
+ *
+ * `vars` fills {name} placeholders, so a sentence with a count in the middle can
+ * be a single key. Without it those sentences cannot be translated at all —
+ * they get assembled from fragments at the call site, and Arabic does not put
+ * the fragments in the same order.
+ */
+function t(s, vars) {
   const dict = I18N[Lang.current];
-  return (dict && dict[s]) || s;
+  let out = dict && dict[s];
+  if (out === undefined) {
+    if (Lang.current !== 'en') {
+      if (!window.__i18nMisses) window.__i18nMisses = new Set();
+      window.__i18nMisses.add(s);
+    }
+    out = s;
+  }
+  return vars ? out.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m)) : out;
 }
 window.t = t;
 

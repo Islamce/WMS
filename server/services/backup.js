@@ -26,6 +26,26 @@ const crypto = require('crypto');
 const Database = require('better-sqlite3');
 const config = require('../config');
 
+/**
+ * The application version, read from package.json as DATA rather than imported
+ * as a module.
+ *
+ * `require('../../package.json')` did the same job, but a static reader cannot
+ * tell that apart from importing the repository root, so it counted this file
+ * as depending on the runtime-entry module — and since that module boots this
+ * one, that closed a false cycle which blocked the architecture check entirely.
+ * Declaring the dependency would have made the cycle real; removing the import
+ * makes the analysis true instead. Reading a version string was never a module
+ * dependency. Same value, same file, no import edge.
+ */
+function appVersion() {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8')).version;
+  } catch {
+    return null;
+  }
+}
+
 const ATTACH_SRC = path.join(__dirname, '..', '..', 'data', 'attachments');
 
 function sha256File(file) {
@@ -68,7 +88,7 @@ async function backup(destDir) {
   }
   const manifest = {
     created_at: new Date().toISOString(),
-    app_version: require('../../package.json').version,
+    app_version: appVersion(),
     db_file: path.basename(dbDest),
     db_bytes: fs.statSync(dbDest).size,
     db_sha256: sha256File(dbDest),
