@@ -1,12 +1,12 @@
 {
   "_meta": {
     "artifact": "modules/wms-runtime-entry.json",
-    "bodyDigest": "777cd4588ab53a565ed7038460ec9dc36308373c0e15a21a1cf2db6a377b9c94",
+    "bodyDigest": "9ba15b4a810108a890b898b4fd7be024ed7a6f219b4c25d1e022f2682fb336c5",
     "confidence": "verified",
     "doNotEdit": true,
     "generator": "kaaf",
     "generatorVersion": "0.7.0",
-    "inputDigest": "02edbe4d759435994575bf3f24be529c2f5e453ef1c5a457ceb9fe2d2493cb4b",
+    "inputDigest": "d4431ce676b2d8517dccc3e4133035037181b5a716e5997f799596e50330f11c",
     "provenanceNote": "Generated from the declared kaaf.repo.json and kaaf.module.json manifests. No wall-clock time or commit SHA is embedded: both would break byte-identical regeneration. Use git history for when and from which commit.",
     "schemaVersion": "1.0.0"
   },
@@ -117,9 +117,11 @@
       "docs/vault/.obsidian/core-plugins.json",
       "docs/vault/.obsidian/templates.json",
       "docs/vault/Lessons/A demo that cannot be performed is worse than no demo.md",
+      "docs/vault/Lessons/A fix that is right in the rare case and wrong on every ordinary day.md",
       "docs/vault/Lessons/A guard that measures the wrong number is worse than none.md",
       "docs/vault/Lessons/A test that grants a permission and never revokes it passes exactly once.md",
       "docs/vault/Lessons/Counting rows to make an identifier issues the same number twice.md",
+      "docs/vault/Lessons/Every gate passed because none of them could see the file.md",
       "docs/vault/Lessons/Fail open for licensing, fail closed for authority.md",
       "docs/vault/Lessons/I claimed the same thing was fixed, twice, and was wrong both times.md",
       "docs/vault/Lessons/Merged is not deployed, and green is not correct.md",

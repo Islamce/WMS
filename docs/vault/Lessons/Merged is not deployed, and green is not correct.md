@@ -54,3 +54,5 @@ real when a run stops at it, not when a document says it does.
 - [[I claimed the same thing was fixed, twice, and was wrong both times]]
 - [[A test that grants a permission and never revokes it passes exactly once]]
 - [[Tooling that is not gated is already dead]]
+- [[A fix that is right in the rare case and wrong on every ordinary day]]
+- [[Every gate passed because none of them could see the file]]

@@ -49,3 +49,4 @@ Parse each item as a whole and pull fields by name —
 
 - [[I claimed the same thing was fixed, twice, and was wrong both times]]
 - [[A test that grants a permission and never revokes it passes exactly once]]
+- [[A fix that is right in the rare case and wrong on every ordinary day]]

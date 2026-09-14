@@ -17,6 +17,7 @@ so the list can be read in one place.
 | Screens the collapsed workflow routes past are still reachable | A tenant switched between editions can have requests stranded there. See [[The edition is checked before the admin short-circuit]] |
 | `server/routes/setup.js` has no permission check | It returns only `done: <count> > 0` — booleans, never quantities or names. **If that ever changes it becomes an unprivileged inventory oracle and must be gated** |
 | `i18n.js` `t()` is an identity function | English-only by decision; there is no `en` dictionary. New code writes English directly |
+| `analytics.js` `current_stock` counts `QUALITY_HOLD` and blocked batches that allocation would refuse | Deliberate, and it was tried the other way. Held stock is *pending*, not lost. Every batch is received on hold (`server/routes/receiving.js:133`), so excluding it makes every fresh delivery read as empty. Use `issuable_stock` for "what a picker could be handed now". See [[A fix that is right in the rare case and wrong on every ordinary day]] |
 
 ## Hard invariants — breaking these corrupts data
 
