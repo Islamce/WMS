@@ -7,7 +7,7 @@ Pages.batches = {
   async render(el) {
     this.el = el;
     el.innerHTML = `<div class="card">
-      <div class="toolbar"><h3 class="mb-0">Batch Tracking</h3><div class="spacer"></div>
+      <div class="toolbar"><h3 class="mb-0">Batch Traceability</h3><div class="spacer"></div>
         <input type="text" class="search-input" id="bt-search" placeholder="Search batch / material / warehouse…">
         <span id="bt-export"></span></div>
       <div class="table-wrap" id="bt-table"><div class="loading">Loading…</div></div>

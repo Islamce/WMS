@@ -4,7 +4,7 @@ window.Pages = window.Pages || {};
 Pages.approvals = {
   async render(el) {
     this.el = el;
-    el.innerHTML = `<div class="card"><h3>Approval Inbox</h3>
+    el.innerHTML = `<div class="card"><h3>Approvals</h3>
       <div class="table-wrap" id="ap-table"><div class="loading">Loading…</div></div></div>
       <div id="ap-detail"></div>`;
     await this.loadInbox();

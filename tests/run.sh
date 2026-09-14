@@ -86,6 +86,7 @@ run_suite contracting_collapsed_chain_test.py
 run_suite first_hour_test.py
 run_suite import_examples_test.py
 run_suite subscription_test.py
+run_suite demo_tenant_test.py
 # Offline: migrated temp database; pins that ownership defaults leave live data alone.
 run_suite stock_ownership_test.py
 # LAST in this phase — it marks a batch as subcontractor-owned and depletes it,

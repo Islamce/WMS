@@ -246,6 +246,22 @@ async function stopServer(server) {
     check('and it is a warning, not an error, while the system still works',
       await page.locator('.subscription-notice.error').count() === 0, notice);
 
+    // The fourth naming table: permissions.label names these screens again and is
+    // rendered here. Those labels are seeded ROWS, so they are resolved through
+    // MODULES at render rather than migrated — this asserts the resolution is
+    // real, on a tenant whose database still holds the old labels.
+    await page.evaluate(() => { window.location.hash = '#/permissions'; });
+    await page.waitForSelector('.perm-grid, table', { timeout: 15000 });
+    await page.waitForTimeout(500);
+    const permText = await page.locator('#page-content').innerText();
+    const stale = ['Manager Approvals', 'Goods Receipt & QR', 'Batch Tracking',
+      'Warehouse Master', 'Movement Type Config']
+      .filter((name) => permText.includes(name));
+    check('the permissions screen shows the navigation name, not the seeded one',
+      stale.length === 0, `still showing: ${stale.join(', ')}`);
+    check('and it does show the navigation names',
+      /Approvals/.test(permText) && /Goods Receipt/.test(permText), permText.slice(0, 200));
+
     check('no uncaught page errors', pageErrors.length === 0, pageErrors.join(' | '));
   } catch (err) {
     check('first-run guide smoke completed', false, err.message);

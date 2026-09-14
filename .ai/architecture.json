@@ -1,12 +1,12 @@
 {
   "_meta": {
     "artifact": "architecture.json",
-    "bodyDigest": "409d964e7bad9c26dc29f935d9e45ce883ecad05ddf34a47b9535d80f9d34c60",
+    "bodyDigest": "1b2e13a3209a6e386a68c0a46baa3dda85c5a3b0c691b84d42a8dfff014d7889",
     "confidence": "verified",
     "doNotEdit": true,
     "generator": "kaaf",
     "generatorVersion": "0.7.0",
-    "inputDigest": "08dbe39622731cf6bcf716f0978412da723de618164887ad98f86f6d6edbb85b",
+    "inputDigest": "6c2d90ac69c78d15f584baeda2a012700e43e0b900fab8aa0966b16df2cb8e34",
     "provenanceNote": "Generated from the declared kaaf.repo.json and kaaf.module.json manifests. No wall-clock time or commit SHA is embedded: both would break byte-identical regeneration. Use git history for when and from which commit.",
     "schemaVersion": "1.0.0"
   },
@@ -686,7 +686,7 @@
     },
     {
       "confidence": "verified",
-      "confidenceReason": "Declared and corroborated by 15 discovered code file(s).",
+      "confidenceReason": "Declared and corroborated by 16 discovered code file(s).",
       "declared": true,
       "declaredConfidence": "verified",
       "dependedOnBy": [
@@ -696,13 +696,14 @@
         "wms-api"
       ],
       "discovery": {
-        "codeFileCount": 15,
+        "codeFileCount": 16,
         "discovered": true,
         "entryPoints": [
           "scripts/backup-retention.js",
           "scripts/backup-select.js",
           "scripts/backup.js",
           "scripts/converge-subcontractor-ledger.js",
+          "scripts/create-demo-tenant.js",
           "scripts/i18n-extract.js",
           "scripts/install-starter-data.js",
           "scripts/monitor.sh",
@@ -719,7 +720,7 @@
         ],
         "parseErrors": [],
         "publicSymbols": [],
-        "sourceFileCount": 16
+        "sourceFileCount": 17
       },
       "id": "wms-ops-scripts",
       "ownedEntities": [
@@ -754,7 +755,7 @@
         ],
         "parseErrors": [],
         "publicSymbols": [],
-        "sourceFileCount": 70
+        "sourceFileCount": 75
       },
       "id": "wms-runtime-entry",
       "ownedEntities": [
@@ -772,7 +773,7 @@
     },
     {
       "confidence": "verified",
-      "confidenceReason": "Declared and corroborated by 53 discovered code file(s).",
+      "confidenceReason": "Declared and corroborated by 54 discovered code file(s).",
       "declared": true,
       "declaredConfidence": "verified",
       "dependedOnBy": [],
@@ -781,7 +782,7 @@
         "wms-ops-scripts"
       ],
       "discovery": {
-        "codeFileCount": 53,
+        "codeFileCount": 54,
         "discovered": true,
         "entryPoints": [
           "tests/e2e/edition_route_coverage_test.js",
@@ -799,7 +800,7 @@
         ],
         "parseErrors": [],
         "publicSymbols": [],
-        "sourceFileCount": 55
+        "sourceFileCount": 56
       },
       "id": "wms-tests",
       "ownedEntities": [
