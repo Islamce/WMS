@@ -79,12 +79,13 @@ Pages.ai = {
       <div class="card">
         <h3>Reorder alerts &amp; safety stock</h3>
         <div class="table-wrap"><table>
-          <thead><tr><th>Item</th><th>Class</th><th class="text-right">Stock</th><th class="text-right">Avg daily demand</th>
+          <thead><tr><th>Item</th><th>Class</th><th class="text-right">Stock on hand</th><th class="text-right">Held</th><th class="text-right">Avg daily demand</th>
             <th class="text-right">Safety stock</th><th class="text-right">Reorder point</th><th class="text-right">Days of cover</th><th>Status</th></tr></thead>
           <tbody>${reorderRows.map((i) => `
             <tr><td><span class="chip">${UI.esc(i.item_code)}</span> <span class="muted">${UI.esc(i.description)}</span></td>
               <td><span class="badge ${clsBadge[i.classification] || 'role'}">${i.classification}</span></td>
               <td class="text-right">${UI.fmtQty(i.current_stock)}</td>
+              <td class="text-right"${Number(i.held_stock) > 0 ? ' title="Awaiting quality release or blocked — on site, not pickable yet"' : ''}>${Number(i.held_stock) > 0 ? UI.fmtQty(i.held_stock) : '—'}</td>
               <td class="text-right">${i.avg_daily_demand}</td>
               <td class="text-right">${i.safety_stock}</td>
               <td class="text-right">${i.reorder_point}</td>
@@ -97,12 +98,13 @@ Pages.ai = {
       <div class="card">
         <h3>Confirmed dead stock (complete coverage, no issues in ${data.parameters.window_days} days)</h3>
         <div class="table-wrap"><table>
-          <thead><tr><th>Item</th><th>Group</th><th class="text-right">Stock</th><th class="text-right">Value</th>
+          <thead><tr><th>Item</th><th>Group</th><th class="text-right">Stock on hand</th><th class="text-right">Held</th><th class="text-right">Value</th>
             <th class="text-right">Days since last issue</th></tr></thead>
           <tbody>${deadRows.map((i) => `
             <tr><td><span class="chip">${UI.esc(i.item_code)}</span> <span class="muted">${UI.esc(i.description)}</span></td>
               <td>${UI.esc(i.material_group || '')}</td>
               <td class="text-right">${UI.fmtQty(i.current_stock)}</td>
+              <td class="text-right"${Number(i.held_stock) > 0 ? ' title="Awaiting quality release or blocked — on site, not pickable yet"' : ''}>${Number(i.held_stock) > 0 ? UI.fmtQty(i.held_stock) : '—'}</td>
               <td class="text-right">${UI.fmtQty(i.stock_value)}</td>
               <td class="text-right">${i.days_since_last_issue ?? 'never issued'}</td>
             </tr>`).join('') || `<tr><td colspan="5">${UI.meaningfulEmptyState({ title: 'No dead stock', description: 'No material has complete-coverage, zero-issue history in this analysis window.' })}</td></tr>`}</tbody>
@@ -112,7 +114,7 @@ Pages.ai = {
       <div class="card">
         <h3>Full analysis (${data.items.length} materials)</h3>
         <div class="table-wrap" style="max-height:420px;overflow-y:auto"><table>
-          <thead><tr><th>Item</th><th>Class</th><th>Confidence</th><th>ABC</th><th>XYZ</th><th>FSN</th><th class="text-right">Stock</th><th class="text-right">Net use (${data.parameters.window_days}d)</th>
+          <thead><tr><th>Item</th><th>Class</th><th>Confidence</th><th>ABC</th><th>XYZ</th><th>FSN</th><th class="text-right">Stock on hand</th><th class="text-right">Held</th><th class="text-right">Net use (${data.parameters.window_days}d)</th>
             <th>Last issue</th><th class="text-right">Issue freq/mo</th><th class="text-right">Reorder pt</th><th class="text-right">EOQ</th><th class="text-right">Value</th><th>Flags</th></tr></thead>
           <tbody>${data.items.map((i) => `
             <tr><td><span class="chip">${UI.esc(i.item_code)}</span></td>
@@ -120,6 +122,7 @@ Pages.ai = {
               <td>${UI.esc(i.classification_confidence || '—')}</td>
               <td>${i.abc_class || '—'}</td><td>${i.xyz_class || '—'}</td><td>${i.fsn_class || '—'}</td>
               <td class="text-right">${UI.fmtQty(i.current_stock)}</td>
+              <td class="text-right"${Number(i.held_stock) > 0 ? ' title="Awaiting quality release or blocked — on site, not pickable yet"' : ''}>${Number(i.held_stock) > 0 ? UI.fmtQty(i.held_stock) : '—'}</td>
               <td class="text-right">${UI.fmtQty(i.net_consumption)}</td>
               <td>${UI.esc(i.last_issue_date || '—')}</td>
               <td class="text-right">${i.issue_frequency_per_month}</td>

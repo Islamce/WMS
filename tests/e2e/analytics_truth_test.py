@@ -180,27 +180,36 @@ try:
           k0.get('subcontractor_stock') == 200, k0.get('subcontractor_stock'))
     check('T1 and what was received but never put away (15)',
           k0.get('unplaced_stock') == 15, k0.get('unplaced_stock'))
-    check('T1 the dashboard and the analytics report now agree on what is issuable',
-          k0.get('available_stock') == (item or {}).get('current_stock'),
-          (k0.get('available_stock'), (item or {}).get('current_stock')))
+    check('T1 the dashboard and the analytics report agree on what is issuable',
+          k0.get('available_stock') == (item or {}).get('issuable_stock'),
+          (k0.get('available_stock'), (item or {}).get('issuable_stock')))
+    # The four parts must account for the whole. A released, unblocked, fully
+    # reserved batch once fell into no bucket and the screen showed a gap it
+    # never explained.
+    parts = (k0.get('available_stock', 0) + k0.get('reserved_stock', 0)
+             + k0.get('held_stock', 0) + k0.get('subcontractor_stock', 0))
+    check('T1 available + reserved + held + subcontractor accounts for every unit on hand',
+          parts == total_stock, (parts, total_stock, k0))
     check('T1 analytics reports the subcontractor holding separately (200)',
           item and item['subcontractor_stock'] == 200, item and item['subcontractor_stock'])
 
     # ---- 2. Stock that cannot be issued still counts as stock --------------
     # allocation.js takes only quality_status='RELEASED' AND is_blocked=0.
     issuable = 135
-    check('T2 replenishment plans only against stock allocation would accept',
-          item and item['current_stock'] == issuable, item and item['current_stock'])
-    check('T2 and the held stock is reported, not silently dropped (90)',
+    # current_stock deliberately still counts held stock. Excluding it was worse
+    # than the defect it fixed: receiving.js puts EVERY received batch on
+    # QUALITY_HOLD, so a fresh delivery read as zero and fired a critical
+    # "replenish now" alert on material that had just been unloaded.
+    check('T2 current stock counts held stock, because held stock is pending, not lost (225)',
+          item and item['current_stock'] == 225, item and item['current_stock'])
+    check('T2 what a picker could be handed today is its own figure (135)',
+          item and item.get('issuable_stock') == issuable, item and item.get('issuable_stock'))
+    check('T2 and the held part is named rather than dropped (90)',
           item and item.get('held_stock') == 90, item and item.get('held_stock'))
-    if item and item['current_stock'] != issuable:
-        finding('Replenishment plans against stock allocation would refuse',
-                f"current_stock = {item['current_stock']} includes a 50-unit QUALITY_HOLD batch and a "
-                f"40-unit blocked batch. allocation.js:23-24 takes RELEASED and is_blocked=0 only, so only "
-                f"{issuable} could actually be issued today. reorder_point/below_reorder are computed "
-                "against the larger number, so a reorder signal can be suppressed by stock nobody can "
-                "draw. The service already argues exactly this for subcontractor stock, in a comment "
-                "above the same query.")
+    check('T2 a material whose stock is entirely held still appears in the report',
+          item is not None and item['classification'] != 'INACTIVE', item and item['classification'])
+    # (The finding this block used to raise is now a deliberate decision, pinned
+    # by the assertions above rather than reported as a defect.)
     check('T2 the analytics service knows hold/blocked stock is unavailable (it says so in insights)',
           any('quality' in (i.get('title', '') + i.get('detail', '')).lower() for i in ana['insights']),
           [i['title'] for i in ana['insights']])
@@ -257,6 +266,10 @@ try:
           {kk: k.get(kk) for kk in ('erp_staging', 'avg_erp_reservation_minutes', 'avg_gi_posting_minutes')})
     check('T6 and is given the cycle time its workflow actually has',
           'avg_approval_to_issue_minutes' in k, sorted(k))
+    # The one structural fix the first version of this test did not pin — proved
+    # unpinned by mutation testing, and it was the one broken on the KPI screen.
+    check('T6 a success rate over zero postings is unknown, not 100%',
+          k.get('erp_success_rate') is None, k.get('erp_success_rate'))
     if k['avg_erp_reservation_minutes'] == 0 and k['avg_gi_posting_minutes'] == 0:
         finding('Two cycle-time KPIs are structurally zero on the contracting edition',
                 "avg_erp_reservation_minutes and avg_gi_posting_minutes are both measured from "

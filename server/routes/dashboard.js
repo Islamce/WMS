@@ -181,6 +181,15 @@ router.get('/', (req, res) => {
     WHERE COALESCE(owner_type, 'COMPANY') = 'COMPANY'
       AND (quality_status <> 'RELEASED' OR is_blocked = 1)
   `).n;
+  // Without this the four tiles did not add up to the one above them: a company
+  // batch that is released, unblocked and fully reserved fell out of
+  // `available` (it is promised) and out of `held` (it is released), so its
+  // quantity appeared in no tile and the screen offered no explanation.
+  const reservedStock = one(`
+    SELECT COALESCE(SUM(reserved_quantity), 0) AS n FROM batches
+    WHERE COALESCE(owner_type, 'COMPANY') = 'COMPANY'
+      AND quality_status = 'RELEASED' AND is_blocked = 0
+  `).n;
 
   const movementSince = (type, dateExpr) => one(`
     SELECT COALESCE(SUM(quantity), 0) AS n FROM stock_transactions
@@ -215,9 +224,14 @@ router.get('/', (req, res) => {
 
   // Received but not put away. Previously hidden inside the bin ranking under a
   // warehouse code; it is a thing to act on, so it is reported as itself.
+  // Ours only, like the tiles beside it. Owner-blind, it counted a
+  // subcontractor's un-put-away delivery as well, so the same quantity showed in
+  // two tiles on one screen. This one cuts across the others by design — it asks
+  // "where is it", not "whose is it" — so it is labelled as a task, not a total.
   const unplacedStock = one(`
     SELECT COALESCE(SUM(remaining_quantity), 0) AS n FROM batches
-    WHERE remaining_quantity > 0 AND (bin_location IS NULL OR TRIM(bin_location) = '')
+    WHERE remaining_quantity > 0 AND COALESCE(owner_type, 'COMPANY') = 'COMPANY'
+      AND (bin_location IS NULL OR TRIM(bin_location) = '')
   `).n;
 
   const recentTransactions = all(`
@@ -241,7 +255,7 @@ router.get('/', (req, res) => {
       SUM(CASE WHEN transaction_type = 'IN' THEN quantity ELSE 0 END) AS in_qty,
       SUM(CASE WHEN transaction_type = 'OUT' THEN quantity ELSE 0 END) AS out_qty
     FROM stock_transactions
-    WHERE date(transaction_date) >= date('now', '-29 days')
+    WHERE date(transaction_date) BETWEEN date('now', '-29 days') AND date('now')
     GROUP BY day ORDER BY day
   `);
   const byDay = Object.fromEntries(movementDays.map((r) => [r.day, r]));
@@ -285,6 +299,7 @@ router.get('/', (req, res) => {
       total_stock: totalStock,
       available_stock: availableStock,
       held_stock: heldStock,
+      reserved_stock: reservedStock,
       subcontractor_stock: subcontractorStock,
       unplaced_stock: unplacedStock,
       stock_in_today: stockInToday,

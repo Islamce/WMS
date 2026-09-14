@@ -170,13 +170,14 @@ Pages.kpi = {
         ${tile('red', 'ERP Error', k.erp_error, 'requests:ERP Error')}
         ${tile('red', 'Rejected / Cancelled', k.rejected + k.cancelled, 'requests:Rejected')}
         ${tile('accent', 'Avg Approval (min)', k.avg_approval_minutes, 'requests:')}
-        ${tile('accent', 'Avg GI Posting (min)', k.avg_gi_posting_minutes, 'requests:')}
+        ${k.avg_gi_posting_minutes === null ? '' : tile('accent', 'Avg GI Posting (min)', k.avg_gi_posting_minutes, 'requests:')}
+        ${k.avg_approval_to_issue_minutes === null || k.avg_approval_to_issue_minutes === undefined ? '' : tile('accent', 'Avg Approval to Issue (min)', k.avg_approval_to_issue_minutes, 'requests:')}
         ${tile('amber', 'Shortage Lines', k.shortage_lines, 'requests:', `${k.shortage_percentage}% of lines`)}
         ${tile('red', 'Expired Batches', k.expired_batches, 'expiry:')}
         ${tile('green', 'QR Scan Pass', k.qr_scan_pass, 'audit:QR_SCAN_PASS', `${k.qr_scan_failure} failed`)}
         ${tile('amber', 'Overrides', k.manual_override_count, 'audit:SUPERVISOR_OVERRIDE')}
         ${tile('accent', 'FIFO / FEFO Allocations', `${k.fifo_allocations}/${k.fefo_allocations}`, 'batches:')}
-        ${tile('green', 'ERP Success Rate', `${k.erp_success_rate}%`, 'audit:GI_POSTED', `${k.erp_posting_success} ok · ${k.erp_posting_failure} fail`)}
+        ${k.erp_success_rate === null ? '' : tile('green', 'ERP Success Rate', `${k.erp_success_rate}%`, 'audit:GI_POSTED', `${k.erp_posting_success} ok · ${k.erp_posting_failure} fail`)}
       </div>
       <div class="grid two">
         <div class="card"><h3>Requests by status</h3><div class="chart-box"><canvas id="kpi-status"></canvas></div></div>
