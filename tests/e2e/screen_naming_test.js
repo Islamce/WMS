@@ -17,6 +17,10 @@ const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.join(__dirname, '..', '..');
+
+// Screens whose permission label still differs from the navigation name. This
+// number may fall and must never rise. See the note at the bottom of this file.
+const KNOWN_PERMISSION_LABEL_CLASHES = 17;
 let passed = 0;
 let failed = 0;
 const fails = [];
@@ -87,6 +91,42 @@ const settled = {
 const wrong = Object.entries(settled).filter(([route, label]) => byRoute.get(route) !== label)
   .map(([route, label]) => `${route}: expected "${label}", found "${byRoute.get(route)}"`);
 check('the screens that had two names now have one', wrong.length === 0, wrong.join('; '));
+
+// ===== 5. The fourth table, MEASURED but not yet enforced =====
+// permissions.label names the same screens again, and is rendered as the
+// screen's name on Roles & Permissions. It is not gated yet for one reason: the
+// labels are ROWS IN EACH TENANT'S DATABASE, seeded once. Correcting the seed
+// changes nothing on a tenant that already exists, so closing this needs an
+// additive migration against live data — a separate, separately reviewed
+// change. Counted here so it cannot be forgotten a third time, and so the
+// number can only be seen to fall.
+{
+  const seed = fs.readFileSync(path.join(ROOT, 'server/db/seed2.js'), 'utf8');
+  // Parse each item as a whole rather than assuming the field order. An
+  // order-sensitive pattern silently matched 28 of 39 routes and undercounted
+  // this gap — a guard that measures the wrong number is worse than none.
+  const byPermission = new Map();
+  for (const entry of modules.matchAll(/\{ route: '([^']+)',([^}]*)\}/g)) {
+    const label = /label: '([^']+)'/.exec(entry[2]);
+    const perms = [...entry[2].matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
+    const permission = /permission: '([a-z_]+)'/.exec(entry[2]);
+    const keys = permission ? [permission[1]] : perms;
+    if (label) keys.forEach((k) => { if (!byPermission.has(k)) byPermission.set(k, label[1]); });
+  }
+  const clashes = [];
+  for (const m of seed.matchAll(/key: '([a-z_]+)', label: '([^']+)'/g)) {
+    const navName = byPermission.get(m[1]);
+    if (navName && navName !== m[2]) clashes.push(`${m[1]}: nav "${navName}" vs permission "${m[2]}"`);
+  }
+  console.log(`\nKNOWN GAP: ${clashes.length} permission label(s) still name a screen `
+    + 'differently from the navigation. Closing this needs a migration against live\n'
+    + 'tenant rows, so it is measured here rather than gated. It must only go DOWN.');
+  if (clashes.length > KNOWN_PERMISSION_LABEL_CLASHES) {
+    failed += 1;
+    fails.push('permission label clashes increased');
+    console.log('FAIL: the known gap grew —', clashes.slice(0, 5).join('; '));
+  }
+}
 
 console.log(`\n===== RESULT: ${passed} passed, ${failed} failed =====`);
 if (fails.length) console.log('Failed:', fails.join(', '));

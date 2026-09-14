@@ -6,7 +6,7 @@ Pages.erpOperator = {
   async render(el) {
     this.el = el;
     this.meta = await Api.get('/api/meta');
-    el.innerHTML = `<div class="card"><h3>ERP Operator Queue</h3>
+    el.innerHTML = `<div class="card"><h3>ERP Processing Queue</h3>
       <div class="table-wrap" id="eo-table"><div class="loading">Loading…</div></div></div>
       <div id="eo-detail"></div>`;
     await this.loadQueue();
