@@ -381,9 +381,18 @@ What the evidence says, so a later decision does not have to re-derive it:
   "CI gates cheap enough to run on every pull request".
 - `docs/kaaf/STANDARDS.md`, cited by its own error message, does not exist.
 
-So its current role is none. This note deliberately proposes nothing: reviving
-it, deleting it, or leaving it dormant is the owner's call, and `CLAUDE.md` is
-explicit that a real task is not stopped to rebuild a governance layer. What
-would make the decision: it is worth reviving only if someone would actually
-read the generated context, and worth deleting only if the vendored tooling is
-confusing people. Neither is established.
+**Resolved the same day: the owner chose to revive it.** The dependency cycle
+was a stale manifest rather than a design defect — `server/services/backup.js`
+had already been refactored to remove the real cycle, and says so in its own
+header, but `server/kaaf.module.json` was never updated to match. One further
+false edge came from reading `package.json` for a version string, which a static
+reader cannot distinguish from importing the repository root; that now reads the
+file as data, so the analysis is true rather than exempted.
+
+It is enforced by two CI gates rather than trusted: one fails when the committed
+context no longer matches the manifests, the other when the manifests and the
+code disagree. Both were verified by breaking the manifests deliberately and
+watching them fire. Drift now reports zero errors and zero warnings.
+
+The argument for the gates rather than for the tooling: generated context that
+nobody verifies is worse than none, because it is believed.

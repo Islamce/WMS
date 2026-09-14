@@ -1,12 +1,12 @@
 {
   "_meta": {
     "artifact": "modules/wms-api.json",
-    "bodyDigest": "a4a65cd296a773574cf0506f20865ce48da919c37852e804ce7fe7afa7ce7ca7",
+    "bodyDigest": "8492a2b5014b893476af1bfebc1ccb4801ccb5e4298f5c8175b193c6f055f87c",
     "confidence": "verified",
     "doNotEdit": true,
     "generator": "kaaf",
     "generatorVersion": "0.7.0",
-    "inputDigest": "8f5f19c1b46bdc9b7c02c7f28e3524288722198142d16464698ebe1eb0598902",
+    "inputDigest": "08dbe39622731cf6bcf716f0978412da723de618164887ad98f86f6d6edbb85b",
     "provenanceNote": "Generated from the declared kaaf.repo.json and kaaf.module.json manifests. No wall-clock time or commit SHA is embedded: both would break byte-identical regeneration. Use git history for when and from which commit.",
     "schemaVersion": "1.0.0"
   },
@@ -293,10 +293,14 @@
     }
   ],
   "confidence": "verified",
-  "confidenceReason": "Declared and corroborated by 63 discovered code file(s).",
+  "confidenceReason": "Declared and corroborated by 78 discovered code file(s).",
   "declared": true,
   "declaredConfidence": "verified",
-  "dependedOnBy": [],
+  "dependedOnBy": [
+    "wms-ops-scripts",
+    "wms-runtime-entry",
+    "wms-tests"
+  ],
   "dependsOn": [],
   "discovery": {
     "codeFiles": [
@@ -311,8 +315,11 @@
       "server/index.js",
       "server/middleware/apiRateLimit.js",
       "server/middleware/auth.js",
+      "server/middleware/idempotency.js",
       "server/middleware/rateLimit.js",
+      "server/middleware/subscription.js",
       "server/routes/admin.js",
+      "server/routes/analyticalAttestations.js",
       "server/routes/analytics.js",
       "server/routes/approvals.js",
       "server/routes/attachments.js",
@@ -336,14 +343,21 @@
       "server/routes/reallocation.js",
       "server/routes/receiving.js",
       "server/routes/requests.js",
+      "server/routes/setup.js",
       "server/routes/shipping.js",
       "server/routes/stock.js",
+      "server/routes/subcontractors.js",
+      "server/routes/subscription.js",
       "server/routes/users.js",
       "server/routes/warehouse.js",
       "server/services/allocation.js",
+      "server/services/analyticalAttestations.js",
       "server/services/analytics.js",
       "server/services/approvalMatrix.js",
       "server/services/audit.js",
+      "server/services/autoAllocate.js",
+      "server/services/backup.js",
+      "server/services/documentNumber.js",
       "server/services/email.js",
       "server/services/erp.js",
       "server/services/expiry.js",
@@ -360,8 +374,13 @@
       "server/services/reverseWorkflow.js",
       "server/services/scheduler.js",
       "server/services/sod.js",
+      "server/services/subscription.js",
+      "server/services/tenant.js",
+      "server/services/tenantProfile.js",
+      "server/services/workflowContext.js",
       "server/utils/errors.js",
       "server/utils/validate.js",
+      "server/utils/windowCounter.js",
       "server/workflow/states.js"
     ],
     "discovered": true,
@@ -387,8 +406,11 @@
       "server/kaaf.module.json",
       "server/middleware/apiRateLimit.js",
       "server/middleware/auth.js",
+      "server/middleware/idempotency.js",
       "server/middleware/rateLimit.js",
+      "server/middleware/subscription.js",
       "server/routes/admin.js",
+      "server/routes/analyticalAttestations.js",
       "server/routes/analytics.js",
       "server/routes/approvals.js",
       "server/routes/attachments.js",
@@ -412,14 +434,21 @@
       "server/routes/reallocation.js",
       "server/routes/receiving.js",
       "server/routes/requests.js",
+      "server/routes/setup.js",
       "server/routes/shipping.js",
       "server/routes/stock.js",
+      "server/routes/subcontractors.js",
+      "server/routes/subscription.js",
       "server/routes/users.js",
       "server/routes/warehouse.js",
       "server/services/allocation.js",
+      "server/services/analyticalAttestations.js",
       "server/services/analytics.js",
       "server/services/approvalMatrix.js",
       "server/services/audit.js",
+      "server/services/autoAllocate.js",
+      "server/services/backup.js",
+      "server/services/documentNumber.js",
       "server/services/email.js",
       "server/services/erp.js",
       "server/services/expiry.js",
@@ -436,37 +465,17 @@
       "server/services/reverseWorkflow.js",
       "server/services/scheduler.js",
       "server/services/sod.js",
+      "server/services/subscription.js",
+      "server/services/tenant.js",
+      "server/services/tenantProfile.js",
+      "server/services/workflowContext.js",
       "server/utils/errors.js",
       "server/utils/validate.js",
+      "server/utils/windowCounter.js",
       "server/workflow/states.js"
     ]
   },
-  "driftFindings": [
-    {
-      "evidence": [
-        "server/index.js",
-        "scripts/backup.js",
-        "scripts/fresh-start.js",
-        "scripts/reset-admin.js",
-        "scripts/validate-opening-stock.js"
-      ],
-      "module": "wms-api",
-      "recommendation": "Break the cycle. A cycle is a design defect and blocks merge (docs/kaaf/STANDARDS.md §1).",
-      "severity": "error",
-      "summary": "Discovered imports form a cycle: wms-api -> wms-ops-scripts -> wms-api",
-      "type": "discovered-import-cycle"
-    },
-    {
-      "evidence": [
-        "server/index.js"
-      ],
-      "module": "wms-api",
-      "recommendation": "Add 'wms-ops-scripts' to dependsOn in server/kaaf.module.json, or remove the import (docs/kaaf/STANDARDS.md §1).",
-      "severity": "error",
-      "summary": "'wms-api' imports 'wms-ops-scripts' but does not declare the dependency.",
-      "type": "undeclared-dependency"
-    }
-  ],
+  "driftFindings": [],
   "externalIntegrations": [
     {
       "criticality": "optional",

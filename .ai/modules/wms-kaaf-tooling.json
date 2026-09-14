@@ -1,12 +1,12 @@
 {
   "_meta": {
     "artifact": "modules/wms-kaaf-tooling.json",
-    "bodyDigest": "5ed7de1ac879b388474b7af0ad03d32a9c2275d511e5fea9cf4ff203a501032f",
+    "bodyDigest": "3e90f4273592965638fa4914aab6fa06c65edee47cdf78c924ebd40a17328c36",
     "confidence": "verified",
     "doNotEdit": true,
     "generator": "kaaf",
     "generatorVersion": "0.7.0",
-    "inputDigest": "8f5f19c1b46bdc9b7c02c7f28e3524288722198142d16464698ebe1eb0598902",
+    "inputDigest": "08dbe39622731cf6bcf716f0978412da723de618164887ad98f86f6d6edbb85b",
     "provenanceNote": "Generated from the declared kaaf.repo.json and kaaf.module.json manifests. No wall-clock time or commit SHA is embedded: both would break byte-identical regeneration. Use git history for when and from which commit.",
     "schemaVersion": "1.0.0"
   },
@@ -63,6 +63,7 @@
     ],
     "languages": [
       "json",
+      "markdown",
       "python",
       "shell"
     ],
@@ -74,6 +75,7 @@
       "write"
     ],
     "sourceFiles": [
+      "scripts/architecture/VENDORED.md",
       "scripts/architecture/aggregate.py",
       "scripts/architecture/compat.py",
       "scripts/architecture/generate.py",

@@ -1,25 +1,28 @@
 {
   "_meta": {
     "artifact": "modules/wms-runtime-entry.json",
-    "bodyDigest": "3b7d18713308faddb4c197162e3011ba5cf006975d3414279f42934f63a7089c",
+    "bodyDigest": "494e80a5d3022c7b131b5b357f4941306abc3726a673d97923d3b224bf1a519f",
     "confidence": "verified",
     "doNotEdit": true,
     "generator": "kaaf",
     "generatorVersion": "0.7.0",
-    "inputDigest": "8f5f19c1b46bdc9b7c02c7f28e3524288722198142d16464698ebe1eb0598902",
+    "inputDigest": "08dbe39622731cf6bcf716f0978412da723de618164887ad98f86f6d6edbb85b",
     "provenanceNote": "Generated from the declared kaaf.repo.json and kaaf.module.json manifests. No wall-clock time or commit SHA is embedded: both would break byte-identical regeneration. Use git history for when and from which commit.",
     "schemaVersion": "1.0.0"
   },
   "apis": [],
   "confidence": "verified",
-  "confidenceReason": "Declared and corroborated by 3 discovered code file(s).",
+  "confidenceReason": "Declared and corroborated by 4 discovered code file(s).",
   "declared": true,
   "declaredConfidence": "verified",
   "dependedOnBy": [],
-  "dependsOn": [],
+  "dependsOn": [
+    "wms-api"
+  ],
   "discovery": {
     "codeFiles": [
       "app.js",
+      "design-preview/render-preview.js",
       "ecosystem.config.js",
       "index.js"
     ],
@@ -40,16 +43,27 @@
       ".github/workflows/build-hostinger-native.yml",
       ".github/workflows/ci.yml",
       ".github/workflows/flutter-apk.yml",
+      ".github/workflows/hostinger-release-layout-diagnostic.yml",
       ".github/workflows/mobile-ci.yml",
       ".github/workflows/production-backup.yml",
+      ".github/workflows/production-release.yml",
+      ".github/workflows/subcontractor-ledger-report.yml",
       "CLAUDE.md",
       "DEPLOY-HOSTINGER.md",
       "HOSTINGER-NATIVE-RECOVERY.md",
       "README.md",
       "app.js",
+      "design-preview/UAT-FUNCTIONAL-SLICE-CONTRACT.md",
+      "design-preview/UAT-FUNCTIONAL-SLICE-TEST-EVIDENCE.md",
+      "design-preview/render-preview.js",
+      "design-preview/visual-qa-notes.md",
+      "design-qa.md",
       "docker-compose.yml",
       "docs/ANDROID-UAT-V1.0.md",
+      "docs/CONTRACTING-EDITION-REQUIREMENTS.md",
+      "docs/DEPLOY-PROMPT-VPS.md",
       "docs/HOSTINGER-SCHEDULED-BACKUP.md",
+      "docs/HOSTINGER-VPS-MIGRATION-2026-09-06.md",
       "docs/KYNOX-WMS-V2-EXECUTION-NOTE.md",
       "docs/KYNOX-WMS-V2-IMPLEMENTATION-SEQUENCE.md",
       "docs/KYNOX-WMS-V2-NAVIGATION-MATRIX.md",
@@ -60,14 +74,27 @@
       "docs/KYNOX-WMS-V2-PHASE-2-UAT.md",
       "docs/KYNOX-WMS-V2-REALITY-GATES.md",
       "docs/KYNOX-WMS-V2-TRANSFORMATION-PLAN.md",
+      "docs/LOAD-TEST-BASELINE-2026-09-11.md",
       "docs/OPS-RUNBOOK.md",
       "docs/POSTGRES-MIGRATION.md",
+      "docs/PRODUCT-CRITIQUE-2026-09-12.md",
+      "docs/SUBCONTRACTOR-MATERIALS-UAT-V1.0.md",
       "docs/WMS-ACTIONS-ARTIFACT-INVENTORY-2026-08-01.md",
+      "docs/WMS-CORRECTIVE-RECONCILIATION-2026-08-11.md",
       "docs/WMS-CURRENT-STATUS.md",
       "docs/WMS-DECISION-LOG.md",
+      "docs/WMS-DESIGN-QUALIFICATION-2026-08-18.md",
+      "docs/WMS-DESIGN-RECOVERY-MATRIX-2026-08-18.md",
+      "docs/WMS-GATED-CICD-PIPELINE.md",
       "docs/WMS-INCIDENT-LOG.md",
+      "docs/WMS-MASTER-UAT-V1.0.md",
       "docs/WMS-PROCESS-FLOW-ASSESSMENT.md",
       "docs/WMS-PRODUCTION-RUNBOOK.md",
+      "docs/WMS-REDESIGN-ARCHITECTURE-2026-08-17.md",
+      "docs/WMS-REDESIGN-BASELINE-2026-08-17.md",
+      "docs/WMS-REDESIGN-MARKET-BENCHMARK-2026-08-17.md",
+      "docs/WMS-REDESIGN-SCREEN-INVENTORY-2026-08-17.md",
+      "docs/WMS-REDESIGN-TEST-EVIDENCE-2026-08-17.md",
       "docs/WMS-SESSION-LOG.md",
       "docs/WMS-UNIFIED-AI-HANDOFF.md",
       "docs/WMS-V1.0-EXECUTION-PLAN.md",
@@ -82,19 +109,7 @@
       "package.json"
     ]
   },
-  "driftFindings": [
-    {
-      "evidence": [
-        "app.js",
-        "index.js"
-      ],
-      "module": "wms-runtime-entry",
-      "recommendation": "Add 'wms-api' to dependsOn in kaaf.module.json, or remove the import (docs/kaaf/STANDARDS.md §1).",
-      "severity": "error",
-      "summary": "'wms-runtime-entry' imports 'wms-api' but does not declare the dependency.",
-      "type": "undeclared-dependency"
-    }
-  ],
+  "driftFindings": [],
   "externalIntegrations": [
     {
       "criticality": "required",
@@ -115,7 +130,7 @@
     "ecosystem.config.js",
     "index.js"
   ],
-  "purpose": "Boot the production process under the managed host. Production path, runtime path and required environment flags are defined in CLAUDE.md and are authoritative over this manifest.",
+  "purpose": "Boot the production process. Production runs under Docker Compose on a VPS since 2026-09-06; the managed-host process manager named below is history, not current. Production path, runtime path and required environment flags are defined in CLAUDE.md and are authoritative over this manifest.",
   "readNext": [
     "app.js",
     "ecosystem.config.js",

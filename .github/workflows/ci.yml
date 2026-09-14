@@ -34,6 +34,36 @@ jobs:
       - name: Lint (ESLint + security plugin)
         run: npm run lint
 
+      # The architecture context is generated from the kaaf.module.json
+      # manifests. Without this gate it rots silently: it was last generated on
+      # 2026-08-01, and by 2026-09-14 it still described production as running
+      # under Passenger on a host retired a week earlier — a description an
+      # agent would have acted on. Nothing ran it, so nobody knew.
+      #
+      # Two checks, because they catch different failures. --check fails when
+      # the committed context no longer matches the manifests or was hand
+      # edited. The drift read fails when the manifests and the code disagree:
+      # an undeclared dependency, or an import cycle. Python standard library
+      # only, so there is nothing to install.
+      - name: Architecture context is current (KAAF)
+        run: python3 scripts/architecture/generate.py --check
+
+      - name: Architecture manifests match the code (KAAF drift)
+        run: |
+          python3 - <<'PY'
+          import json, sys
+          drift = json.load(open('.ai/drift.json'))
+          counts = drift.get('counts', {})
+          findings = [f for f in drift.get('findings', []) if f.get('severity') == 'error']
+          print(f"drift: {counts.get('error', 0)} error(s), "
+                f"{counts.get('warning', 0)} warning(s), {counts.get('info', 0)} info")
+          for f in findings:
+              print(f"::error::{f['summary']} — {f.get('recommendation', '')}")
+              for e in f.get('evidence', [])[:5]:
+                  print(f"    {e}")
+          sys.exit(1 if findings else 0)
+          PY
+
       - name: Dependency vulnerability audit (production deps)
         run: npm audit --omit=dev --audit-level=high
 

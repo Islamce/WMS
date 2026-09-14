@@ -1,12 +1,12 @@
 {
   "_meta": {
     "artifact": "index/repository.json",
-    "bodyDigest": "5dcfe5b7ba03dd7288172e68c27f4719214ab10cce0a426850abe9d3a5c396d6",
+    "bodyDigest": "48328b484f908694a050e2a29297913e1fefc0fa5f6db933e6aa7c5bc2298bfc",
     "confidence": "derived",
     "doNotEdit": true,
     "generator": "kaaf",
     "generatorVersion": "0.7.0",
-    "inputDigest": "8f5f19c1b46bdc9b7c02c7f28e3524288722198142d16464698ebe1eb0598902",
+    "inputDigest": "08dbe39622731cf6bcf716f0978412da723de618164887ad98f86f6d6edbb85b",
     "provenanceNote": "Generated from the declared kaaf.repo.json and kaaf.module.json manifests. No wall-clock time or commit SHA is embedded: both would break byte-identical regeneration. Use git history for when and from which commit.",
     "schemaVersion": "1.0.0"
   },
@@ -329,11 +329,11 @@
       "verified": 7
     },
     "driftCounts": {
-      "error": 5,
+      "error": 0,
       "info": 0,
       "warning": 0
     },
-    "hasDriftErrors": true,
+    "hasDriftErrors": false,
     "moduleCount": 7,
     "modulesUndeclared": 0,
     "modulesWithoutOwner": [],
@@ -427,7 +427,9 @@
       "confidence": "verified",
       "consumes": [],
       "declared": true,
-      "dependsOn": [],
+      "dependsOn": [
+        "wms-api"
+      ],
       "id": "wms-ops-scripts",
       "ownedEntities": [
         "operational-procedure"
@@ -441,21 +443,26 @@
       "confidence": "verified",
       "consumes": [],
       "declared": true,
-      "dependsOn": [],
+      "dependsOn": [
+        "wms-api"
+      ],
       "id": "wms-runtime-entry",
       "ownedEntities": [
         "production-process"
       ],
       "owner": "DevOps",
       "path": ".",
-      "purpose": "Boot the production process under the managed host. Production path, runtime path and required environment flags are defined in CLAUDE.md and are authoritative over this manifest.",
+      "purpose": "Boot the production process. Production runs under Docker Compose on a VPS since 2026-09-06; the managed-host process manager named below is history, not current. Production path, runtime path and required environment flags are defined in CLAUDE.md and are authoritative over this manifest.",
       "qualifiedId": "Islamce/WMS#wms-runtime-entry"
     },
     {
       "confidence": "verified",
       "consumes": [],
       "declared": true,
-      "dependsOn": [],
+      "dependsOn": [
+        "wms-api",
+        "wms-ops-scripts"
+      ],
       "id": "wms-tests",
       "ownedEntities": [
         "regression-suite"
