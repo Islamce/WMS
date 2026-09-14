@@ -155,7 +155,32 @@ router.get('/', (req, res) => {
         AND b.remaining_quantity > 0
     )
   `).n;
+  // "How much stock is there" has more than one true answer, and a single
+  // unlabelled number let two screens disagree in the customer's face: this one
+  // summed every batch regardless of owner or status, while AI Stock Analytics
+  // counted only company-owned stock net of reservation. Both are now returned
+  // and each says what it counts, so the screen can stop implying they are the
+  // same figure. `total_stock` keeps its old meaning and value — existing
+  // deployments see no number change, only a clearer label.
   const totalStock = one('SELECT COALESCE(SUM(remaining_quantity), 0) AS n FROM batches').n;
+  // What a picker could actually be given today: ours, released, not blocked,
+  // and not already promised to a request. This is the number allocation.js
+  // works from (quality_status='RELEASED' AND is_blocked=0).
+  const availableStock = one(`
+    SELECT COALESCE(SUM(remaining_quantity - reserved_quantity), 0) AS n FROM batches
+    WHERE COALESCE(owner_type, 'COMPANY') = 'COMPANY'
+      AND quality_status = 'RELEASED' AND is_blocked = 0
+      AND remaining_quantity > reserved_quantity
+  `).n;
+  const subcontractorStock = one(`
+    SELECT COALESCE(SUM(remaining_quantity), 0) AS n FROM batches
+    WHERE owner_type = 'SUBCONTRACTOR'
+  `).n;
+  const heldStock = one(`
+    SELECT COALESCE(SUM(remaining_quantity), 0) AS n FROM batches
+    WHERE COALESCE(owner_type, 'COMPANY') = 'COMPANY'
+      AND (quality_status <> 'RELEASED' OR is_blocked = 1)
+  `).n;
 
   const movementSince = (type, dateExpr) => one(`
     SELECT COALESCE(SUM(quantity), 0) AS n FROM stock_transactions
@@ -174,13 +199,26 @@ router.get('/', (req, res) => {
     GROUP BY b.material_id HAVING quantity > 0
     ORDER BY quantity DESC LIMIT 10
   `);
+  // Bins only, each qualified by its warehouse. Two faults were corrected here.
+  // Falling back to warehouse_code ranked a whole site as if it were a bin, so a
+  // delivery received but not yet put away — an ordinary daily state — appeared
+  // in the ranking as the site itself. And grouping on the bare bin_location
+  // merged RACK-01 in one warehouse with RACK-01 in another into a single bar.
   const topLocations = all(`
-    SELECT COALESCE(NULLIF(b.bin_location, ''), b.warehouse_code) AS code,
+    SELECT COALESCE(b.warehouse_code, '(no site)') || ' · ' || b.bin_location AS code,
            SUM(b.remaining_quantity) AS quantity
     FROM batches b
-    GROUP BY code HAVING quantity > 0
+    WHERE b.bin_location IS NOT NULL AND TRIM(b.bin_location) <> ''
+    GROUP BY b.warehouse_code, b.bin_location HAVING quantity > 0
     ORDER BY quantity DESC LIMIT 10
   `);
+
+  // Received but not put away. Previously hidden inside the bin ranking under a
+  // warehouse code; it is a thing to act on, so it is reported as itself.
+  const unplacedStock = one(`
+    SELECT COALESCE(SUM(remaining_quantity), 0) AS n FROM batches
+    WHERE remaining_quantity > 0 AND (bin_location IS NULL OR TRIM(bin_location) = '')
+  `).n;
 
   const recentTransactions = all(`
     SELECT st.id, st.transaction_type, st.quantity, st.transaction_date,
@@ -193,7 +231,12 @@ router.get('/', (req, res) => {
     ORDER BY st.id DESC LIMIT 10
   `);
 
-  const inOutOverTime = all(`
+  // Every one of the last 30 days, including the quiet ones. SQL can only return
+  // days that have rows, and the chart plots them on a category axis — so a
+  // sparse result made two movements a fortnight apart render side by side and
+  // a dead fortnight look like steady activity. A day with no movement is a
+  // fact about the warehouse, not a missing row.
+  const movementDays = all(`
     SELECT date(transaction_date) AS day,
       SUM(CASE WHEN transaction_type = 'IN' THEN quantity ELSE 0 END) AS in_qty,
       SUM(CASE WHEN transaction_type = 'OUT' THEN quantity ELSE 0 END) AS out_qty
@@ -201,6 +244,15 @@ router.get('/', (req, res) => {
     WHERE date(transaction_date) >= date('now', '-29 days')
     GROUP BY day ORDER BY day
   `);
+  const byDay = Object.fromEntries(movementDays.map((r) => [r.day, r]));
+  const inOutOverTime = [];
+  for (let back = 29; back >= 0; back -= 1) {
+    const date = new Date();
+    date.setUTCDate(date.getUTCDate() - back);
+    const day = date.toISOString().slice(0, 10);
+    const row = byDay[day];
+    inOutOverTime.push({ day, in_qty: row ? row.in_qty : 0, out_qty: row ? row.out_qty : 0 });
+  }
 
   const stockByGroup = all(`
     SELECT COALESCE(NULLIF(m.material_group, ''), 'UNGROUPED') AS material_group,
@@ -231,6 +283,10 @@ router.get('/', (req, res) => {
       empty_locations: emptyLocations,
       occupied_locations: totalLocations - emptyLocations,
       total_stock: totalStock,
+      available_stock: availableStock,
+      held_stock: heldStock,
+      subcontractor_stock: subcontractorStock,
+      unplaced_stock: unplacedStock,
       stock_in_today: stockInToday,
       stock_out_today: stockOutToday,
       stock_in_month: stockInMonth,

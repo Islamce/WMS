@@ -1,18 +1,18 @@
 {
   "_meta": {
     "artifact": "modules/wms-tests.json",
-    "bodyDigest": "72f7811e81dfa14cc2dd542292fea068d5d287a5af2f8301a8c64be5378c4b7f",
+    "bodyDigest": "c7bdec59bc6b34bb561249c86b04a7651c22609c5990d1d770de4b682e81593e",
     "confidence": "verified",
     "doNotEdit": true,
     "generator": "kaaf",
     "generatorVersion": "0.7.0",
-    "inputDigest": "1af3dc172b28c4c0ef9022bed5e43027e502e985180fa6cfac33ce1cc654b106",
+    "inputDigest": "a22550c37271d931d26d61660a4a2ff3fa3aba0879c1395bc26c36da7437422d",
     "provenanceNote": "Generated from the declared kaaf.repo.json and kaaf.module.json manifests. No wall-clock time or commit SHA is embedded: both would break byte-identical regeneration. Use git history for when and from which commit.",
     "schemaVersion": "1.0.0"
   },
   "apis": [],
   "confidence": "verified",
-  "confidenceReason": "Declared and corroborated by 54 discovered code file(s).",
+  "confidenceReason": "Declared and corroborated by 55 discovered code file(s).",
   "declared": true,
   "declaredConfidence": "verified",
   "dependedOnBy": [],
@@ -22,6 +22,7 @@
   ],
   "discovery": {
     "codeFiles": [
+      "tests/e2e/analytics_truth_test.py",
       "tests/e2e/autoseed_guard_test.py",
       "tests/e2e/backup_retention_test.py",
       "tests/e2e/backup_test.py",
@@ -95,6 +96,7 @@
     "parseErrors": [],
     "publicSymbols": [],
     "sourceFiles": [
+      "tests/e2e/analytics_truth_test.py",
       "tests/e2e/autoseed_guard_test.py",
       "tests/e2e/backup_retention_test.py",
       "tests/e2e/backup_test.py",

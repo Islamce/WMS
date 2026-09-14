@@ -86,10 +86,29 @@ batch_ids = [r[0] for r in con.execute(
     'SELECT id FROM batches WHERE material_id=? AND remaining_quantity>0 ORDER BY id', (material_id,)).fetchall()]
 owned_batch = batch_ids[-1]
 
-total_before = con.execute(
-    'SELECT SUM(remaining_quantity-reserved_quantity) FROM batches WHERE material_id=?', (material_id,)).fetchone()[0]
-owned_qty = con.execute(
-    'SELECT remaining_quantity-reserved_quantity FROM batches WHERE id=?', (owned_batch,)).fetchone()[0]
+# What replenishment may plan against, by the rules allocation.js itself uses:
+# ours, released, unblocked, and not already promised. Quality-hold and blocked
+# stock used to be inside this number; it is now reported separately, so this
+# test computes its expectations from the same rules rather than from a plain
+# sum of every batch.
+ISSUABLE = ("COALESCE(owner_type,'COMPANY')='COMPANY' AND quality_status='RELEASED' "
+            "AND is_blocked=0 AND remaining_quantity>reserved_quantity")
+
+
+def issuable_total():
+    con_ = sqlite3.connect(DB)
+    try:
+        return con_.execute(
+            f'SELECT COALESCE(SUM(remaining_quantity-reserved_quantity),0) FROM batches '
+            f'WHERE material_id=? AND {ISSUABLE}', (material_id,)).fetchone()[0]
+    finally:
+        con_.close()
+
+
+total_before = issuable_total()
+owned_qty, owned_is_issuable = con.execute(
+    f'SELECT remaining_quantity-reserved_quantity, CASE WHEN {ISSUABLE} THEN 1 ELSE 0 END '
+    f'FROM batches WHERE id=?', (owned_batch,)).fetchone()
 con.close()
 
 
@@ -113,15 +132,31 @@ con.commit()
 con.close()
 
 after = analytics_item()
+expected_after = total_before - (owned_qty if owned_is_issuable else 0)
 check('P1 replenishment no longer counts the subcontractor-owned batch',
-      after and abs(after['current_stock'] - (total_before - owned_qty)) < 0.001,
+      after and abs(after['current_stock'] - expected_after) < 0.001,
       (after or {}).get('current_stock'))
 check('P1 the owned quantity is reported, not dropped',
       after and abs(after['subcontractor_stock'] - owned_qty) < 0.001,
       (after or {}).get('subcontractor_stock'))
-check('P1 the two halves still add up to the physical total',
-      after and abs((after['current_stock'] + after['subcontractor_stock']) - total_before) < 0.001,
-      after)
+# Three parts now, not two: what we can issue, what is ours but held back for
+# inspection or blocked, and what belongs to somebody else. Nothing may fall
+# between them — a quantity that appears in none of the three has vanished from
+# every screen while still sitting in a bin.
+con = sqlite3.connect(DB)
+physical, reserved_visible = con.execute(
+    f'''SELECT COALESCE(SUM(remaining_quantity),0),
+               COALESCE(SUM(CASE WHEN {ISSUABLE} OR owner_type='SUBCONTRACTOR'
+                                 THEN reserved_quantity ELSE 0 END),0)
+        FROM batches WHERE material_id=?''', (material_id,)).fetchone()
+con.close()
+reported = (after or {}).get('current_stock', 0) + (after or {}).get('held_stock', 0) \
+    + (after or {}).get('subcontractor_stock', 0)
+check('P1 the three parts account for every unit physically present',
+      after and abs(reported - (physical - reserved_visible)) < 0.001,
+      {'reported': reported, 'physical': physical, 'reserved_netted_out': reserved_visible,
+       'current': (after or {}).get('current_stock'), 'held': (after or {}).get('held_stock'),
+       'subcontractor': (after or {}).get('subcontractor_stock')})
 
 # ===== 2. The report itself =====
 c, rep = call('GET', '/api/subcontractor/owned-stock-report', admin)

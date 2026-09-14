@@ -15,3 +15,7 @@ tenants/
 # ever reading the .py beside it, and nobody reads bytecode in a review.
 __pycache__/
 *.pyc
+
+# Scratch probe/diagnostic scripts. Never committed: they take a database path
+# and have none of the guards the reviewed scripts in scripts/ carry.
+.probe-*

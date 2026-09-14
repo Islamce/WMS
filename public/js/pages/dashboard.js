@@ -41,7 +41,7 @@ Pages.dashboard = {
 
   async render(el) {
     this.destroyCharts();
-    el.innerHTML = '<div class="loading">Loading command center…</div>';
+    el.innerHTML = '<div class="loading">Loading dashboard…</div>';
 
     const canKpi = App.can('kpi_dashboard');
     const [dashboardResult, kpiResult] = await Promise.allSettled([
@@ -76,7 +76,7 @@ Pages.dashboard = {
       { level: ek.erp_error > 0 ? 'critical' : 'clear', value: ek.erp_error, label: 'ERP posting errors', detail: 'Requests requiring posting correction', route: 'requests', state: { status: 'ERP Error' } },
       { level: ek.shortage_lines > 0 ? 'warning' : 'clear', value: ek.shortage_lines, label: 'Shortage lines', detail: `${ek.shortage_percentage || 0}% of request lines`, route: 'requests', state: { status: '' } },
       { level: ek.expired_batches > 0 ? 'critical' : 'clear', value: ek.expired_batches, label: 'Expired batches', detail: 'Stock requiring immediate disposition', route: 'expiry' },
-      { level: ek.qr_scan_failure > 0 ? 'warning' : 'clear', value: ek.qr_scan_failure, label: 'Failed QR scans', detail: `${ek.qr_scan_pass || 0} successful scans`, route: 'audit', state: { action: 'QR_SCAN_FAILURE' } },
+      { level: ek.qr_scan_failure > 0 ? 'warning' : 'clear', value: ek.qr_scan_failure, label: 'Failed QR scans', detail: `${ek.qr_scan_pass || 0} successful scans`, route: 'audit', state: { action: 'QR_SCAN_FAIL' } },
       { level: ek.open > 0 ? 'info' : 'clear', value: ek.open, label: 'Open requests', detail: 'Active execution workload', route: 'requests', state: { status: '' } },
       { level: ek.partially_completed > 0 ? 'warning' : 'clear', value: ek.partially_completed, label: 'Partially completed', detail: 'Requests awaiting remaining quantities', route: 'requests', state: { status: 'Partially Completed' } },
     ] : [];
@@ -125,12 +125,16 @@ Pages.dashboard = {
         <div class="cc-section-head"><div><h2>Operational snapshot</h2><p>Physical inventory and today's warehouse movement.</p></div></div>
         <div class="grid kpis cc-kpis">
           ${metric('accent', 'Total materials', UI.fmtQty(k.total_materials || 0), 'Active material records', 'materials', 'materials')}
-          ${metric('accent', 'Total stock', UI.fmtQty(k.total_stock || 0), 'Quantity across all bins', 'batch_tracking', 'batches')}
+          ${metric('accent', 'Stock on hand', UI.fmtQty(k.total_stock || 0), 'Everything in the store, whoever owns it', 'batch_tracking', 'batches')}
+          ${metric('green', 'Available to issue', UI.fmtQty(k.available_stock || 0), 'Released, unblocked, not reserved', 'batch_tracking', 'batches')}
+          ${Number(k.held_stock) > 0 ? metric('amber', 'Held back', UI.fmtQty(k.held_stock), 'Awaiting inspection or blocked', 'quality', 'quality') : ''}
+          ${Number(k.subcontractor_stock) > 0 ? metric('accent', 'Subcontractor-owned', UI.fmtQty(k.subcontractor_stock), 'On site, not ours to issue', 'subcontractor_receiving', 'subcontractor-stock') : ''}
+          ${Number(k.unplaced_stock) > 0 ? metric('amber', 'Not yet put away', UI.fmtQty(k.unplaced_stock), 'Received but in no bin', 'goods_receipt', 'receiving') : ''}
           ${metric('green', 'Stock in today', UI.fmtQty(k.stock_in_today || 0), `${UI.fmtQty(k.stock_in_month || 0)} this month`, 'batch_tracking', 'batches', sparkIn)}
           ${metric('red', 'Stock out today', UI.fmtQty(k.stock_out_today || 0), `${UI.fmtQty(k.stock_out_month || 0)} this month`, 'gi_posting', 'gi-posting', sparkOut)}
           ${metric('green', 'Occupied bins', UI.fmtQty(k.occupied_locations || 0), `${UI.fmtQty(k.total_locations || 0)} total bins`, 'all_locations', 'all-locations')}
           ${metric('amber', 'Empty bins', UI.fmtQty(k.empty_locations || 0), 'Available storage locations', 'empty_locations', 'empty-locations')}
-          ${ek ? metric('green', 'ERP success rate', `${ek.erp_success_rate || 0}%`, `${ek.erp_posting_success || 0} successful postings`, 'kpi_dashboard', 'kpi') : ''}
+          ${ek && ek.erp_staging !== false && ek.erp_success_rate !== null ? metric('green', 'ERP success rate', `${ek.erp_success_rate || 0}%`, `${ek.erp_posting_success || 0} successful postings`, 'kpi_dashboard', 'kpi') : ''}
           ${ek ? metric('accent', 'Completed requests', UI.fmtQty(ek.completed || 0), `${UI.fmtQty(ek.total_requests || 0)} total requests`, 'material_requests', 'requests') : ''}
         </div>
       </section>

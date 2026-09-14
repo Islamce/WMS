@@ -1,12 +1,12 @@
 {
   "_meta": {
     "artifact": "modules/wms-runtime-entry.json",
-    "bodyDigest": "9a9ab735836f1a231e55b6d35d2628813507dc7c8d35c082aacb11e808610aca",
+    "bodyDigest": "777cd4588ab53a565ed7038460ec9dc36308373c0e15a21a1cf2db6a377b9c94",
     "confidence": "verified",
     "doNotEdit": true,
     "generator": "kaaf",
     "generatorVersion": "0.7.0",
-    "inputDigest": "1af3dc172b28c4c0ef9022bed5e43027e502e985180fa6cfac33ce1cc654b106",
+    "inputDigest": "a22550c37271d931d26d61660a4a2ff3fa3aba0879c1395bc26c36da7437422d",
     "provenanceNote": "Generated from the declared kaaf.repo.json and kaaf.module.json manifests. No wall-clock time or commit SHA is embedded: both would break byte-identical regeneration. Use git history for when and from which commit.",
     "schemaVersion": "1.0.0"
   },
@@ -38,10 +38,16 @@
     "publicSymbols": [],
     "sourceFiles": [
       ".claude/agents/README.md",
+      ".claude/agents/wms-data-truth.md",
       ".claude/agents/wms-first-impression.md",
       ".claude/agents/wms-lessons.md",
+      ".claude/agents/wms-market.md",
+      ".claude/agents/wms-mobile.md",
+      ".claude/agents/wms-ops.md",
+      ".claude/agents/wms-performance.md",
       ".claude/agents/wms-reviewer.md",
       ".claude/agents/wms-security.md",
+      ".claude/agents/wms-supply-chain.md",
       ".devcontainer/devcontainer.json",
       ".eslintrc.json",
       ".github/dependabot.yml",

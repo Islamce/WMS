@@ -375,7 +375,9 @@ router.post('/:id/decision', (req, res) => {
     notify.send({ requestNumber: header.request_number, recipientUserId: header.requester_id,
       notificationType: 'REQUEST_APPROVED',
       title: `Request ${header.request_number} ${decision === 'partial' ? 'partially ' : ''}approved`,
-      message: comments || 'Your request was approved and moved to ERP processing.', email: true });
+      message: comments || (usesErpStaging(getTenant().profileKey)
+        ? 'Your request was approved and moved to ERP processing.'
+        : 'Your request was approved and is with the store for picking.'), email: true });
     if (directIssue) {
       notify.notifyPermission('bin_batch_assignment', { requestNumber: header.request_number,
         notificationType: 'WAREHOUSE_QUEUE', title: `Request ${header.request_number} approved and sent to the store`,

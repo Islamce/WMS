@@ -1,7 +1,8 @@
 # The team, checked in
 
-Four agent definitions that travel with this repository — three reviewers and
-one that keeps the record. Any Claude Code
+Nine agent definitions that travel with this repository — a small company's worth
+of specialists: engineering, operations, the trade itself, and the commercial
+side. Eight review; one keeps the record. Any Claude Code
 session opened here can invoke them by name; they are not a running service and
 nothing keeps them alive between sessions. What is permanent is the KNOWLEDGE in
 them, not a process.
@@ -12,6 +13,33 @@ them, not a process.
 | `wms-security` | When routes, middleware, permissions, database scripts or workflows change | It found a line that would have misled an operator trying to get a warehouse out of read-only, and 46 committed bytecode files |
 | `wms-first-impression` | After any change to `public/js`, and before showing the product to a customer | It found nineteen screens showing the user two different names at the same moment, on a change whose author had just declared the problem solved |
 | `wms-lessons` | After a review finds something, after a defect escapes, after an incident | The reviewers find the same *class* of defect repeatedly, because nothing was written down between one session and the next. It writes to `docs/vault` |
+| `wms-data-truth` | After any change to a dashboard, KPI, report, chart or analytics query | Twelve reporting defects in one sitting — three screens answering "how much stock is there" with three different numbers, none of them labelled, and a 30-day chart with two points on it |
+| `wms-ops` | Before a deploy or a migration; any change touching the VPS or the live database | A deploy workflow sat dispatchable and pointed at a host retired weeks earlier, and an approval gate that was documented, cited, and did not exist |
+| `wms-supply-chain` | When a workflow, movement, reservation, allocation, receipt, issue or return changes | The product is sold to contractors, and the failure that costs a pilot is designing for somebody else's warehouse — racked aisles for a store that is two yard areas and three racks |
+| `wms-performance` | When a query, list screen, report or import changes, or a table will grow | One SQLite file, one writer at a time. A slow report does not just feel slow — it holds a lock while a storekeeper is posting a goods issue |
+| `wms-market` | Before a demo or a sales conversation; when a feature is proposed to win customers | The alternative a contractor is really comparing against is Excel and a paper book, and features that win the meeting are not the ones that get renewed |
+| `wms-mobile` | When the Flutter app changes, or the web product changes and the app must follow | The app carries its own screen-name table and already disagrees with the web on eight screens — drift is its normal state, not an exception |
+
+## How they divide the work
+
+Each owns one question nobody else asks:
+
+| | |
+|---|---|
+| `wms-reviewer` | Is the change correct? |
+| `wms-data-truth` | Do the numbers mean what the labels say? |
+| `wms-security` | What can a warehouse employee, or a mistyped command, reach? |
+| `wms-performance` | Does it hold on a real day's data? |
+| `wms-ops` | Is it safe to put in front of a live warehouse? |
+| `wms-supply-chain` | Would a site storekeeper actually work this way? |
+| `wms-first-impression` | What does a user, and a buyer, see? |
+| `wms-market` | Does it win or keep a customer? |
+| `wms-lessons` | What did this teach, and where is it written down? |
+
+Do not run all nine on every change. Run the two or three whose question the
+change actually raises — a naming fix needs `first-impression` and `reviewer`; a
+report needs `data-truth`; a deploy needs `ops` and `security`. Running the whole
+team on a small change is how a review team becomes noise that gets skipped.
 
 ## Why these are project agents rather than a general-purpose collection
 

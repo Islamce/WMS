@@ -70,7 +70,18 @@ c, report = call('GET', '/api/analytics', admin)
 stocked = [item for item in report.get('items', []) if item.get('current_stock', 0) > 0]
 check('no movement evidence reports NONE coverage', c == 200 and report.get('coverage', {}).get('status') == 'NONE', report.get('coverage'))
 check('stocked materials are UNKNOWN, never DEAD, with no history', stocked and all(item['classification'] == 'UNKNOWN' for item in stocked), stocked[:3])
-check('coverage warning states absence is not proof', 'must not be interpreted' in (report.get('coverage', {}).get('warning') or ''), report.get('coverage'))
+# The claim that must survive any rewording: silence in the data is not evidence
+# that nothing moved. The original wording ("No observed movement must not be
+# interpreted as proof that no movement occurred") carried it as a double
+# negative that a contractor could not parse, so the sentence was rewritten in
+# plain English. This checks the MEANING, not one phrasing — it must disclaim
+# proof, and it must not assert that nothing moved.
+_warning = (report.get('coverage', {}).get('warning') or '').lower()
+check('coverage warning states absence is not proof',
+      any(phrase in _warning for phrase in
+          ('must not be interpreted', 'has not been proven', 'is not proof', 'does not prove'))
+      and 'no movement occurred.' not in _warning.replace('that no movement occurred', ''),
+      report.get('coverage'))
 
 batch_columns = {row['name'] for row in db_rows('PRAGMA table_info(stock_movement_import_batches)')}
 history_columns = {row['name'] for row in db_rows('PRAGMA table_info(stock_movement_history)')}

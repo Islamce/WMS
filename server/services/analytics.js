@@ -140,7 +140,7 @@ function movementCoverage(movements) {
     assumption: 'Only the operational ledger may establish continuous global coverage. Import batches contribute observed issue dates, not completeness.',
     warning: complete ? null : unresolvedOperationalRows > 0
       ? `${unresolvedOperationalRows} operational movement row(s) require category review. No observed movement must not be interpreted as proof that no movement occurred.`
-      : 'Movement coverage is incomplete. No observed movement must not be interpreted as proof that no movement occurred.',
+      : 'Not every day in the window has recorded movement, so a material showing no issues here has not been proven unused — it may simply have no history yet.',
   };
 }
 
@@ -176,9 +176,22 @@ function analyzeWithCoverage() {
   // real material in a real bin, it just answers a different question. Its own
   // depletion signal lives in the owned-stock report, where the party who has to
   // act on it can see it.
+  // The same argument, finished. The comment above was applied to ONE kind of
+  // stock the company cannot draw on — somebody else's — and not to the other
+  // two. A batch on QUALITY_HOLD and a blocked batch are equally undrawable:
+  // allocation.js:23-24 takes quality_status='RELEASED' AND is_blocked=0 only.
+  // Counting them as stock let ninety units nobody can touch suppress a reorder
+  // signal on the units they can. current_stock is now what a picker could
+  // actually be given; what is held is reported alongside, not dropped, because
+  // it is real material in a real bin that simply answers a different question.
   const materials = db.prepare(`SELECT m.id, m.item_code, m.description, m.unit, m.price, m.currency, m.material_group, m.plant,
     COALESCE((SELECT SUM(remaining_quantity-reserved_quantity) FROM batches
-              WHERE material_id=m.id AND COALESCE(owner_type,'COMPANY')='COMPANY'),0) AS current_stock,
+              WHERE material_id=m.id AND COALESCE(owner_type,'COMPANY')='COMPANY'
+                AND quality_status='RELEASED' AND is_blocked=0
+                AND remaining_quantity>reserved_quantity),0) AS current_stock,
+    COALESCE((SELECT SUM(remaining_quantity) FROM batches
+              WHERE material_id=m.id AND COALESCE(owner_type,'COMPANY')='COMPANY'
+                AND (quality_status<>'RELEASED' OR is_blocked=1)),0) AS held_stock,
     COALESCE((SELECT SUM(remaining_quantity-reserved_quantity) FROM batches
               WHERE material_id=m.id AND owner_type='SUBCONTRACTOR'),0) AS subcontractor_stock,
     (SELECT MIN(receiving_date) FROM batches
@@ -231,6 +244,9 @@ function analyzeWithCoverage() {
       // number is never silently missing from a stock screen, and excluded from
       // every replenishment signal below.
       subcontractor_stock: Number(material.subcontractor_stock),
+      // Ours, on site, and not issuable today: awaiting inspection, or blocked.
+      // Same treatment for the same reason — visible, never planned against.
+      held_stock: Number(material.held_stock),
       stock_value: round(Number(material.current_stock) * (material.price || 0)),
       out_qty_window: round(grossIssues), out_events_window: issueEvents, net_consumption: round(netConsumption),
       avg_monthly_consumption: round(Math.max(0, netConsumption) / WINDOW_DAYS * 30),
@@ -295,7 +311,16 @@ function weeklyTrend(movements) {
 function buildInsights(items, coverage) {
   const insights = [];
   const list = (rows) => rows.slice(0, 3).map((item) => item.item_code).join(', ') + (rows.length > 3 ? ` (+${rows.length - 3} more)` : '');
-  if (coverage.warning) insights.push({ severity: 'warning', title: `${coverage.status.toLowerCase()} movement coverage (${coverage.coverage_percent}%)`, detail: coverage.warning });
+  // Was `${status.toLowerCase()} movement coverage`, which printed "none
+  // movement coverage (0%)" as the headline on every new tenant.
+  const COVERAGE_TITLE = {
+    NONE: 'No movement history yet',
+    PARTIAL: `Partial movement history (${coverage.coverage_percent}% of the window)`,
+    COMPLETE: 'Complete movement history',
+  };
+  if (coverage.warning) insights.push({ severity: 'warning',
+    title: COVERAGE_TITLE[coverage.status] || 'Movement history is incomplete',
+    detail: coverage.warning });
   const dead = items.filter((item) => item.classification === 'DEAD');
   if (dead.length) insights.push({ severity: 'warning', title: `${dead.length} confirmed dead-stock material(s)`, detail: `Complete coverage shows no issues in the analysis window: ${list(dead)}.` });
   const unknown = items.filter((item) => item.classification === 'UNKNOWN');

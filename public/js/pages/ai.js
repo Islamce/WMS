@@ -126,7 +126,7 @@ Pages.ai = {
               <td class="text-right">${i.reorder_point}</td>
               <td class="text-right">${i.eoq ?? '—'}</td>
               <td class="text-right">${UI.fmtQty(i.stock_value)}</td>
-              <td>${i.overstock ? '<span class="badge pending">overstock</span>' : ''}${i.below_reorder ? '<span class="badge OUT">understock</span>' : ''}${i.attested_review_required && i.attestation ? `<span class="badge pending" title="${UI.esc(i.attestation.review_message)}">ATTESTED_PAYLOAD_UNVERIFIED</span>` : ''}</td>
+              <td>${i.overstock ? '<span class="badge pending">overstock</span>' : ''}${i.below_reorder ? '<span class="badge OUT">understock</span>' : ''}${i.attested_review_required && i.attestation ? `<span class="badge pending" title="${UI.esc(i.attestation.review_message)}">Attested — unverified</span>` : ''}</td>
             </tr>`).join('')}</tbody>
         </table></div>
       </div>`;
