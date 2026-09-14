@@ -1,12 +1,12 @@
 {
   "_meta": {
     "artifact": "modules/wms-runtime-entry.json",
-    "bodyDigest": "ebd69e8b842c455e560902e353b8dd34d4da6cf751f789d464055c2ef2168540",
+    "bodyDigest": "9ec0b8989df2b2687584f556191721c711f9ba1d75f6afa5f664ecd1066c333e",
     "confidence": "verified",
     "doNotEdit": true,
     "generator": "kaaf",
     "generatorVersion": "0.7.0",
-    "inputDigest": "1db2d0c1fd7ac7f4eed3a5409e831ca5438205f13cd8d47adc0c6b75df3809ab",
+    "inputDigest": "6c2d90ac69c78d15f584baeda2a012700e43e0b900fab8aa0966b16df2cb8e34",
     "provenanceNote": "Generated from the declared kaaf.repo.json and kaaf.module.json manifests. No wall-clock time or commit SHA is embedded: both would break byte-identical regeneration. Use git history for when and from which commit.",
     "schemaVersion": "1.0.0"
   },
@@ -37,6 +37,10 @@
     "parseErrors": [],
     "publicSymbols": [],
     "sourceFiles": [
+      ".claude/agents/README.md",
+      ".claude/agents/wms-first-impression.md",
+      ".claude/agents/wms-reviewer.md",
+      ".claude/agents/wms-security.md",
       ".devcontainer/devcontainer.json",
       ".eslintrc.json",
       ".github/dependabot.yml",
