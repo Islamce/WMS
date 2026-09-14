@@ -65,7 +65,7 @@ Pages.expiry = {
         <div class="kpi amber"><div class="label">Critical (≤30d)</div><div class="value">${summary.CRITICAL || 0}</div></div>
         <div class="kpi amber"><div class="label">Early Warning (≤90d)</div><div class="value">${summary.EARLY_WARNING || 0}</div></div>
       </div>
-      <div class="card"><div class="toolbar"><h3 class="mb-0">Expiry Alerts</h3><div class="spacer"></div><span id="ex-export"></span></div><div class="table-wrap"><table>
+      <div class="card"><div class="toolbar"><h3 class="mb-0">Expiry &amp; Shelf Life</h3><div class="spacer"></div><span id="ex-export"></span></div><div class="table-wrap"><table>
         <thead><tr><th>Batch</th><th>Material</th><th>WH / Bin</th><th class="text-right">Qty</th><th>Expiry</th><th>Days</th><th>Level</th></tr></thead>
         <tbody>${alerts.map((a) => `
           <tr class="row-link" data-batch="${UI.esc(a.batch_number)}" role="button" tabindex="0" aria-label="Open batch ${UI.esc(a.batch_number)} in Batch Tracking">
@@ -97,7 +97,7 @@ Pages.quality = {
   async render(el) {
     this.el = el;
     el.innerHTML = `
-      <div class="card"><h3>🔬 Pending Inspection <span class="badge pending" id="ql-count"></span></h3>
+      <div class="card"><h3>Quality Inspection <span class="badge pending" id="ql-count"></span></h3>
         <p class="muted">Every received batch lands here on Quality Hold. Only this step may change quality status;
         held/blocked batches are excluded from FIFO/FEFO allocation and QR validation.</p>
         <div class="table-wrap" id="ql-pending"><div class="loading">Loading…</div></div></div>
@@ -171,7 +171,7 @@ Pages.quality = {
 Pages.warehousesMaster = {
   async render(el) {
     this.el = el;
-    el.innerHTML = `<div class="card"><div class="toolbar"><h3 class="mb-0">Warehouse Master</h3>
+    el.innerHTML = `<div class="card"><div class="toolbar"><h3 class="mb-0">Warehouses</h3>
       <select id="wm-project" style="max-width:220px"><option value="">All projects</option></select>
       <div class="spacer"></div>
       <button class="btn" id="wm-add">+ Add Warehouse</button></div>
@@ -251,7 +251,7 @@ Pages.binsMaster = {
   async render(el) {
     this.el = el;
     this.meta = await Api.get('/api/meta');
-    el.innerHTML = `<div class="card"><div class="toolbar"><h3 class="mb-0">Bin Location Master</h3><div class="spacer"></div>
+    el.innerHTML = `<div class="card"><div class="toolbar"><h3 class="mb-0">Bin Locations</h3><div class="spacer"></div>
       <button class="btn secondary" id="bm-upload">⬆ Mass Upload</button>
       <button class="btn" id="bm-add">+ Add Bin</button></div>
       <p class="muted">Compact format e.g. <code>R-03-02-23</code>; expanded e.g. <code>WH01-ZA-R03-L02-C23</code>.</p>
@@ -306,7 +306,7 @@ Pages.binsMaster = {
 Pages.movementTypes = {
   async render(el) {
     this.el = el;
-    el.innerHTML = `<div class="card"><div class="toolbar"><h3 class="mb-0">Movement Type Configuration</h3><div class="spacer"></div>
+    el.innerHTML = `<div class="card"><div class="toolbar"><h3 class="mb-0">Movement Types</h3><div class="spacer"></div>
       <button class="btn" id="mt-add">+ Add Movement Type</button></div>
       <div class="table-wrap" id="mt-table"><div class="loading">Loading…</div></div></div>`;
     el.querySelector('#mt-add').addEventListener('click', () => this.form());

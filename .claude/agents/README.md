@@ -1,6 +1,7 @@
-# The review team, checked in
+# The team, checked in
 
-Three reviewer definitions that travel with this repository. Any Claude Code
+Four agent definitions that travel with this repository — three reviewers and
+one that keeps the record. Any Claude Code
 session opened here can invoke them by name; they are not a running service and
 nothing keeps them alive between sessions. What is permanent is the KNOWLEDGE in
 them, not a process.
@@ -10,6 +11,7 @@ them, not a process.
 | `wms-reviewer` | Before merging or deploying any change | It was written from the defects that reached a branch: a document number that could be issued twice, and a third table naming screens |
 | `wms-security` | When routes, middleware, permissions, database scripts or workflows change | It found a line that would have misled an operator trying to get a warehouse out of read-only, and 46 committed bytecode files |
 | `wms-first-impression` | After any change to `public/js`, and before showing the product to a customer | It found nineteen screens showing the user two different names at the same moment, on a change whose author had just declared the problem solved |
+| `wms-lessons` | After a review finds something, after a defect escapes, after an incident | The reviewers find the same *class* of defect repeatedly, because nothing was written down between one session and the next. It writes to `docs/vault` |
 
 ## Why these are project agents rather than a general-purpose collection
 
@@ -40,9 +42,15 @@ reviewer that skims is worse than none because its silence gets trusted.
 
 ## The rule that makes them worth having
 
-**They review, they never edit.** Every definition says so. A reviewer that fixes
-what it finds stops being independent, and its next report becomes a description
-of its own work.
+**The reviewers review, they never edit.** Each of the three definitions says so.
+A reviewer that fixes what it finds stops being independent, and its next report
+becomes a description of its own work.
+
+`wms-lessons` is the deliberate exception and the only one that writes. It is
+allowed to, because it writes **only** under `docs/vault` — never product code,
+tests or configuration. It records what the reviewers found; it does not act on
+it. Keeping those two jobs in separate agents is what stops the record from
+becoming an account of the recorder's own work.
 
 They are also worth most on work whose author is confident. The single most
 valuable finding so far came from asking a reviewer to check claims an author had
@@ -57,3 +65,15 @@ every push. The agents are for the questions those cannot answer.
 
 Nor do they replace a person using the product for a day. No agent has ever
 noticed that a screen is annoying to use.
+
+## The second brain
+
+`docs/vault` is an Obsidian vault committed to the repository, owning one thing:
+**how work on this product actually failed, and what caught it.** It links to
+`CLAUDE.md`, the decision log and the incident log rather than restating them.
+
+Open it with Obsidian → *Open folder as vault* → `docs/vault`, and start at
+`Map/00 Start Here.md`. `wms-lessons` proposes the notes; a human decides whether
+the lesson was real. The bar is deliberately high — a lesson must have been paid
+for. A vault of forty notes gets read; a vault of four hundred is where the four
+that mattered go to be lost.

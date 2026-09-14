@@ -4,7 +4,7 @@ window.Pages = window.Pages || {};
 Pages.giPosting = {
   async render(el) {
     this.el = el;
-    el.innerHTML = `<div class="card"><h3>Goods Issue Posting Queue</h3>
+    el.innerHTML = `<div class="card"><h3>Goods Issue Posting</h3>
       <div class="table-wrap" id="gi-table"><div class="loading">Loading…</div></div></div>
       <div id="gi-detail"></div>`;
     await this.loadQueue();

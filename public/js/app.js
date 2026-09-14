@@ -128,17 +128,6 @@ MODULES.forEach((m) => m.items.forEach((it) => { NAV_ITEMS.push(Object.assign({ 
 ROUTE_MODULE['request-detail'] = ROUTE_MODULE['requests'];
 
 /**
- * Route -> page module and permission. It deliberately carries NO screen name.
- *
- * It used to carry `title`, rendered as the breadcrumb above the page, while the
- * sidebar rendered the MODULES label — so 19 screens showed the user two
- * different names for the screen they were standing on, at the same moment.
- * Deleting the sidebar's own table was not enough; this was the third one.
- *
- * Titles come from MODULES via routeTitle() below. The four routes here with no
- * MODULES entry keep a title, because nothing else names them.
- */
-/**
  * The screen a permission protects, by its key.
  *
  * `permissions.label` in the database names these screens too — a fourth table,
@@ -152,10 +141,19 @@ ROUTE_MODULE['request-detail'] = ROUTE_MODULE['requests'];
  * `approvals_high_value` and the attestation keys are authorities, not screens.
  */
 function permissionScreenName(key, storedLabel) {
-  const item = NAV_ITEMS.find((it) => (Array.isArray(it.permission)
-    ? it.permission[0] === key
-    : it.permission === key));
-  return item ? item.label : storedLabel;
+  // A screen this key ALONE opens outranks a screen that merely lists it first.
+  // Nav order decided the name before, and nav order is arbitrary:
+  // `subcontractor_admin` is listed first on Returns to Owner but is the SOLE
+  // key of Subcontractors & Categories, so the checkbox granting subcontractor
+  // master data was labelled after the returns screen. On a control that grants
+  // authority, the wrong screen's name is worse than the stale seeded one.
+  const exclusive = NAV_ITEMS.find((it) => it.permission === key);
+  if (exclusive) return exclusive.label;
+  // No screen is gated on this key alone. The route that lists it FIRST is the
+  // one it principally opens (`goods_receipt` gates Goods Receipt, and also
+  // QR & Label Printing and Import Data behind other keys).
+  const primary = NAV_ITEMS.find((it) => Array.isArray(it.permission) && it.permission[0] === key);
+  return primary ? primary.label : storedLabel;
 }
 
 function routeTitle(route) {
@@ -164,6 +162,17 @@ function routeTitle(route) {
   return (ROUTE_PAGES[route] || {}).title || '';
 }
 
+/**
+ * Route -> page module and permission. It deliberately carries NO screen name.
+ *
+ * It used to carry `title`, rendered as the breadcrumb above the page, while the
+ * sidebar rendered the MODULES label — so 19 screens showed the user two
+ * different names for the screen they were standing on, at the same moment.
+ * Deleting the sidebar's own table was not enough; this was the third one.
+ *
+ * Titles come from MODULES via routeTitle() below. The four routes here with no
+ * MODULES entry keep a title, because nothing else names them.
+ */
 const ROUTE_PAGES = {
   'home': { title: 'Home', page: 'home', permission: null }, // launchpad — any signed-in user
   'dashboard': { page: 'dashboard', permission: 'dashboard' },

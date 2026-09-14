@@ -85,7 +85,7 @@ Pages.dashboard = {
       <section class="cc-hero">
         <div>
           <span class="cc-eyebrow">LIVE OPERATIONS</span>
-          <h1>Warehouse Command Center</h1>
+          <h1>Dashboard</h1>
           <p>Current stock position, execution workload and exceptions requiring action.</p>
           <div class="page-head-context">
             <span>${new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>

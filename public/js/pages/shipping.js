@@ -10,7 +10,7 @@ Pages.shipping = {
     el.innerHTML = `
       <div class="card">
         <div class="toolbar mb-0">
-          <h3 class="mb-0">${t('Shipping & Outbound')}</h3>
+          <h3 class="mb-0">Packing &amp; Dispatch</h3>
           <div class="spacer"></div>
           <button class="btn" id="sh-new">+ ${t('New delivery order')}</button>
         </div>

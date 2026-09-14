@@ -120,7 +120,7 @@ const SubcontractorDeliveries = {
     el.innerHTML = `
       <div class="card">
         <div class="toolbar">
-          <h3 class="mb-0">Subcontractor Deliveries</h3>
+          <h3 class="mb-0">Deliveries &amp; Quality</h3>
           <select id="dq-warehouse" style="max-width:200px"><option value="">All warehouses</option>
             ${warehouseOptions(this.warehouses)}</select>
           <select id="dq-status" style="max-width:200px"><option value="">All statuses</option>
@@ -260,7 +260,7 @@ Pages.subcontractorStock = {
     this.el = el;
     const meta = await Api.get('/api/meta');
     el.innerHTML = `<div class="card">
-      <div class="toolbar"><h3 class="mb-0">Subcontractor Material — On Hand</h3>
+      <div class="toolbar"><h3 class="mb-0">Subcontractor Stock</h3>
         <select id="ss-warehouse" style="max-width:220px"><option value="">All warehouses</option>
           ${warehouseOptions(meta.warehouses)}</select>
         <div class="spacer"></div>

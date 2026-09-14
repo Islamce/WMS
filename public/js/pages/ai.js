@@ -46,7 +46,7 @@ Pages.ai = {
       </div>
 
       <div class="card">
-        <h3>🤖 AI Insights</h3>
+        <h3>AI Stock Analytics</h3>
         ${data.insights.map((i) => `
           <div class="insight ${i.severity}">
             <div class="t"><span class="badge ${sevBadge[i.severity] || 'role'}">${i.severity.toUpperCase()}</span> ${UI.esc(i.title)}</div>

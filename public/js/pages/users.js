@@ -178,7 +178,7 @@ Pages.users = {
           ${permissions.map((p) => `
             <label class="perm-item">
               <input type="checkbox" value="${p.id}" ${p.direct ? 'checked' : ''} />
-              <span>${UI.esc(p.label)}
+              <span>${UI.esc(App.permissionScreenName(p.key, p.label))}
                 ${p.from_role ? '<div class="via-role">✓ via role</div>' : ''}
               </span>
             </label>`).join('')}

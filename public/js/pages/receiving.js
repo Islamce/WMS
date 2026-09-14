@@ -244,7 +244,7 @@ Pages.qrPrinting = {
   async render(el) {
     this.el = el;
     el.innerHTML = `<div class="card">
-        <div class="toolbar"><h3 class="mb-0">QR Label Printing</h3><div class="spacer"></div>
+        <div class="toolbar"><h3 class="mb-0">QR &amp; Label Printing</h3><div class="spacer"></div>
           <input type="text" class="search-input" id="qr-search" placeholder="Search material / batch / QR…">
           <button class="btn sm" id="qr-pdf-all">📄 PDF — all shown</button></div>
         <div id="qr-list"><div class="loading">Loading…</div></div></div>`;

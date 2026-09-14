@@ -174,14 +174,18 @@ function main() {
   console.log('A ten-minute demo, in order:');
   console.log('  1. Goods Receipt      — receive 100 bags of CEM-OPC-50 into SITE-01');
   console.log('  2. Quality Inspection — release the batch (it arrives on hold)');
-  console.log('  3. Goods Receipt      — put it away in SITE-01-RACK-01');
+  console.log('  3. Goods Receipt      — put it away in RACK-01 (Covered store)');
   console.log('  4. Create Material Request — ask for 10 back out, then approve it');
   console.log('  5. My Picking Tasks   — claim it, pick it, post the issue');
   if (args.secondUser) {
-    console.log('\n  To show segregation of duties: approve as the demo account, then try');
-    console.log('  to post the issue as the storekeeper account — and then the other way');
-    console.log('  round, which is refused. That control is what stops a storekeeper');
+    console.log('\n  To show segregation of duties: approve as the demo account, then post');
+    console.log('  the issue from Goods Issue Posting as the storekeeper account. Two');
+    console.log('  people, two steps — that is the control that stops a storekeeper');
     console.log('  issuing material to himself.');
+    console.log('  The storekeeper holds gi_posting but NOT approvals, material_requests');
+    console.log('  or picking, so those screens are simply absent from his menu. Do not');
+    console.log('  try to approve as him expecting a refusal message: he never gets that');
+    console.log('  far, and an empty menu is a poor thing to show a buyer.');
   }
 }
 
