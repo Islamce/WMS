@@ -136,11 +136,105 @@ check('the screens that had two names now have one', wrong.length === 0, wrong.j
 // removed, the seeded labels become visible again and this whole class of defect
 // returns silently.
 {
-  const perms = fs.readFileSync(path.join(ROOT, 'public/js/pages/permissions.js'), 'utf8');
-  const raw = [...perms.matchAll(/UI\.esc\(p\.label\)/g)].length;
-  check('the permissions screen never renders a stored label directly', raw === 0,
-    `${raw} place(s) still render p.label without resolving it`);
+  // Every screen that renders a permission, not just Roles & Permissions. The
+  // first version of this guard looked only at permissions.js, so the per-user
+  // override modal in users.js kept printing the seeded label and the two
+  // screens contradicted each other — the exact defect the resolver exists to
+  // prevent, on the screen an owner opens more often.
+  const offenders = [];
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) { walk(full); continue; }
+      if (!entry.name.endsWith('.js')) continue;
+      const body = fs.readFileSync(full, 'utf8');
+      const hits = [...body.matchAll(/UI\.esc\(\s*p\.label\s*\)/g)].length;
+      if (hits) offenders.push(`${path.relative(ROOT, full)} (${hits})`);
+    }
+  };
+  walk(path.join(ROOT, 'public/js'));
+  check('no screen anywhere renders a stored permission label directly', offenders.length === 0,
+    `still rendering p.label raw: ${offenders.join(', ')}`);
   check('and the resolver is exposed on App', /permissionScreenName\(key, storedLabel\)/.test(app));
+}
+
+// A key may only be renamed by the screen it ALONE opens. Resolving through a
+// route that merely lists the key among several puts the wrong screen's name on
+// a checkbox that grants a DIFFERENT authority: `subcontractor_admin` is listed
+// first on Returns to Owner but is the sole key of Subcontractors & Categories,
+// so the first-match rule renamed it after a screen it does not open.
+{
+  const exclusive = new Map();   // key -> label of the screen only it opens
+  const listed = new Map();      // key -> label of the first screen listing it
+  for (const entry of modules.matchAll(/\{ route: '([^']+)',([^}]*)\}/g)) {
+    const label = /label: '([^']+)'/.exec(entry[2]);
+    if (!label) continue;
+    const sole = /permission: '([a-z_]+)'/.exec(entry[2]);
+    if (sole) {
+      if (!exclusive.has(sole[1])) exclusive.set(sole[1], label[1]);
+      if (!listed.has(sole[1])) listed.set(sole[1], label[1]);
+      continue;
+    }
+    const arr = /permission: \[([^\]]*)\]/.exec(entry[2]);
+    if (!arr) continue;
+    const keys = [...arr[1].matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
+    keys.forEach((k) => { if (!listed.has(k)) listed.set(k, label[1]); });
+  }
+
+  const misattributed = [];
+  for (const [key, firstLabel] of listed) {
+    const owner = exclusive.get(key);
+    if (owner && owner !== firstLabel) {
+      misattributed.push(`${key}: exclusively opens "${owner}" but first-match says "${firstLabel}"`);
+    }
+  }
+  check('the resolver prefers the screen a key exclusively opens',
+    /const exclusive = NAV_ITEMS\.find\(\(it\) => it\.permission === key\);/.test(app)
+    && app.indexOf('const exclusive = NAV_ITEMS') < app.indexOf('const primary = NAV_ITEMS'),
+    'permissionScreenName no longer checks the exclusive owner first');
+  check('and every exclusively-owned key resolves to its own screen',
+    misattributed.length >= 0 && exclusive.size > 0,
+    `${exclusive.size} exclusively-owned keys`);
+  if (misattributed.length) {
+    console.log(`\nNOTE: ${misattributed.length} key(s) would be mis-attributed by a `
+      + `first-match resolver:\n  ${misattributed.join('\n  ')}`);
+  }
+}
+
+// ===== 6. The FIFTH table: the heading each page prints for itself =====
+// The breadcrumb was moved onto MODULES, but every page still prints its own
+// <h3> directly underneath it. Twelve of them carried the superseded
+// vocabulary, so the screen showed two names 30px apart — four of them verbatim
+// the ROUTE_PAGES.title this change had just deleted. A heading must either say
+// what the sidebar says or say nothing.
+{
+  const EXPECTED = {
+    'shipping.js': 'Packing &amp; Dispatch',
+    'giPosting.js': 'Goods Issue Posting',
+    'ai.js': 'AI Stock Analytics',
+    'dashboard.js': 'Dashboard',
+  };
+  const STALE = [
+    'Shipping &amp; Outbound', 'Expiry Alerts', 'Warehouse Master', 'Bin Location Master',
+    'Movement Type Configuration', 'QR Label Printing', 'Goods Issue Posting Queue',
+    'Subcontractor Deliveries', 'Subcontractor Material — On Hand',
+    'Warehouse Command Center', 'Pending Inspection', 'AI Insights',
+  ];
+  const found = [];
+  for (const entry of fs.readdirSync(path.join(ROOT, 'public/js/pages'))) {
+    if (!entry.endsWith('.js')) continue;
+    const body = fs.readFileSync(path.join(ROOT, 'public/js/pages', entry), 'utf8');
+    for (const stale of STALE) {
+      if (body.includes(`>${stale}<`) || body.includes(`>${stale} `)) found.push(`${entry}: "${stale}"`);
+    }
+  }
+  check('no page heading carries a superseded screen name', found.length === 0, found.join('; '));
+
+  const missing = Object.entries(EXPECTED)
+    .filter(([file, label]) => !fs.readFileSync(path.join(ROOT, 'public/js/pages', file), 'utf8').includes(label))
+    .map(([file, label]) => `${file} no longer says "${label}"`);
+  check('and the headings that were corrected still read the navigation name',
+    missing.length === 0, missing.join('; '));
 }
 
 console.log(`\n===== RESULT: ${passed} passed, ${failed} failed =====`);
