@@ -357,3 +357,33 @@ The rest of that critique is not recoverable verbatim, which is exactly why this
 document exists as a file. This is a fresh critique of the current product, not
 a reconstruction of the old one — the product it examines has changed materially
 since, having gained tenants, editions and the whole Contracting feature set.
+
+---
+
+## 9. DRIFT: the KAAF architecture context is dormant and was not used
+
+Recorded 2026-09-14 because the owner asked whether it had been consulted. It
+had not, and the reason is not an oversight: `CLAUDE.md` is the mandatory
+starting point for every agent on this repository and does not mention KAAF at
+all, so nothing in the instructions routes work through it.
+
+What the evidence says, so a later decision does not have to re-derive it:
+
+- `.ai/` was last generated **2026-08-01**. Many pull requests have landed since.
+- Its production description was **factually wrong** — Passenger on the shared
+  host retired on 2026-09-06. That is the one thing corrected here, because a
+  future agent reading it would run commands against a path that no longer
+  exists. Everything else is left alone.
+- **The generator cannot run.** `generate.py --check` fails on a dependency
+  cycle, `wms-api -> wms-ops-scripts -> wms-api`, declared by hand in the two
+  module manifests. The same failure exists on `main`, so it predates this work.
+- **Nothing invokes it.** No workflow runs it, despite `VENDORED.md` describing
+  "CI gates cheap enough to run on every pull request".
+- `docs/kaaf/STANDARDS.md`, cited by its own error message, does not exist.
+
+So its current role is none. This note deliberately proposes nothing: reviving
+it, deleting it, or leaving it dormant is the owner's call, and `CLAUDE.md` is
+explicit that a real task is not stopped to rebuild a governance layer. What
+would make the decision: it is worth reviving only if someone would actually
+read the generated context, and worth deleting only if the vendored tooling is
+confusing people. Neither is established.
