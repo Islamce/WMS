@@ -59,7 +59,22 @@ for (const [, route, label] of items) {
 check('no two screens share a name', duplicates.length === 0, duplicates.join('; '));
 check('no screen name is too short to identify it', terse.length === 0, terse.join('; '));
 
-// ===== 3. The names people disagreed about are settled =====
+// ===== 3. No THIRD table names a screen =====
+// Deleting the sidebar's table was not enough. ROUTE_PAGES carried a `title`
+// rendered as the breadcrumb above the page, so 19 screens showed the sidebar
+// name and the breadcrumb name at the same moment, on the same screen. Titles
+// now come from MODULES; only routes with no MODULES entry may carry one.
+{
+  const routePages = app.slice(app.indexOf('const ROUTE_PAGES = {'));
+  const withTitle = [...routePages.matchAll(/'?([a-z0-9-]+)'?:\s*\{[^}]*title: '([^']+)'/g)];
+  const shadowing = withTitle.filter(([, route]) => byRoute.has(route))
+    .map(([, route, title]) => `${route}: MODULES says "${byRoute.get(route)}", ROUTE_PAGES says "${title}"`);
+  check('no route carries a second name of its own', shadowing.length === 0, shadowing.join('; '));
+  check('the breadcrumb reads its name from the one table',
+    /renderLayout\(activeMenu, routeTitle\(/.test(app));
+}
+
+// ===== 4. The names people disagreed about are settled =====
 // Spot-checks on the worst offenders, so a silent revert to either vocabulary
 // is caught rather than merely being inconsistent again.
 const settled = {

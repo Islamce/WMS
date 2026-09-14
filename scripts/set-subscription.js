@@ -143,7 +143,13 @@ function main() {
     );
   })();
   db.close();
-  console.log('\nWritten. Restart the application (or wait for the next request) to pick it up.');
+  // The running process caches the subscription for the rest of the UTC day
+  // (services/subscription.js), so a restart is REQUIRED, not optional. Saying
+  // "or wait for the next request" would strand somebody using --remove to get
+  // a warehouse out of read-only, at exactly the wrong moment.
+  console.log('\nWritten. RESTART the application to pick it up:');
+  console.log('  cd /opt/apps/wms && docker compose restart wms');
+  console.log('The running process caches this until restart, so it is not optional.');
 }
 
 main();

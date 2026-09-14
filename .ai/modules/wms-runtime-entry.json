@@ -1,12 +1,12 @@
 {
   "_meta": {
     "artifact": "modules/wms-runtime-entry.json",
-    "bodyDigest": "494e80a5d3022c7b131b5b357f4941306abc3726a673d97923d3b224bf1a519f",
+    "bodyDigest": "ebd69e8b842c455e560902e353b8dd34d4da6cf751f789d464055c2ef2168540",
     "confidence": "verified",
     "doNotEdit": true,
     "generator": "kaaf",
     "generatorVersion": "0.7.0",
-    "inputDigest": "08dbe39622731cf6bcf716f0978412da723de618164887ad98f86f6d6edbb85b",
+    "inputDigest": "1db2d0c1fd7ac7f4eed3a5409e831ca5438205f13cd8d47adc0c6b75df3809ab",
     "provenanceNote": "Generated from the declared kaaf.repo.json and kaaf.module.json manifests. No wall-clock time or commit SHA is embedded: both would break byte-identical regeneration. Use git history for when and from which commit.",
     "schemaVersion": "1.0.0"
   },
@@ -60,6 +60,7 @@
       "design-qa.md",
       "docker-compose.yml",
       "docs/ANDROID-UAT-V1.0.md",
+      "docs/APPROVALS-AND-GATES.md",
       "docs/CONTRACTING-EDITION-REQUIREMENTS.md",
       "docs/DEPLOY-PROMPT-VPS.md",
       "docs/HOSTINGER-SCHEDULED-BACKUP.md",

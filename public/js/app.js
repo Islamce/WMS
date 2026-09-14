@@ -127,50 +127,67 @@ const ROUTE_MODULE = {};
 MODULES.forEach((m) => m.items.forEach((it) => { NAV_ITEMS.push(Object.assign({ module: m }, it)); ROUTE_MODULE[it.route] = m; }));
 ROUTE_MODULE['request-detail'] = ROUTE_MODULE['requests'];
 
+/**
+ * Route -> page module and permission. It deliberately carries NO screen name.
+ *
+ * It used to carry `title`, rendered as the breadcrumb above the page, while the
+ * sidebar rendered the MODULES label — so 19 screens showed the user two
+ * different names for the screen they were standing on, at the same moment.
+ * Deleting the sidebar's own table was not enough; this was the third one.
+ *
+ * Titles come from MODULES via routeTitle() below. The four routes here with no
+ * MODULES entry keep a title, because nothing else names them.
+ */
+function routeTitle(route) {
+  const item = NAV_ITEMS.find((it) => it.route === route);
+  if (item) return item.label;
+  return (ROUTE_PAGES[route] || {}).title || '';
+}
+
 const ROUTE_PAGES = {
   'home': { title: 'Home', page: 'home', permission: null }, // launchpad — any signed-in user
-  'dashboard': { title: 'Dashboard', page: 'dashboard', permission: 'dashboard' },
-  'kpi': { title: 'KPI Dashboard', page: 'kpi', permission: 'kpi_dashboard' },
-  'ai': { title: 'AI Stock Analytics', page: 'ai', permission: 'ai_analytics' },
-  'notifications': { title: 'Notifications', page: 'notifications', permission: 'notifications' },
-  'create-request': { title: 'Create Material Request', page: 'createRequest', permission: 'create_request' },
-  'requests': { title: 'Material Requests', page: 'requests', permission: 'material_requests' },
+  'dashboard': { page: 'dashboard', permission: 'dashboard' },
+  'kpi': { page: 'kpi', permission: 'kpi_dashboard' },
+  'ai': { page: 'ai', permission: 'ai_analytics' },
+  'notifications': { page: 'notifications', permission: 'notifications' },
+  'create-request': { page: 'createRequest', permission: 'create_request' },
+  'requests': { page: 'requests', permission: 'material_requests' },
   'request-detail': { title: 'Request Detail', page: 'requestDetail', permission: 'material_requests' },
-  'approvals': { title: 'Manager Approvals', page: 'approvals', permission: 'approvals' },
-  'erp-operator': { title: 'ERP Operator Queue', page: 'erpOperator', permission: 'erp_operator' },
-  'warehouse': { title: 'Warehouse Dashboard', page: 'warehouse', permission: 'warehouse_dashboard' },
-  'allocation': { title: 'Bin & Batch Assignment', page: 'allocation', permission: 'bin_batch_assignment' },
-  'picker-assign': { title: 'Picker Assignment', page: 'pickerAssign', permission: 'picker_assignment' },
-  'picking': { title: 'My Picking Tasks', page: 'picking', permission: 'picking' },
-  'gi-posting': { title: 'Goods Issue Posting', page: 'giPosting', permission: 'gi_posting' },
-  'reallocation': { title: 'Stock Reallocation', page: 'reallocation', permission: ['reallocation', 'bin_batch_assignment'] },
-  'shipping': { title: 'Shipping & Outbound', page: 'shipping', permission: ['shipping', 'gi_posting'] },
-  'subcontractor-quality': { title: 'Subcontractor Deliveries & Quality', page: 'subcontractorQuality', permission: ['subcontractor_receiving', 'subcontractor_quality_inspection'] },
-  'subcontractor-stock': { title: 'Subcontractor On-Hand Stock', page: 'subcontractorStock', permission: ['subcontractor_receiving', 'subcontractor_quality_inspection', 'subcontractor_admin'] },
-  'subcontractor-reconciliation': { title: 'Subcontractor Reconciliation', page: 'subcontractorReconciliation', permission: ['subcontractor_receiving', 'subcontractor_quality_inspection', 'subcontractor_admin'] },
-  'subcontractor-returns': { title: 'Returns to Owner', page: 'subcontractorReturns', permission: ['subcontractor_admin', 'subcontractor_receiving', 'subcontractor_return_approval'] },
-  'subcontractor-owned-stock': { title: 'Subcontractor-Owned Stock', page: 'subcontractorOwnedStock', permission: ['subcontractor_admin', 'subcontractor_receiving', 'subcontractor_return_approval', 'project_management_approval', 'kpi_dashboard'] },
-  'subcontractors': { title: 'Subcontractors & Categories', page: 'subcontractors', permission: 'subcontractor_admin' },
-  'physical-inventory': { title: 'Physical Inventory', page: 'inventory', permission: ['inventory_count', 'cycle_count'] },
-  'receiving': { title: 'Goods Receipt & QR', page: 'receiving', permission: ['goods_receipt', 'erp_operator', 'picking'] },
-  'qr-printing': { title: 'QR Label Printing', page: 'qrPrinting', permission: ['qr_printing', 'goods_receipt'] },
-  'batches': { title: 'Batch Tracking', page: 'batches', permission: 'batch_tracking' },
-  'expiry': { title: 'Expiry Alerts', page: 'expiry', permission: 'expiry_alerts' },
-  'cycle-count': { title: 'Cycle Counting', page: 'cycleCount', permission: 'cycle_count' },
-  'quality': { title: 'Quality Management', page: 'quality', permission: 'quality' },
+  'approvals': { page: 'approvals', permission: 'approvals' },
+  'erp-operator': { page: 'erpOperator', permission: 'erp_operator' },
+  'warehouse': { page: 'warehouse', permission: 'warehouse_dashboard' },
+  'allocation': { page: 'allocation', permission: 'bin_batch_assignment' },
+  'picker-assign': { page: 'pickerAssign', permission: 'picker_assignment' },
+  'picking': { page: 'picking', permission: 'picking' },
+  'gi-posting': { page: 'giPosting', permission: 'gi_posting' },
+  'reallocation': { page: 'reallocation', permission: ['reallocation', 'bin_batch_assignment'] },
+  'shipping': { page: 'shipping', permission: ['shipping', 'gi_posting'] },
+  'subcontractor-quality': { page: 'subcontractorQuality', permission: ['subcontractor_receiving', 'subcontractor_quality_inspection'] },
+  'subcontractor-stock': { page: 'subcontractorStock', permission: ['subcontractor_receiving', 'subcontractor_quality_inspection', 'subcontractor_admin'] },
+  'subcontractor-reconciliation': { page: 'subcontractorReconciliation', permission: ['subcontractor_receiving', 'subcontractor_quality_inspection', 'subcontractor_admin'] },
+  'subcontractor-returns': { page: 'subcontractorReturns', permission: ['subcontractor_admin', 'subcontractor_receiving', 'subcontractor_return_approval'] },
+  'subcontractor-owned-stock': { page: 'subcontractorOwnedStock', permission: ['subcontractor_admin', 'subcontractor_receiving', 'subcontractor_return_approval', 'project_management_approval', 'kpi_dashboard'] },
+  'subcontractors': { page: 'subcontractors', permission: 'subcontractor_admin' },
+  'physical-inventory': { page: 'inventory', permission: ['inventory_count', 'cycle_count'] },
+  'receiving': { page: 'receiving', permission: ['goods_receipt', 'erp_operator', 'picking'] },
+  'qr-printing': { page: 'qrPrinting', permission: ['qr_printing', 'goods_receipt'] },
+  'batches': { page: 'batches', permission: 'batch_tracking' },
+  'expiry': { page: 'expiry', permission: 'expiry_alerts' },
+  'cycle-count': { page: 'cycleCount', permission: 'cycle_count' },
+  'quality': { page: 'quality', permission: 'quality' },
   'stock-in': { title: 'Stock In', page: 'stockin', permission: 'stock_in' },
   'stock-out': { title: 'Stock Out', page: 'stockout', permission: 'stock_out' },
-  'all-locations': { title: 'All Locations', page: 'alllocations', permission: 'all_locations' },
-  'empty-locations': { title: 'Empty Locations', page: 'emptylocations', permission: 'empty_locations' },
-  'materials': { title: 'Materials', page: 'materials', permission: 'materials' },
-  'locations': { title: 'Locations', page: 'locations', permission: 'locations' },
-  'warehouses-master': { title: 'Warehouse Master', page: 'warehousesMaster', permission: 'warehouses_master' },
-  'bins-master': { title: 'Bin Location Master', page: 'binsMaster', permission: 'bins_master' },
-  'movement-types': { title: 'Movement Type Config', page: 'movementTypes', permission: 'movement_types_master' },
-  'import': { title: 'Import Center', page: 'importCenter', permission: ['materials', 'locations', 'warehouses_master', 'bins_master', 'movement_types_master', 'goods_receipt'] },
-  'audit': { title: 'Audit Trail', page: 'audit', permission: 'audit_trail' },
-  'users': { title: 'Users Management', page: 'users', permission: 'users_management' },
-  'permissions': { title: 'Permissions Management', page: 'permissions', permission: 'permissions_management' },
+  'all-locations': { page: 'alllocations', permission: 'all_locations' },
+  'empty-locations': { page: 'emptylocations', permission: 'empty_locations' },
+  'materials': { page: 'materials', permission: 'materials' },
+  'locations': { page: 'locations', permission: 'locations' },
+  'warehouses-master': { page: 'warehousesMaster', permission: 'warehouses_master' },
+  'bins-master': { page: 'binsMaster', permission: 'bins_master' },
+  'movement-types': { page: 'movementTypes', permission: 'movement_types_master' },
+  'import': { page: 'importCenter', permission: ['materials', 'locations', 'warehouses_master', 'bins_master', 'movement_types_master', 'goods_receipt'] },
+  'audit': { page: 'audit', permission: 'audit_trail' },
+  'users': { page: 'users', permission: 'users_management' },
+  'permissions': { page: 'permissions', permission: 'permissions_management' },
 };
 
 const LS = { collapsed: 'wms_nav_collapsed', groups: 'wms_nav_groups' };
@@ -276,7 +293,7 @@ const App = {
     }
 
     const activeMenu = routeKey === 'request-detail' ? 'requests' : routeKey;
-    this.renderLayout(activeMenu, def.title);
+    this.renderLayout(activeMenu, routeTitle(routeKey));
     Pages[def.page].render(document.getElementById('page-content'), param);
     this.refreshNotificationBadge();
   },

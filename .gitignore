@@ -10,3 +10,8 @@ npm-debug.log*
 # and its own JWT secret (.env). Never committed — one leaked secret here lets a
 # token forged for that tenant authenticate against it.
 tenants/
+
+# Python bytecode. Never committed: a hash-based .pyc executes without Python
+# ever reading the .py beside it, and nobody reads bytecode in a review.
+__pycache__/
+*.pyc
