@@ -18,8 +18,11 @@ const path = require('path');
 
 const ROOT = path.join(__dirname, '..', '..');
 
-// Screens whose permission label still differs from the navigation name. This
-// number may fall and must never rise. See the note at the bottom of this file.
+// The seeded permission labels still differ from the navigation names for this
+// many screens. They are no longer USER-VISIBLE — the permissions screen
+// resolves the name through MODULES at render — so this is now a tidiness
+// measure on seed data rather than a defect a customer can see. It may fall and
+// must never rise.
 const KNOWN_PERMISSION_LABEL_CLASHES = 17;
 let passed = 0;
 let failed = 0;
@@ -118,14 +121,26 @@ check('the screens that had two names now have one', wrong.length === 0, wrong.j
     const navName = byPermission.get(m[1]);
     if (navName && navName !== m[2]) clashes.push(`${m[1]}: nav "${navName}" vs permission "${m[2]}"`);
   }
-  console.log(`\nKNOWN GAP: ${clashes.length} permission label(s) still name a screen `
-    + 'differently from the navigation. Closing this needs a migration against live\n'
-    + 'tenant rows, so it is measured here rather than gated. It must only go DOWN.');
+  console.log(`\nSEED TIDINESS: ${clashes.length} seeded permission label(s) differ from the `
+    + 'navigation name.\nNot user-visible — the permissions screen resolves through MODULES '
+    + 'at render, which\nis why no migration against live tenant rows was needed. '
+    + 'It must only go DOWN.');
   if (clashes.length > KNOWN_PERMISSION_LABEL_CLASHES) {
     failed += 1;
     fails.push('permission label clashes increased');
     console.log('FAIL: the known gap grew —', clashes.slice(0, 5).join('; '));
   }
+}
+
+// The resolution is what keeps the fourth table off the screen. If it is
+// removed, the seeded labels become visible again and this whole class of defect
+// returns silently.
+{
+  const perms = fs.readFileSync(path.join(ROOT, 'public/js/pages/permissions.js'), 'utf8');
+  const raw = [...perms.matchAll(/UI\.esc\(p\.label\)/g)].length;
+  check('the permissions screen never renders a stored label directly', raw === 0,
+    `${raw} place(s) still render p.label without resolving it`);
+  check('and the resolver is exposed on App', /permissionScreenName\(key, storedLabel\)/.test(app));
 }
 
 console.log(`\n===== RESULT: ${passed} passed, ${failed} failed =====`);

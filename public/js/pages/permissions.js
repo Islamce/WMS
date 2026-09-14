@@ -27,7 +27,7 @@ Pages.permissions = {
         <div class="table-wrap"><table>
           <thead><tr><th>Key</th><th>Screen</th></tr></thead>
           <tbody>
-            ${permissions.map((p) => `<tr><td><code>${UI.esc(p.key)}</code></td><td>${UI.esc(p.label)}</td></tr>`).join('')}
+            ${permissions.map((p) => `<tr><td><code>${UI.esc(p.key)}</code></td><td>${UI.esc(App.permissionScreenName(p.key, p.label))}</td></tr>`).join('')}
           </tbody>
         </table></div>
       </div>
@@ -42,7 +42,7 @@ Pages.permissions = {
               ${permissions.map((p) => `
                 <label class="perm-item">
                   <input type="checkbox" value="${p.id}" ${role.permission_ids.includes(p.id) ? 'checked' : ''} />
-                  <span>${UI.esc(p.label)}</span>
+                  <span>${UI.esc(App.permissionScreenName(p.key, p.label))}</span>
                 </label>`).join('')}
             </div>
             <div style="display:flex;align-items:center;gap:10px">

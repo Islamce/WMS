@@ -138,6 +138,26 @@ ROUTE_MODULE['request-detail'] = ROUTE_MODULE['requests'];
  * Titles come from MODULES via routeTitle() below. The four routes here with no
  * MODULES entry keep a title, because nothing else names them.
  */
+/**
+ * The screen a permission protects, by its key.
+ *
+ * `permissions.label` in the database names these screens too — a fourth table,
+ * and the one the user reads on Roles & Permissions. Those labels are seeded
+ * rows, so correcting them would need a migration against every existing
+ * tenant. Resolving the name here instead costs nothing, works on every tenant
+ * that already exists, and makes MODULES the single source in fact rather than
+ * in intention.
+ *
+ * Falls back to the stored label for permissions that do not name a screen —
+ * `approvals_high_value` and the attestation keys are authorities, not screens.
+ */
+function permissionScreenName(key, storedLabel) {
+  const item = NAV_ITEMS.find((it) => (Array.isArray(it.permission)
+    ? it.permission[0] === key
+    : it.permission === key));
+  return item ? item.label : storedLabel;
+}
+
 function routeTitle(route) {
   const item = NAV_ITEMS.find((it) => it.route === route);
   if (item) return item.label;
@@ -223,6 +243,9 @@ const App = {
    * gets this by declaring erpStaging rather than by being added to a list of
    * names here. Defaults to "has ERP staging" when unknown, matching the server.
    */
+  /** The screen a permission protects. See permissionScreenName above. */
+  permissionScreenName(key, storedLabel) { return permissionScreenName(key, storedLabel); },
+
   routesStraightToStore() {
     return !!(this.tenant && this.tenant.erpStaging === false);
   },
