@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+#
+# Refuse a push whose gates have not been read.
+#
+# This exists because a note did not work. The lesson "run the gate before you
+# push" was written into docs/vault on 2026-09-14 at 15:54; the same mistake
+# happened again at 21:29 the same day, and a third time within the hour. Three
+# occurrences is the threshold CLAUDE.md sets for building a control instead of
+# recording another observation.
+#
+# It runs the two FAST gates that actually caught things — lint and the KAAF
+# architecture check — and prints the files being pushed. It deliberately does
+# NOT run the test suites: a hook slow enough to be annoying is a hook people
+# bypass, and CI already owns the slow gates.
+#
+# Install (once per clone):   git config core.hooksPath scripts/hooks
+# Emergency bypass:           git push --no-verify
+#
+set -uo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "$ROOT" || exit 1
+
+red()  { printf '\033[31m%s\033[0m\n' "$*"; }
+grn()  { printf '\033[32m%s\033[0m\n' "$*"; }
+bold() { printf '\033[1m%s\033[0m\n' "$*"; }
+
+fail=0
+
+# ---- What is actually being pushed -----------------------------------------
+# The .probe-* leak happened because `git add -A` swept in eleven files nobody
+# had opened. Seeing the list is half the control.
+remote_sha="$(git rev-parse --verify --quiet "@{upstream}" 2>/dev/null || true)"
+if [ -n "$remote_sha" ]; then
+  files="$(git diff --name-only "$remote_sha"..HEAD)"
+else
+  files="$(git diff --name-only HEAD~1..HEAD 2>/dev/null || git ls-files)"
+fi
+count="$(printf '%s\n' "$files" | grep -c . || true)"
+bold "── pushing $count file(s) ──"
+printf '%s\n' "$files" | sed 's/^/   /'
+echo
+
+# Anything that looks like a scratch script or a key never belongs in a push.
+suspicious="$(printf '%s\n' "$files" | grep -iE '(^|/)\.probe|(^|/)\.env($|\.)|\.(pem|key|p12|pfx)$|(^|/)id_(rsa|ed25519)' || true)"
+if [ -n "$suspicious" ]; then
+  red "REFUSED: these look like scratch or secret files:"
+  printf '%s\n' "$suspicious" | sed 's/^/   /'
+  fail=1
+fi
+
+# ---- Gate 1: lint ------------------------------------------------------------
+if npx --no-install eslint . --ext .js >/tmp/_prepush_lint 2>&1; then
+  grn "✓ lint"
+else
+  red  "✗ lint"; tail -15 /tmp/_prepush_lint | sed 's/^/   /'; fail=1
+fi
+
+# ---- Gate 2: the generated architecture context ------------------------------
+# Adding OR removing any file makes this stale — documentation and test files
+# included. That is exactly what was missed, three times.
+if python3 scripts/architecture/generate.py --check >/tmp/_prepush_kaaf 2>&1; then
+  grn "✓ architecture context current"
+else
+  red  "✗ architecture context is stale"
+  tail -6 /tmp/_prepush_kaaf | sed 's/^/   /'
+  echo "   fix:  ./scripts/architecture/generate.sh  && git add .ai && git commit --amend --no-edit"
+  fail=1
+fi
+
+echo
+if [ "$fail" -ne 0 ]; then
+  red "Push refused. Fix the above, or bypass deliberately with: git push --no-verify"
+  exit 1
+fi
+grn "All pre-push gates passed."
+exit 0
