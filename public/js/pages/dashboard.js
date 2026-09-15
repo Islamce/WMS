@@ -127,6 +127,7 @@ Pages.dashboard = {
           ${metric('accent', 'Total materials', UI.fmtQty(k.total_materials || 0), 'Active material records', 'materials', 'materials')}
           ${metric('accent', 'Stock on hand', UI.fmtQty(k.total_stock || 0), 'Everything in the store, whoever owns it', 'batch_tracking', 'batches')}
           ${metric('green', 'Available to issue', UI.fmtQty(k.available_stock || 0), 'Released, unblocked, not reserved', 'batch_tracking', 'batches')}
+          ${Number(k.reserved_stock) > 0 ? metric('accent', 'Reserved', UI.fmtQty(k.reserved_stock), 'Promised to an approved request', 'material_requests', 'requests') : ''}
           ${Number(k.held_stock) > 0 ? metric('amber', 'Held back', UI.fmtQty(k.held_stock), 'Awaiting inspection or blocked', 'quality', 'quality') : ''}
           ${Number(k.subcontractor_stock) > 0 ? metric('accent', 'Subcontractor-owned', UI.fmtQty(k.subcontractor_stock), 'On site, not ours to issue', 'subcontractor_receiving', 'subcontractor-stock') : ''}
           ${Number(k.unplaced_stock) > 0 ? metric('amber', 'Not yet put away', UI.fmtQty(k.unplaced_stock), 'Received but in no bin', 'goods_receipt', 'receiving') : ''}
