@@ -190,6 +190,17 @@ try:
              + k0.get('held_stock', 0) + k0.get('subcontractor_stock', 0))
     check('T1 available + reserved + held + subcontractor accounts for every unit on hand',
           parts == total_stock, (parts, total_stock, k0))
+    # And the SCREEN must show every part, not just the payload. The first
+    # version of this fix computed reserved_stock server-side and never rendered
+    # it, so the tiles a storekeeper actually reads still did not add up — the
+    # defect was closed where the number is computed and left open where it is
+    # displayed. That is the exact reasoning error this suite exists to catch.
+    page = open(os.path.join(ROOT, 'public/js/pages/dashboard.js'), encoding='utf-8').read()
+    unrendered = [key for key in ('available_stock', 'reserved_stock', 'held_stock',
+                                  'subcontractor_stock', 'unplaced_stock')
+                  if key not in page]
+    check('T1 and the dashboard renders every part it is given',
+          not unrendered, f'computed but never shown: {unrendered}')
     check('T1 analytics reports the subcontractor holding separately (200)',
           item and item['subcontractor_stock'] == 200, item and item['subcontractor_stock'])
 
