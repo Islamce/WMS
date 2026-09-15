@@ -25,6 +25,11 @@ New to the codebase, or about to change something risky:
 ### Data integrity
 - [[Counting rows to make an identifier issues the same number twice]]
 - [[Fail open for licensing, fail closed for authority]]
+- [[A fix that is right in the rare case and wrong on every ordinary day]] — and
+  why the number a screen shows must not be quietly redefined
+
+### What gets into the repository
+- [[Every gate passed because none of them could see the file]]
 
 ### What the customer sees
 - [[The first hour is not receive then issue]]

@@ -86,8 +86,13 @@ batch_ids = [r[0] for r in con.execute(
     'SELECT id FROM batches WHERE material_id=? AND remaining_quantity>0 ORDER BY id', (material_id,)).fetchall()]
 owned_batch = batch_ids[-1]
 
+# Expectations here are computed from plain arithmetic over the batch rows, not
+# from a copy of the service's own WHERE clause. A test that re-derives its
+# expected value from the implementation's predicate cannot detect a wrong
+# predicate.
 total_before = con.execute(
-    'SELECT SUM(remaining_quantity-reserved_quantity) FROM batches WHERE material_id=?', (material_id,)).fetchone()[0]
+    'SELECT COALESCE(SUM(remaining_quantity-reserved_quantity),0) FROM batches WHERE material_id=?',
+    (material_id,)).fetchone()[0]
 owned_qty = con.execute(
     'SELECT remaining_quantity-reserved_quantity FROM batches WHERE id=?', (owned_batch,)).fetchone()[0]
 con.close()
@@ -119,9 +124,19 @@ check('P1 replenishment no longer counts the subcontractor-owned batch',
 check('P1 the owned quantity is reported, not dropped',
       after and abs(after['subcontractor_stock'] - owned_qty) < 0.001,
       (after or {}).get('subcontractor_stock'))
-check('P1 the two halves still add up to the physical total',
+check('P1 ours plus theirs still accounts for every unit physically present',
       after and abs((after['current_stock'] + after['subcontractor_stock']) - total_before) < 0.001,
       after)
+# held_stock is a SUBSET of current_stock, not a sibling of it: material awaiting
+# quality release is still ours and still counted, because it becomes issuable
+# the moment quality releases it. issuable_stock is the part a picker could be
+# handed right now, so it can never exceed what we hold.
+check('P1 held stock is a part of what we hold, not a separate pile',
+      after and after.get('held_stock', 0) <= after['current_stock'] + 0.001,
+      {'held': (after or {}).get('held_stock'), 'current': (after or {}).get('current_stock')})
+check('P1 issuable stock never exceeds what we hold',
+      after and after.get('issuable_stock', 0) <= after['current_stock'] + 0.001,
+      {'issuable': (after or {}).get('issuable_stock'), 'current': (after or {}).get('current_stock')})
 
 # ===== 2. The report itself =====
 c, rep = call('GET', '/api/subcontractor/owned-stock-report', admin)

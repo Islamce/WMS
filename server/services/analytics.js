@@ -140,7 +140,7 @@ function movementCoverage(movements) {
     assumption: 'Only the operational ledger may establish continuous global coverage. Import batches contribute observed issue dates, not completeness.',
     warning: complete ? null : unresolvedOperationalRows > 0
       ? `${unresolvedOperationalRows} operational movement row(s) require category review. No observed movement must not be interpreted as proof that no movement occurred.`
-      : 'Movement coverage is incomplete. No observed movement must not be interpreted as proof that no movement occurred.',
+      : 'Not every day in the window has recorded movement, so a material showing no issues here has not been proven unused — it may simply have no history yet.',
   };
 }
 
@@ -176,13 +176,39 @@ function analyzeWithCoverage() {
   // real material in a real bin, it just answers a different question. Its own
   // depletion signal lives in the owned-stock report, where the party who has to
   // act on it can see it.
+  // A correction to a correction. Excluding QUALITY_HOLD from current_stock was
+  // wrong, and worse than the defect it fixed: receiving.js:133 puts EVERY
+  // received batch on QUALITY_HOLD, so between a delivery arriving and somebody
+  // clicking release — the normal state of every delivery, every day — the
+  // material read as empty and fired a critical "replenish now" alert on stock
+  // that had just been unloaded. A rare suppressed signal was traded for a false
+  // one on every receipt.
+  //
+  // Held stock is not unavailable, it is PENDING. It is on site, it is ours, and
+  // it becomes issuable the moment quality releases it — which is exactly what a
+  // replenishment decision should count. So current_stock keeps its meaning and
+  // its value: no existing tenant sees this number move.
+  //
+  // What a picker could be handed RIGHT NOW is a different question, and it gets
+  // its own field rather than redefining this one. Subcontractor-owned stock
+  // stays excluded from both, because that is not pending — it is not ours.
   const materials = db.prepare(`SELECT m.id, m.item_code, m.description, m.unit, m.price, m.currency, m.material_group, m.plant,
     COALESCE((SELECT SUM(remaining_quantity-reserved_quantity) FROM batches
               WHERE material_id=m.id AND COALESCE(owner_type,'COMPANY')='COMPANY'),0) AS current_stock,
     COALESCE((SELECT SUM(remaining_quantity-reserved_quantity) FROM batches
+              WHERE material_id=m.id AND COALESCE(owner_type,'COMPANY')='COMPANY'
+                AND quality_status='RELEASED' AND is_blocked=0
+                AND remaining_quantity>reserved_quantity),0) AS issuable_stock,
+    COALESCE((SELECT SUM(remaining_quantity) FROM batches
+              WHERE material_id=m.id AND COALESCE(owner_type,'COMPANY')='COMPANY'
+                AND (quality_status<>'RELEASED' OR is_blocked=1)),0) AS held_stock,
+    COALESCE((SELECT SUM(remaining_quantity-reserved_quantity) FROM batches
               WHERE material_id=m.id AND owner_type='SUBCONTRACTOR'),0) AS subcontractor_stock,
+    -- Same set as current_stock, so the age and the quantity describe the same
+    -- batches. They diverged when current_stock was briefly redefined.
     (SELECT MIN(receiving_date) FROM batches
-     WHERE material_id=m.id AND remaining_quantity>0 AND COALESCE(owner_type,'COMPANY')='COMPANY') AS oldest_stock_date
+     WHERE material_id=m.id AND remaining_quantity>reserved_quantity
+       AND COALESCE(owner_type,'COMPANY')='COMPANY') AS oldest_stock_date
     FROM materials m ORDER BY m.item_code`).all();
 
   const items = materials.map((material) => {
@@ -231,6 +257,12 @@ function analyzeWithCoverage() {
       // number is never silently missing from a stock screen, and excluded from
       // every replenishment signal below.
       subcontractor_stock: Number(material.subcontractor_stock),
+      // Ours and on site, but not issuable this minute: awaiting inspection, or
+      // blocked. Counted in current_stock (held stock is pending, not lost) and
+      // reported separately so a screen can say why a number is not pickable.
+      held_stock: Number(material.held_stock),
+      // What allocation would actually find today (allocation.js:23-24).
+      issuable_stock: Number(material.issuable_stock),
       stock_value: round(Number(material.current_stock) * (material.price || 0)),
       out_qty_window: round(grossIssues), out_events_window: issueEvents, net_consumption: round(netConsumption),
       avg_monthly_consumption: round(Math.max(0, netConsumption) / WINDOW_DAYS * 30),
@@ -295,7 +327,16 @@ function weeklyTrend(movements) {
 function buildInsights(items, coverage) {
   const insights = [];
   const list = (rows) => rows.slice(0, 3).map((item) => item.item_code).join(', ') + (rows.length > 3 ? ` (+${rows.length - 3} more)` : '');
-  if (coverage.warning) insights.push({ severity: 'warning', title: `${coverage.status.toLowerCase()} movement coverage (${coverage.coverage_percent}%)`, detail: coverage.warning });
+  // Was `${status.toLowerCase()} movement coverage`, which printed "none
+  // movement coverage (0%)" as the headline on every new tenant.
+  const COVERAGE_TITLE = {
+    NONE: 'No movement history yet',
+    PARTIAL: `Partial movement history (${coverage.coverage_percent}% of the window)`,
+    COMPLETE: 'Complete movement history',
+  };
+  if (coverage.warning) insights.push({ severity: 'warning',
+    title: COVERAGE_TITLE[coverage.status] || 'Movement history is incomplete',
+    detail: coverage.warning });
   const dead = items.filter((item) => item.classification === 'DEAD');
   if (dead.length) insights.push({ severity: 'warning', title: `${dead.length} confirmed dead-stock material(s)`, detail: `Complete coverage shows no issues in the analysis window: ${list(dead)}.` });
   const unknown = items.filter((item) => item.classification === 'UNKNOWN');

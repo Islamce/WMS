@@ -101,6 +101,42 @@ before, and that is a habit, not something a second script would fix — see
 [[Merged is not deployed, and green is not correct]] for why a control that is
 merely described is not a control.
 
+## Second amendment, 2026-09-14 — it happened again five hours later
+
+The amendment above was committed at 15:54 (`bd688a5`). It ends with the exact
+instruction *"the check to run **before** pushing is
+`python3 scripts/architecture/generate.py --check`"*.
+
+At 21:29 the same day, commit `2dd0e45` changed module content the generated
+context records, and `6a5e1e4` — committed **21 seconds later** — was a bare
+regeneration to repair it. Its own commit message says so: *"Caught by the gate —
+after the push this time, not before it, which is the same habit the vault note
+on this tool already describes."* (As before, git records no push timestamps; the
+ordering is the author's account in the commit message, not independently
+verified — **inference**.)
+
+**The lesson this adds, and it is not about KAAF.** Writing the habit down —
+here, in this vault, in the note whose stated purpose is to stop it — did not
+change the habit. Five and a half hours was not enough for a written note to
+survive contact with a task. That is this vault's own standing pattern turned
+back on itself: *believed because it was written down, rather than because it was
+run.* A note is not a control.
+
+**And no control was built for it.** There is still no pre-commit or pre-push
+hook (`.git/hooks` holds only samples — checked) and the only place the check
+runs is `.github/workflows/ci.yml:49`, on the remote, after the push. That was a
+deliberate choice, not an oversight: the failure is cheap — a bare regeneration
+commit, no product code involved, caught by CI every time. A local hook would
+fire on every commit in a repository where most commits do not add files. The
+honest position is that this costs one wasted commit each time it happens, and
+the day it costs more than that is the day to build the hook.
+
+**The shape, restated.** If a lesson's only enforcement is a person remembering
+it, count on it failing, and decide deliberately whether that failure is cheap
+enough to accept. Do not assume writing it down changed anything — this note is
+the evidence that it does not.
+
 ## Related
 
 - [[Merged is not deployed, and green is not correct]]
+- [[Every gate passed because none of them could see the file]]

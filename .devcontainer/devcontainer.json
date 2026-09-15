@@ -4,8 +4,10 @@
   // the better-sqlite3 native module.
   "image": "mcr.microsoft.com/devcontainers/javascript-node:20",
 
-  // Install dependencies and create + seed the SQLite database on first build.
-  "postCreateCommand": "cp -n .env.example .env || true; npm install && npm run setup",
+  // Install dependencies, wire the pre-push gates, and create + seed the SQLite
+  // database on first build. core.hooksPath is per-clone and not carried by git,
+  // so it has to be set somewhere that every new checkout runs.
+  "postCreateCommand": "cp -n .env.example .env || true; git config core.hooksPath scripts/hooks; npm install && npm run setup",
 
   // Auto-forward the app port. onAutoForward 'openPreview' opens the app inside
   // the Codespace (authenticated), avoiding the private-port 401 you get when

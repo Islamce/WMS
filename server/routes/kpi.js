@@ -5,6 +5,8 @@
 const express = require('express');
 const db = require('./../db/connection');
 const { authenticate, requirePermission } = require('./../middleware/auth');
+const { getTenant } = require('./../services/tenant');
+const { usesErpStaging } = require('./../services/tenantProfile');
 
 const router = express.Router();
 router.use(authenticate, requirePermission('kpi_dashboard'));
@@ -22,7 +24,17 @@ router.get('/', (req, res) => {
   const rejected = statusCount(['Rejected']);
   const cancelled = statusCount(['Cancelled']);
   const erpError = statusCount(['ERP Error']);
-  const open = total - completed - partiallyCompleted - rejected - cancelled;
+  // ERP Error has its own tile, so leaving it inside `open` counted the same
+  // request twice and any chart drawing both totalled over 100%. It is still
+  // open work — it is just open work of a kind the screen already names.
+  const open = total - completed - partiallyCompleted - rejected - cancelled - erpError;
+
+  // Two cycle times are measured from erp_reservation_date, which is written in
+  // exactly one place: the ERP Operator screen. The contracting workflow routes
+  // past that screen, so on a contracting tenant the column is never set and
+  // both averages came back 0 — indistinguishable from "instant", on a step that
+  // does not exist. null says "not applicable here" and the screen can omit it.
+  const erpStaged = usesErpStaging(getTenant().profileKey);
 
   // Average durations (minutes) between lifecycle timestamps.
   const avgMinutes = (fromCol, toCol) => {
@@ -61,15 +73,22 @@ router.get('/', (req, res) => {
       total_requests: total, completed, partially_completed: partiallyCompleted, rejected, cancelled,
       open, erp_error: erpError,
       avg_approval_minutes: avgMinutes('submitted_at', 'approved_at'),
-      avg_erp_reservation_minutes: avgMinutes('approved_at', 'erp_reservation_date'),
-      avg_gi_posting_minutes: avgMinutes('erp_reservation_date', 'gi_posting_date'),
+      avg_erp_reservation_minutes: erpStaged ? avgMinutes('approved_at', 'erp_reservation_date') : null,
+      avg_gi_posting_minutes: erpStaged ? avgMinutes('erp_reservation_date', 'gi_posting_date') : null,
+      // On a tenant with no ERP staging, approval runs straight to the store.
+      // This is the cycle time that step actually has, rather than a zero.
+      avg_approval_to_issue_minutes: erpStaged ? null : avgMinutes('approved_at', 'gi_posting_date'),
+      erp_staging: erpStaged,
       shortage_lines: shortageLines,
       shortage_percentage: totalLines ? Math.round((shortageLines / totalLines) * 100) : 0,
       expired_batches: expiredBatches,
       qr_scan_pass: qrPass, qr_scan_failure: qrFail, manual_override_count: overrides,
       fifo_allocations: fifo, fefo_allocations: fefo, total_allocations: allocTotal,
       erp_posting_success: giSuccess, erp_posting_failure: giFail,
-      erp_success_rate: (giSuccess + giFail) ? Math.round((giSuccess / (giSuccess + giFail)) * 100) : 100,
+      // Was 100 when nothing had ever been posted, so a brand-new tenant saw a
+      // reassuring green "100% — 0 successful postings" next to its own
+      // contradiction. A rate over no attempts is not 100%, it is unknown.
+      erp_success_rate: (giSuccess + giFail) ? Math.round((giSuccess / (giSuccess + giFail)) * 100) : null,
     },
     by_status: all('SELECT request_status AS status, COUNT(*) AS count FROM material_request_headers GROUP BY request_status ORDER BY count DESC'),
     by_warehouse: all("SELECT issue_warehouse_code AS warehouse, COUNT(*) AS count FROM material_request_headers WHERE issue_warehouse_code IS NOT NULL GROUP BY issue_warehouse_code"),

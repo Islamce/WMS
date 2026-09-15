@@ -57,7 +57,29 @@ Do not write "X is now the single source" in a commit message. Write "X is the
 single source for A and B; C still has its own and is out of scope." The first
 sentence is a claim a reviewer will falsify. The second is a map.
 
+## Amendment, 2026-09-14 — the third time, in a different domain
+
+The "guard scoped to the file that had been fixed" failure repeated the same day,
+on numbers instead of names. `server/routes/kpi.js:91` returns `null` for
+`erp_success_rate` when there have been no postings — correctly, because a
+success rate over zero attempts is unknown, not 100%. The fix guarded the tile on
+`public/js/pages/dashboard.js:137` and stopped there. `public/js/pages/adminViews.js:180`
+renders the same field on the KPI screen and was left interpolating it straight
+into a template, so it printed the literal string **`null%`**. The correction for
+an invented 100% shipped a broken tile one screen over. Both are now omitted when
+the value is null (`1476921`).
+
+**Why the existing control did not help.** `tests/e2e/screen_naming_test.js` walks
+all of `public/js`, but it walks it looking for *names*. The lesson generalised;
+the guard did not. A guard built for one instance of a shape does not cover the
+shape.
+
+**What caught it:** an adversarial review agent running the real screens — see
+[[A fix that is right in the rare case and wrong on every ordinary day]], which
+came out of the same review.
+
 ## Related
 
 - [[A guard that measures the wrong number is worse than none]]
 - [[Merged is not deployed, and green is not correct]]
+- [[A fix that is right in the rare case and wrong on every ordinary day]]
