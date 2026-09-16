@@ -804,6 +804,23 @@ const MIGRATIONS = [
       `).run();
     },
   },
+  {
+    id: '029_site_storekeeper_role',
+    description: 'Add the site_storekeeper role with its default grants. Additive: touches no existing role, assigns no user. A seed edit alone never reaches a live tenant, because npm run seed is forbidden in production.',
+    up(db) {
+      db.prepare(`INSERT OR IGNORE INTO roles (name, description) VALUES (?, ?)`)
+        .run('site_storekeeper', 'Runs the site store end to end: receive, release, pick, issue, count. Cannot approve.');
+      // SELECT ... WHERE key IN (...) rather than one INSERT per key: a key that
+      // does not exist on this tenant is skipped instead of inserting a NULL
+      // permission_id, and the row count the deploy gate sees is exactly the
+      // number of keys that exist.
+      db.prepare(`
+        INSERT OR IGNORE INTO role_permissions (role_id, permission_id)
+        SELECT (SELECT id FROM roles WHERE name = 'site_storekeeper'), id
+        FROM permissions WHERE key IN ('dashboard', 'warehouse_dashboard', 'goods_receipt', 'quality', 'picking', 'gi_posting', 'qr_printing', 'bins_master', 'batch_tracking', 'cycle_count', 'inventory_count', 'notifications')
+      `).run();
+    },
+  },
 ];
 
 function ensureTable() {
