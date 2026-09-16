@@ -4,7 +4,12 @@
 #   docker compose logs -f            # tail logs
 services:
   wms:
-    build: .
+    build:
+      context: .
+      args:
+        # Passed through to /healthz so a deploy can prove which build is
+        # serving. Defaults to 'unknown' for a hand-run local build.
+        BUILD_SHA: ${BUILD_SHA:-unknown}
     restart: unless-stopped
     ports:
       # Local diagnostic access only. Caddy reaches the service over `web`.

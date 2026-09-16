@@ -10,7 +10,13 @@ RUN npm ci --omit=dev
 COPY . .
 
 FROM node:20-bookworm-slim
-ENV NODE_ENV=production \
+# The commit this image was built from. /healthz returns it, and the release
+# workflow asserts the served value matches the ref it asked for - without it a
+# 200 from the OLD container satisfies the health gate exactly as well as a 200
+# from the new one, which is how a deploy can look green and land nothing.
+ARG BUILD_SHA=unknown
+ENV BUILD_SHA=$BUILD_SHA \
+    NODE_ENV=production \
     SKIP_AUTO_SEED=1 \
     ALLOW_AUTO_SEED=0 \
     PRODUCTION_INITIALIZATION_ENABLED=false
