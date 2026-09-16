@@ -97,6 +97,10 @@ class Session extends ChangeNotifier {
     // it be changed in Settings/at login, but any value stored by those is
     // now ignored so every install talks to the same server.
     lang = prefs.getString(_kLang) ?? 'en';
+    // The product settled on English only (see public/js/i18n.js). A device that
+    // stored 'ar' or 'fr' from an earlier build would otherwise flip the whole
+    // app to RTL and leave most of it in English, laid out right-to-left.
+    if (lang != 'en') lang = 'en';
     I18n.current = lang;
     final themeName = prefs.getString(_kTheme) ?? 'system';
     themeMode = ThemeMode.values.firstWhere((m) => m.name == themeName, orElse: () => ThemeMode.system);
@@ -235,6 +239,9 @@ class Session extends ChangeNotifier {
 
   Future<void> signOut() async {
     await Push.unregister(api); // uses the still-valid token/api
+    // Anything still queued belongs to the person signing out. Left in place it
+    // would replay under whoever signs in next.
+    await queue.clear();
     token = null;
     user = null;
     locked = false;

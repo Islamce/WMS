@@ -4,8 +4,11 @@ Physical-device acceptance tests for the release APK (`app-arm64-v8a-release.apk
 or universal `app-release.apk`). **Run against a throwaway tenant provisioned with
 `scripts/provision-tenant.js`, never against production.** Rows A16, A18, A20 and
 A24 reverse issues, receive stock, post counts and cancel requests; on
-`https://wms.kynox.io` that is a debug-signed APK mutating live stock. Point the
-app's server URL at the test tenant (Settings → Server URL) before row A1.
+`https://wms.kynox.io` that is a debug-signed APK mutating live stock. **Blocker:**
+the app is hard-wired to the production URL - `lib/core/session.dart` ignores any
+stored server URL by design - so there is currently no way to point it at a test
+tenant. Until a server-URL setting exists, the mutating rows of section A must not
+be run at all; section C (push) and the read-only rows are the only ones that can.
 Configure that server's Firebase service account for section C. Record **Actual
 result**, **Pass/Fail**, **Evidence** (screenshot/log ref) and a **Defect ID** for
 every row.

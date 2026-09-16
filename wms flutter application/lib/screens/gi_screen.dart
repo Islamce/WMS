@@ -15,8 +15,12 @@ class _GiScreenState extends State<GiScreen> {
   bool _busy = false;
 
   Future<void> _post(int id) async {
-    final ctrl = TextEditingController(
-        text: '49${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}');
+    // This used to pre-fill '49' + a timestamp fragment and refuse an empty
+    // field, so every mobile goods issue posted a fabricated pseudo-SAP number
+    // and the server's own numbering (used on contracting tenants, where there
+    // is no SAP) was never reached from a phone. Empty is now allowed and means
+    // "the store issues the number".
+    final ctrl = TextEditingController();
     final doc = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
@@ -24,15 +28,17 @@ class _GiScreenState extends State<GiScreen> {
         content: TextField(
           controller: ctrl,
           autofocus: true,
-          decoration: const InputDecoration(labelText: 'GI document number', border: OutlineInputBorder()),
+          decoration: const InputDecoration(
+            labelText: 'GI document number',
+            helperText: 'Leave empty unless your site posts to an ERP - the number is issued for you.',
+            helperMaxLines: 3,
+            border: OutlineInputBorder(),
+          ),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
           FilledButton(
-            onPressed: () {
-              if (ctrl.text.trim().isEmpty) return;
-              Navigator.pop(context, ctrl.text.trim());
-            },
+            onPressed: () => Navigator.pop(context, ctrl.text.trim()),
             child: const Text('Post'),
           ),
         ],
@@ -41,8 +47,9 @@ class _GiScreenState extends State<GiScreen> {
     if (doc == null) return;
     setState(() => _busy = true);
     try {
-      final res = await SessionScope.of(context).api
-          .post('/api/gi/$id/post', {'gi_document_number': doc});
+      final res = await SessionScope.of(context).api.post('/api/gi/$id/post', {
+        if (doc.isNotEmpty) 'gi_document_number': doc,
+      });
       if (mounted) {
         showSnack(context, 'GI posted. ${res['status'] ?? ''}');
         setState(() => _key++);

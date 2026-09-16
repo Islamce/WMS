@@ -61,17 +61,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                DropdownButtonFormField<String>(
-                  initialValue: session.lang,
-                  decoration: InputDecoration(
-                      labelText: t('Language'), border: const OutlineInputBorder()),
-                  items: const [
-                    DropdownMenuItem(value: 'en', child: Text('English')),
-                    DropdownMenuItem(value: 'ar', child: Text('العربية')),
-                    DropdownMenuItem(value: 'fr', child: Text('Français')),
-                  ],
-                  onChanged: (v) { if (v != null) session.setLang(v); },
-                ),
+                // Arabic and French were offered here while the product is
+                // English-only; choosing Arabic flipped the app to RTL with most
+                // strings still in English. Removed rather than half-translated.
+                Text('${t('Language')}: English',
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
                 const SizedBox(height: 14),
                 Text(t('Theme'), style: const TextStyle(fontWeight: FontWeight.w600)),
                 const SizedBox(height: 6),

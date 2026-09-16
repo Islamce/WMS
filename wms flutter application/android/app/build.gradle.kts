@@ -1,8 +1,30 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+// Release signing. The key comes from android/key.properties (git-ignored) or,
+// on CI, from WMS_KEYSTORE_* environment variables written from secrets. With
+// neither present the build still succeeds on the DEBUG key, but says so out
+// loud: a debug-signed "release" gets a fresh key on every CI runner, so each
+// update refuses to install over the last and the uninstall discards any
+// unsynced offline queue. It also cannot be distributed through Play or an MDM.
+val keystoreProperties = Properties().apply {
+    val f = rootProject.file("key.properties")
+    if (f.exists()) FileInputStream(f).use { load(it) }
+}
+fun signingValue(propKey: String, envKey: String): String? =
+    keystoreProperties.getProperty(propKey) ?: System.getenv(envKey)
+val releaseStoreFile = signingValue("storeFile", "WMS_KEYSTORE_PATH")
+val releaseStorePassword = signingValue("storePassword", "WMS_KEYSTORE_PASSWORD")
+val releaseKeyAlias = signingValue("keyAlias", "WMS_KEY_ALIAS")
+val releaseKeyPassword = signingValue("keyPassword", "WMS_KEY_PASSWORD")
+val hasReleaseSigning = listOf(releaseStoreFile, releaseStorePassword, releaseKeyAlias, releaseKeyPassword)
+    .all { !it.isNullOrBlank() }
 
 android {
     namespace = "com.wms.wms_mobile"
@@ -28,11 +50,26 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(releaseStoreFile!!)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            } else {
+                logger.warn("WARNING: no release keystore (android/key.properties or WMS_KEYSTORE_* env). " +
+                    "Signing this release with the DEBUG key - it cannot be updated in place or distributed through Play.")
+                signingConfig = signingConfigs.getByName("debug")
+            }
         }
     }
 }
