@@ -49,7 +49,8 @@ The URL is saved on the device; the token is validated against `/api/auth/me`
 on every launch so permissions stay fresh and a disabled account is locked out
 immediately.
 
-Default admin: `admin@example.com` / `Admin@123456`.
+Default admin: `admin@example.com`. The password is printed by `npm run seed` on the
+backend's first run; it is not reproduced here because this repository is public.
 
 ## Build the APK yourself
 

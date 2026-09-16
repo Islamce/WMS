@@ -13,6 +13,20 @@ FAILED=0
 SERVER_PID=""
 
 fresh_db() {
+  # This deletes three files. Inside the production container `data/wms.db` is the
+  # bind-mounted live database - the exact three files lost in INC-2026-07-25-01.
+  # The prohibition used to live only in CLAUDE.md prose. Now it lives here.
+  if [ "${NODE_ENV:-}" = "production" ]; then
+    echo "REFUSING: NODE_ENV=production. This deletes the database." >&2; exit 1
+  fi
+  case "${DB_PATH:-}" in
+    /opt/apps/wms/*|/app/data/*)
+      echo "REFUSING: DB_PATH=$DB_PATH is a production path." >&2; exit 1 ;;
+  esac
+  # This suite runs at the DEFAULT database path and nowhere else. Several tests
+  # open data/wms.db directly, so overriding DB_PATH produces a run that looks
+  # like six unrelated failures. The path is inside the repo, and the guards above
+  # are what make running it safe - not moving it somewhere else.
   rm -f data/wms.db data/wms.db-shm data/wms.db-wal
   node server/db/migrate.js >/dev/null && node server/db/seed.js >/dev/null
 }

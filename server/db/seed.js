@@ -26,7 +26,13 @@ const ROLES = [
 ];
 
 // Default screens a regular user gets when approved (admin can change later).
-const DEFAULT_USER_ROLE_PERMISSIONS = ['dashboard', 'stock_in', 'stock_out', 'all_locations', 'empty_locations'];
+// stock_in/stock_out are deliberately NOT here. They bypass the whole
+// request -> approve -> allocate -> pick -> SoD-checked GI chain: POST /api/stock/out
+// accepts any non-empty string as a reservation number and writes a real ISSUE
+// movement that KPI and analytics then read. The screens appear in no menu, so an
+// administrator reviewing the UI would never have seen what this role could do.
+// An administrator can still grant them deliberately from Roles & Permissions.
+const DEFAULT_USER_ROLE_PERMISSIONS = ['dashboard', 'all_locations', 'empty_locations'];
 
 const SAMPLE_MATERIALS = [
   { plant: 'P100', item_code: 'MAT-0001', description: 'Steel Bolt M8x40', unit: 'EA', price: 0.35, currency: 'USD', material_type: 'RAW', material_group: 'FASTENERS' },
@@ -93,9 +99,29 @@ function seed() {
   require('./seed3').seed3();
 }
 
+// Refuse a DIRECT invocation against production. Scoped to the direct path on
+// purpose: server/index.js requires this module and calls seed() itself on an
+// empty database, and that path has its own gate in shouldAutoSeed(). A guard at
+// the top of this file would run at require time and exit the server process
+// during boot - turning a safety check into an outage.
+//
+// SKIP_AUTO_SEED and ALLOW_AUTO_SEED look like they already cover this and do
+// not: they gate only that boot-time decision, never `npm run seed`.
+function refuseInProduction() {
+  const dbPath = process.env.DB_PATH || '';
+  if (process.env.NODE_ENV === 'production') {
+    console.error('REFUSING: NODE_ENV=production. Seeding installs credentials this repository documents publicly.');
+    process.exit(1);
+  }
+  if (/^(\/opt\/apps\/wms|\/app\/data)\//.test(dbPath)) {
+    console.error(`REFUSING: DB_PATH=${dbPath} is a production path.`);
+    process.exit(1);
+  }
+}
+
 // Run automatically when executed directly (`npm run seed` /
 // `node server/db/seed.js`), but not when required as a module — the server's
 // first-run bootstrap imports and calls seed() itself only on an empty DB.
-if (require.main === module) seed();
+if (require.main === module) { refuseInProduction(); seed(); }
 
 module.exports = { seed };

@@ -789,6 +789,21 @@ const MIGRATIONS = [
       seed('GI', 'gi_document_number', 'GI');
     },
   },
+  {
+    id: '028_revoke_legacy_stock_permissions',
+    description: 'Revoke stock_in/stock_out from the default user role. They bypass the request workflow entirely and their screens are in no menu, so nobody reviewing the UI would have seen the grant.',
+    up(db) {
+      // Seed changes never reach an existing tenant - npm run seed is forbidden in
+      // production - so the grant has to be withdrawn here. Scoped to the 'user'
+      // role only: an administrator who granted these to somebody deliberately
+      // keeps them.
+      db.prepare(`
+        DELETE FROM role_permissions
+        WHERE role_id = (SELECT id FROM roles WHERE name = 'user')
+          AND permission_id IN (SELECT id FROM permissions WHERE key IN ('stock_in', 'stock_out'))
+      `).run();
+    },
+  },
 ];
 
 function ensureTable() {
