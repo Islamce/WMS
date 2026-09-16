@@ -1,12 +1,12 @@
 {
   "_meta": {
     "artifact": "modules/wms-runtime-entry.json",
-    "bodyDigest": "9ba15b4a810108a890b898b4fd7be024ed7a6f219b4c25d1e022f2682fb336c5",
+    "bodyDigest": "86e6898b352641c1141d58032db4f036c4398a2875bab11e522f8e3d0a29dff5",
     "confidence": "verified",
     "doNotEdit": true,
     "generator": "kaaf",
     "generatorVersion": "0.7.0",
-    "inputDigest": "d4431ce676b2d8517dccc3e4133035037181b5a716e5997f799596e50330f11c",
+    "inputDigest": "8a6da73e0c42889ae2c083edfdfc7827a6ff7d0431623ca7f6fc7b62eee4b74b",
     "provenanceNote": "Generated from the declared kaaf.repo.json and kaaf.module.json manifests. No wall-clock time or commit SHA is embedded: both would break byte-identical regeneration. Use git history for when and from which commit.",
     "schemaVersion": "1.0.0"
   },
@@ -92,6 +92,7 @@
       "docs/PRODUCT-CRITIQUE-2026-09-12.md",
       "docs/SUBCONTRACTOR-MATERIALS-UAT-V1.0.md",
       "docs/WMS-ACTIONS-ARTIFACT-INVENTORY-2026-08-01.md",
+      "docs/WMS-CORRECTIVE-PROGRAMME.md",
       "docs/WMS-CORRECTIVE-RECONCILIATION-2026-08-11.md",
       "docs/WMS-CURRENT-STATUS.md",
       "docs/WMS-DECISION-LOG.md",
