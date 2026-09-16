@@ -31,10 +31,17 @@ Pages.cycleCount = {
                 <td>${c.system_quantity}</td>
                 <td>${c.counted_quantity ?? '—'}</td>
                 <td>${c.variance == null ? '—' : `<span class="${c.variance < 0 ? 'neg' : c.variance > 0 ? 'pos' : ''}">${c.variance > 0 ? '+' : ''}${c.variance}</span>`}</td>
-                <td><span class="badge">${UI.esc(c.status)}</span></td>
+                <td><span class="badge">${UI.esc(c.status)}</span>${c.counted_by_name ? `<div class="muted sm">${t('Counted by')} ${UI.esc(c.counted_by_name)}</div>` : ''}</td>
                 <td>
                   ${c.status === 'OPEN' ? `<button class="btn sm" data-count="${c.id}">${t('Enter count')}</button>` : ''}
-                  ${c.status === 'COUNTED' ? `<button class="btn sm" data-post="${c.id}">${t('Post')}</button>` : ''}
+                  ${c.status === 'COUNTED' ? (
+                    // Posting is a second signature. The person who counted cannot
+                    // supply it (admin excepted), so say so here rather than after
+                    // the click.
+                    Number(c.counted_by) === Number(App.user.id) && App.user.role !== 'admin'
+                      ? `<span class="muted sm" title="${t('You entered this count; a different user must post it.')}">${t('Awaiting a second user to post')}</span>`
+                      : `<button class="btn sm" data-post="${c.id}">${t('Post')}</button>`
+                  ) : ''}
                 </td>
               </tr>`).join('') || `<tr><td colspan="7">${UI.meaningfulEmptyState({ title: t('No cycle counts yet'), description: t('Open a new count against a batch to get started.') })}</td></tr>`}
           </tbody>

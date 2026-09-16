@@ -53,6 +53,13 @@ const ROLES = {
   warehouse_operator: ['dashboard', 'warehouse_dashboard', 'gi_posting', 'batch_tracking', 'cycle_count',
     'inventory_count', 'shipping', 'notifications'],
   picker: ['dashboard', 'picking', 'notifications'],
+  // One person, one job: the site storekeeper receives the truck, releases the
+  // batch, picks the request and posts the issue. Before this role existed those
+  // five actions were spread across four roles, none of which could run the
+  // collapsed contracting workflow end to end. Deliberately NOT here: approvals
+  // (segregation of duties still holds - this person cannot approve what they
+  // issue) and reallocation/subcontractor authority.
+  site_storekeeper: ['dashboard', 'warehouse_dashboard', 'goods_receipt', 'quality', 'picking', 'gi_posting', 'qr_printing', 'bins_master', 'batch_tracking', 'cycle_count', 'inventory_count', 'notifications'],
   quality: ['dashboard', 'quality', 'batch_tracking', 'expiry_alerts', 'notifications', 'subcontractor_quality_inspection'],
   integration_admin: ['dashboard', 'material_requests', 'audit_trail', 'kpi_dashboard', 'notifications'],
   auditor: ['dashboard', 'material_requests', 'audit_trail', 'kpi_dashboard', 'notifications'],

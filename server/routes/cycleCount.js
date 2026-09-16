@@ -12,6 +12,7 @@ const { authenticate, requirePermission } = require('./../middleware/auth');
 const { isId, isNonNegativeNumber, parsePagination } = require('./../utils/validate');
 const audit = require('./../services/audit');
 const { recordMovement } = require('./../services/ledger');
+const { activeFreeze, freezeMessage } = require('./../services/freeze');
 
 const router = express.Router();
 router.use(authenticate, requirePermission('cycle_count'));
@@ -87,6 +88,22 @@ router.post('/:id/post', (req, res) => {
   if (cc.status !== 'COUNTED') return res.status(400).json({ error: `Count must be entered before posting (status '${cc.status}').` });
   const batch = db.prepare('SELECT * FROM batches WHERE id=?').get(cc.batch_id);
   if (!batch) return res.status(404).json({ error: 'Batch no longer exists.' });
+
+  // Four-eyes, the same shape every other approval in this system uses. The
+  // segregation of duties the product advertises protects the goods issue; the
+  // fastest way to make material disappear from the books was never an issue,
+  // it was this - count a batch as zero and post it, one person, one click.
+  // Admin is exempt so a one-person tenant can still close a count, as with
+  // every other four-eyes check here.
+  if (Number(cc.counted_by) === Number(req.user.id) && req.user.role !== 'admin') {
+    return res.status(403).json({
+      error: `Segregation of duties: this count was entered by ${cc.counted_by_name || 'you'}; a different user must post it.`,
+    });
+  }
+  // A frozen physical inventory means the warehouse is being counted from a
+  // snapshot. Posting a cycle-count adjustment into it double-books.
+  const freeze = activeFreeze(cc.warehouse_code);
+  if (freeze) return res.status(400).json({ error: freezeMessage(freeze, cc.warehouse_code) });
 
   // Reliability guard: never post a count that leaves on-hand below what is
   // already reserved for open picking allocations — that would let the same

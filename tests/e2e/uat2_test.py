@@ -36,6 +36,7 @@ def login(email, pw):
 admin = login('admin@example.com', 'Admin@123456')
 requester = login('requester@example.com', 'Passw0rd!')
 supervisor = login('supervisor@example.com', 'Passw0rd!')
+whoperator = login('whoperator@example.com', 'Passw0rd!')  # second signature for cycle-count posts
 
 # ===== 1. Cycle-count guard: counted below reserved is rejected =====
 _, r = call('GET', '/api/master/batches?search=MAT-0001', admin)
@@ -47,12 +48,12 @@ if reserved_batches:
     c, cc = call('POST', '/api/cycle-count', supervisor, {'batch_id': b['id']})
     check('cycle count opened on reserved batch', c == 201, (c, cc))
     call('POST', f"/api/cycle-count/{cc['id']}/count", supervisor, {'counted_quantity': 0})
-    c, r2 = call('POST', f"/api/cycle-count/{cc['id']}/post", supervisor)
+    c, r2 = call('POST', f"/api/cycle-count/{cc['id']}/post", whoperator)
     check('post below reserved is blocked (400)', c == 400 and 'reserved' in r2.get('error', '').lower(), (c, r2))
     # a sane count (>= reserved) still posts
     c, cc2 = call('POST', '/api/cycle-count', supervisor, {'batch_id': b['id']})
     call('POST', f"/api/cycle-count/{cc2['id']}/count", supervisor, {'counted_quantity': b['remaining_quantity']})
-    c, r2 = call('POST', f"/api/cycle-count/{cc2['id']}/post", supervisor)
+    c, r2 = call('POST', f"/api/cycle-count/{cc2['id']}/post", whoperator)
     check('post at/above reserved succeeds', c == 200, (c, r2))
 
 # ===== 2. Factory reset =====
