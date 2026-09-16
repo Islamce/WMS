@@ -1,6 +1,6 @@
 # WMS Corrective Programme
 
-**Status:** draft v0.9 — three audit domains still outstanding (see §0.2).
+**Status:** v1.0 — all nine audits complete. §0.2 records what each one changed.
 **Baseline:** `main` at `40e68bc`. Production at `76a1420` (7 commits behind, 2 migrations unapplied).
 **Purpose:** one complete corrective pass. Written so that it does not need a further audit round.
 
@@ -17,17 +17,29 @@ Every item carries one:
 - **REPORTED** — an agent's finding, plausible, not independently re-read.
 - **DEVICE** — cannot be settled without a physical device or a deployed tenant.
 
-### 0.2 Known gaps in this draft
-Three audits did not complete (session rate limit). Until they run, this plan is not final:
+### 0.2 The three outstanding passes, and what they changed
 
-| Domain | What is missing | Risk of proceeding without it |
-| --- | --- | --- |
-| Security | Full-product pass: auth, session, tenancy isolation, import paths, CI secrets. Also the challenge to PR 7 (does `site_storekeeper` collapse a control that exists for a reason?) and to PR 13's client-side checklist filter (is it hiding a server-side authorization gap?). | PR 7 changes an authorization boundary. Do not merge it before the security challenge is answered. |
-| Data truth | Whether `analytics_truth_test.py` would catch A2/A10/A11, and whether multiplying stock by `materials.price` is correct given how price is populated — or just moves the lie. | PR 8 and the spend report both depend on this. |
-| Performance | Index requirements for the spend-by-project report; the unpaginated `/api/dashboard/bins`. | Only affects Wave 6. Safe to sequence last. |
+All three have now run. Two of them **rejected** items this plan had proposed, and one
+found a class of defect the plan did not contain at all. Nothing here is a footnote.
 
-**Rule: PR 7 and PR 8 do not merge until the security and data-truth passes have run.**
-Everything in Waves 0–2 is independent of all three gaps and can proceed now.
+| Pass | Verdict |
+| --- | --- |
+| **Security** | Found thirteen findings, several executed live against throwaway tenants. Two are **standing** on the public production host, not conditional. It also answered both questions §0.2 had blocked PRs on — recorded under Wave 3 and Wave 4. |
+| **Data truth** | Provisioned four tenants, ran the real endpoints, and proved that "how much stock do we have" has **six different answers on six screens**. It **rejected PR 8 as specified** and **rejected PR 17 outright**. |
+| **Performance** | Built 210 MB and 671 MB synthetic databases and timed the real endpoints. Found one endpoint that blocks the whole server for 164 seconds at ten times production size, and two missing indexes worth 456× and 106×. |
+
+Three corrections to what this document previously asserted:
+
+- **D3 was wrong.** `ai_analytics` is granted to six roles in `server/db/seed3.js`, and
+  `/api/analytics` carries **no `requireModule` gate at all** — only `requirePermission`.
+  The client hides the screen; the API does not. So the screen is unreachable in the UI and
+  the endpoint is reachable by anyone holding the permission, whatever edition they bought.
+  That is a client-side-only edition gate, which is a security finding, not a cosmetic one.
+- **A10's classification was too kind.** "One query, one file" is how the *symptom* presents.
+  The cause is two stock ledgers with two writers and no field recording which is authoritative.
+- **A2 is no longer inference.** `allocation.propose()` was executed and returned a
+  subcontractor-owned batch against a company request. It is the most serious item in the
+  programme.
 
 ---
 
@@ -132,10 +144,72 @@ Grouped by the wave that fixes them. `A/B/C/D` ids match the working brief; `O` 
 
 ---
 
+### Security — executed against throwaway tenants unless marked
+| id | finding | evidence |
+| --- | --- | --- |
+| S1 | `npm test` or `npm run seed` in the production container deletes the database and installs accounts whose passwords are published in `README.md` on a **public** repository (`"private": false`, verified). `server/db/seed.js` has **no guard of any kind** — the four production environment variables gate only the boot-time auto-seed. The nine accounts include one holding `approvals` and one holding `gi_posting`, i.e. both halves of the segregation-of-duties pair. | EXECUTED |
+| S2 | `POST /api/stock/out` removes stock with **no request, no approval, no SoD and no freeze check**. The only validation is that `reservation_number` is a non-empty string — `"MADE-UP-0001"` passes. `stock_out` is in `DEFAULT_USER_ROLE_PERMISSIONS`, which is what self-signup assigns. The screen is in `ROUTE_PAGES` but in **no menu**, so no administrator reviewing the UI would know it exists. | EXECUTED |
+| S3 | Unauthenticated self-registration is open on the public host. No CAPTCHA, no invite, no per-endpoint limit. The account lands `pending`, so the exploit is the chain: a stranger looks like a real hire, one approval click makes them active, and S2 then lets them take stock out. | EXECUTED |
+| S4 | Cycle Counting is a **one-person stock write-off**. Open a count, enter zero, post — no approval, no recount, no SoD, no value threshold, and `activeFreeze` is not imported in the file at all. The fastest way to make material disappear from the books is not a goods issue. | VERIFIED |
+| S5 | A frozen physical inventory does not stop picking or goods issue. Receiving refuses; claim, confirm and GI all succeed. The count posting then writes `ADJUSTMENT_OUT` for the same units, so they leave the ledger **twice** — or, under blind counting, the issued material is put **back** on the books with no adjustment at all. | EXECUTED |
+| S6 | Same as A2, proved a second way: subcontractor-owned stock received, released, binned; company batches zeroed; a plain company request allocated against the subcontractor's batch. | EXECUTED |
+| S7 | The value-based approval authority never fires, because `materials.price` is never populated — `install-starter-data.js` inserts materials with no price column and the default is 0. Every request values at zero, so the "senior approval above 1,000" threshold is inert. A control the product reports as present is absent. | VERIFIED |
+| S8–S13 | Idempotency keys global rather than per-user and predictable on mobile; the offline queue survives sign-out; the debug-signed APK is published on a **public** GitHub Release; a test hook can force-release every reservation while the audit trail blames the scheduler; `users_management` is administrator-equivalent with unguarded self-grant; the public repository carries the production operational map. | REPORTED |
+
+### Data truth — measured against running endpoints
+| id | finding |
+| --- | --- |
+| T1 | One material, one database, one moment: the dashboard says 460, the Materials master says 460, its "Available" column says 405, the request screen says 405, analytics says 245, its issuable figure says 135 — and the engine hands out **295**. Not one label says which question it is answering. |
+| T2 | Every dashboard stock total adds BAG to TON to M3. "Stock on hand: 530" is not a quantity of anything. Same for the bin ranking, the group chart and the location chart. |
+| T3 | The request screen's "Available stock" ignores owner, quality and block — it shows 405 where 135 is issuable, and renders it in red/green as if authoritative. |
+| T4 | The analytics row's own three figures do not reconcile: 135 + 115 ≠ 245, because one is net of reservation and the other is gross. The dashboard's equivalent four tiles **do** reconcile, so the product gets this right on one screen and wrong on another. |
+| T5 | Three percentages over a zero denominator survive the earlier `erp_success_rate` fix: shortage percentage renders a **green "clear"** card on a tenant that has never raised a request; FIFO/FEFO "compliance" is graded by the engine that wrote the number; QR pass/fail is structurally zero because the flags that gate the writing path are never set. |
+| T6 | `avg_approval_to_issue_minutes` — the replacement for the two null'd ERP cycle times — has the exact defect it was introduced to fix. `approved_at` is a datetime and `gi_posting_date` is a date, so a same-day request computes −540 minutes, and the clamp is applied to the **average** rather than per row. A single same-day request renders as "0", i.e. instant. |
+| T7 | `erp_success_rate` reads **100%** on a tenant with no ERP, because contracting GI posting still logs a `GI_POSTING / SUCCESS` row for every locally minted number. The dashboard hides this metric on such a tenant; the KPI screen does not. |
+| T8 | "Export Audit Trail" exports **25 rows of 302** and says nothing: the client asks for 5,000, the validator caps at 100 and silently falls back to the default of 25. "Export the full filtered list" exports **100 of 314**; production holds ~9,700. |
+| T9 | Four document numbers are still `COUNT(*) + 1` after the sequence service was introduced: `MR-`, `PI-`, `SCR-`, and the batch-split suffix. |
+| T10 | Twenty-one dead columns. The `supervisor_override_*` group is the one that matters: the KPI screen reports an override **count** while the four columns that would say which line, by whom and why are never written. |
+| T11 | `tests/e2e/analytics_truth_test.py` passes 27 assertions on a baseline containing A2, A10 and A11. It never calls the allocation engine, never calls `/api/materials`, never calls `/api/materials/search`, and its fixture contains no `material_location_stock` rows — so two of the three defects are structurally unreachable from it. The fixture has decayed into one that cannot fail. |
+
+### Performance — measured on synthetic datasets at 10× and 1M rows
+The mechanism that ranks everything: `better-sqlite3` is synchronous, so a slow read does not
+just slow a screen — it **blocks the event loop**, and every other user with it. Measured:
+`GET /healthz` took 1,628 ms while one bins query was in flight, and a stock-in write went from
+5 ms to 1,577 ms. "A slow screen" and "a blocked goods issue" are the same defect here.
+
+| id | finding | measured |
+| --- | --- | --- |
+| P1 | `GET /api/analytics` blocks the whole server. A quadratic de-duplication loop, plus 90 date strings regenerated per material. | **1,187 ms today**; **164 seconds** at 10×, returning 33.8 MB. Hoisting the date strings alone: 1,018 → 20 ms at today's size. |
+| P2 | Warehouse Queue — the screen the storekeeper lives on — does a full scan of `picking_tasks` per row. One missing index. | **6,935 → 15 ms.** 456×. |
+| P3 | `/api/dashboard/bins` builds a throwaway index on every request and returns every bin with its full contents, unpaginated. | **1,277 → 12 ms** with the right index. A *partial* index makes it 4× **worse** — measured. |
+| P4 | Mobile material search fires one request per keystroke, undebounced. | 12 requests per search; ≈3.6 s on a site 3G link versus 300 ms. |
+| P5 | The dashboard wraps `transaction_date` in `date()` five times per load, defeating the index. | **136 → 0.9 ms** each at 1M. Output verified byte-identical. |
+| P6 | No response compression anywhere — not in Express, not in Caddy. | 3.5 MB → 383 KB on the mobile bin screen. Three lines. |
+| P7 | `/api/receiving/pending-gr` is unbounded **and never drains**: the opening-stock importer writes batches with no `gr_number`, so all ~9,700 of production's opening-stock batches sit on that screen permanently. | 6.3 MB at 10×. |
+| P8 | The CI load test cannot detect a single finding above: it runs against ~20 seeded rows and probes five endpoints, none of them the slow ones. `write-contention.js` is well designed and is not wired into `npm run test:load`. | — |
+
 ## 3. Execution order
 
 Principles: nothing that moves data ships with anything else; nothing user-visible ships
 before the pipeline can prove what it is serving; each wave ends at a verifiable point.
+
+### Wave −1 — close what is open right now (1 PR, server code only, no production operation)
+This did not exist in v0.9 because the security pass had not run. It now comes first: S2 and S3
+together are a **standing** path on the live public host, not a conditional one, and S1 is a
+loaded gun pointed at the production database for the duration of this programme.
+
+| contents | closes |
+| --- | --- |
+| Delete `POST /api/auth/signup` and the sign-up link | S3 |
+| Remove `stock_in`/`stock_out` from `DEFAULT_USER_ROLE_PERMISSIONS`, plus a migration revoking both from the `user` role on existing tenants | S2 |
+| `DB_PATH` / `NODE_ENV` / path refusal in `tests/run.sh`, and a production guard in `server/db/seed.js` and `scripts/fresh-start.js` modelled on `reset-admin.js` | S1 |
+| `activeFreeze` in `picking.js` and `gi.js` | S5, A3 |
+| `owner_type` predicate in `allocation.js` | S6, A2 |
+| Remove the default passwords from `README.md` | defence in depth |
+
+Nothing here touches the production database, needs a migration to land first, or depends on
+the catch-up deploy. It ships as one PR because the items are individually small and jointly
+the difference between a product that can be piloted and one that should not be.
 
 ### Wave 0 — baseline (no code, human-dispatched)
 Deploy `40e68bc` as a **catch-up release carrying no corrective content**. `plan_only` first,
@@ -149,12 +223,12 @@ baseline, and the first corrective deploy would carry seven unrelated commits.
 ### Wave 1 — guardrails (4 PRs, no user-visible change)
 | PR | contents | fixes |
 | --- | --- | --- |
-| 1 | `tests/run.sh` DB_PATH/NODE_ENV/path refusal; `fresh-start.js` production guard modelled on `reset-admin.js`; `create-demo-tenant.js` existence check extended to `-wal`/`-shm`; `install-starter-data.js` gains the production-path refusal | O1, O2 |
+| 1 | What Wave −1 did not already cover: `create-demo-tenant.js` existence check extended to `-wal`/`-shm`, and `install-starter-data.js` gains the production-path refusal. (The `tests/run.sh`, `seed.js` and `fresh-start.js` guards moved forward into Wave −1 once the security pass showed how exposed they are.) | O1, O2 |
 | 2 | `BUILD_SHA` build-arg → `/healthz` returns it → the release workflow asserts it matches the requested ref | O4 |
 | 3 | Unpin `/release-assets/9d79a00/`, or drive the segment from `BUILD_SHA` | O5 |
 | 4 | Deploy-gate watch list extended; `expected_row_delta` input; pre-build image tagging so rollback is a retag; backup manifest echoed; `rollback_to` dispatch input | O6, O8 |
 
-PR 1 ships alone. It is the one PR whose absence can end the programme.
+Wave −1 carries what used to make PR 1 urgent; what remains here is ordinary hardening.
 
 → **Deploy Wave 1.** First deploy where "did it land" has a machine answer.
 
@@ -171,8 +245,8 @@ PR 5 ships alone so the KAAF regeneration churn does not hide a real diff.
 
 | PR | contents | classification | fixes |
 | --- | --- | --- | --- |
-| 7 | `site_storekeeper` role as an **additive migration** (new role, grants for the new role only, assigned to no user) plus the matching seed edit for new tenants | MIGRATION — a seed edit alone reaches no existing tenant, because `npm run seed` is forbidden in production | A4 |
-| 8 | `materials.js` list endpoint uses the same `COALESCE` fallback the search endpoint already uses | CODE — no data moves, reverts cleanly | A10 |
+| 7 | `site_storekeeper` role as an **additive migration** (new role, grants for the new role only, assigned to no user) plus the matching seed edit for new tenants. The security pass's answer to whether this collapses a real control: the segregation of duties the product advertises protects the *goods issue*, and the fastest route to making material disappear is **not** a goods issue — it is a cycle count, which today needs one signature and is already held by two seeded roles (S4). Fix the cycle count in the same wave, or the role is being argued about at the wrong door. | MIGRATION — a seed edit alone reaches no existing tenant, because `npm run seed` is forbidden in production | A4, S4 |
+| 8 | **Rewritten.** The bare `COALESCE` this document proposed in v0.9 is **wrong** and must not ship: `COALESCE(SUM(x), …)` falls through only when there are *no rows*, so a material with a depleted batch row plus legacy stock returns **zero** — proved on a live endpoint. And `/api/stock/in` writes legacy rows with no batch at all, so the two ledgers can both legitimately hold stock. Ship instead an expression that subtracts only the overlap the opening-stock import created, identified by the bin code both writers share, plus a field naming which ledgers contributed. Preceded by one read-only production query that settles whether either wrong answer would have been visible. | CODE — no data moves | A10 |
 | 9 | `install-starter-data.js` sets the batch/expiry flags for **new tenants only** | CODE | A8 |
 
 **Explicitly out of scope:** any bulk `UPDATE` of `is_batch_managed` on existing materials.
@@ -214,7 +288,21 @@ device against a deployed tenant.
 | --- | --- | --- |
 | 15 | Spend-by-project report: `stock_transactions → material_request_lines → material_request_headers.wbs_element × materials.price`; enforce `requiredRequestFields` server-side; project becomes a register-backed dropdown; project column and filter on the requests list | D1 |
 | 16 | Deliver `terminology` from `/api/auth/me` and apply it; display maps for the raw enums; drop the impossible stage and the unreachable status options | B11 |
-| 17 | Currency on the dashboard tiles (pending the data-truth verdict on `materials.price`); demo script that triggers the SoD refusal; landing page rewritten for contracting | D2, D4, D5 |
+| 17 | **Rewritten.** Multiplying stock by `materials.price` is **rejected**: the column has no provenance, no effective date, no valuation basis and no aggregated currency, `Number(x) \|\| 0` turns any blank into zero, and the analytics screen already performs this exact multiplication and renders **"Total Stock Value — 0"** on a tenant holding 530 units. It converts a number that merely looks odd into one that looks authoritative and is wrong. Ship **per-unit subtotals** instead — no price needed, correct from day one. Then, separately: make `price` nullable and distinguishable from zero, refuse to aggregate across currencies, and say "not available (N of M unpriced)" rather than summing the priced ones. Plus the demo script that triggers the SoD refusal, and the landing page rewrite. | D2, D4, D5, T2, S7 |
+
+### Wave 7 — performance (2 PRs, every payoff measured)
+None of this is blocked by anything else in the programme.
+
+| PR | contents | measured payoff |
+| --- | --- | --- |
+| 18 | Six changes, each between one and ten lines, all independent, none altering a single output value: the two missing indexes; hoist the 90 date strings; replace the quadratic de-duplication with a `Set`; `app.use(compression())`; drop `date()` from the five dashboard movement queries. | 6,935 → 15 ms; 1,277 → 12 ms; 1,018 → 20 ms; 131 s → 50 ms; 3.5 MB → 383 KB; 136 → 0.9 ms |
+| 19 | Paginate `/api/dashboard/bins` and drop the per-bin contents; exclude opening stock from Pending GR; drop the joins from the transactions count when no search is given; debounce the mobile search. | 3.5 MB → ~40 KB/page; 6.3 MB → ~30 KB; 2,060 → ~30 ms; 12 requests → 1 |
+
+And the gate that would have caught all of it: extend the scale seeder to populate batches,
+bins, requests, tasks, audit and movement history (19 seconds for a 210 MB dataset), point the
+load test at that instead of the ~20 seeded rows, add the seven slow endpoints to its route
+list, and wire `write-contention.js` into `npm run test:load` — because on a synchronous
+database the number that matters is write latency while a read is in flight.
 
 ### Deferred by decision, recorded so they are not rediscovered
 - Bulk `is_batch_managed` on existing materials (Wave 3 note).
@@ -245,20 +333,26 @@ code deliberately and confirm the guard fails.
 | `tests/run.sh` refuses to run when `DB_PATH` points outside the repo | O1 |
 | Deploy asserts the served `BUILD_SHA` equals the requested ref | O4 |
 | Doc test: every `docs/**` path cited in code or `.ai/` exists | O9 |
+| Materials list and request screen return the same figure for a material holding **both** batch and legacy stock, and neither returns zero — the pair fails today under `+` and under bare `COALESCE`, so it rejects both wrong answers | A10 |
+| A cycle time over zero completed requests is `null`, not `0`, and a same-day request does not average negative | T6 |
+| A signed-up user cannot reach any stock-mutating route | S2, S3 |
+| Load test runs against the scale dataset, covers the seven slow endpoints, and asserts write latency under concurrent read | P1–P8 |
 
 ---
 
 ## 5. What a human must do, and when
 
-1. **Now:** dispatch the Wave 0 catch-up release — `plan_only` first, read it, then for real.
+1. **First, before anything else:** review and merge Wave −1. Two of its items close a path
+   that is open on the live public host today. None of it touches production data.
+2. **Then:** dispatch the Wave 0 catch-up release — `plan_only` first, read it, then for real.
    This touches the production database (migration 027 writes rows). It needs explicit approval.
-2. **Before Wave 3:** configure required reviewers on the `production` GitHub environment, then
+3. **Before Wave 3:** configure required reviewers on the `production` GitHub environment, then
    dispatch once and confirm a run actually stops at the gate. A comment saying a gate exists is
    not evidence that it fires.
-3. **Until PR 1 lands:** nobody runs `npm test`, `npm run seed` or `npm run fresh-start` inside
+4. **Until Wave −1 lands:** nobody runs `npm test`, `npm run seed` or `npm run fresh-start` inside
    the production container.
-4. **Wave 5:** a physical device against a provisioned test tenant — not production.
-5. **Throughout:** the owner using the product for a day. No agent in this programme can
+5. **Wave 5:** a physical device against a provisioned test tenant — not production.
+6. **Throughout:** the owner using the product for a day. No agent in this programme can
    substitute for it; none of the nine noticed that a screen is annoying to use.
 
 ## 6. What could not be verified from here
