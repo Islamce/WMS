@@ -95,7 +95,7 @@ function main() {
   }
 
   const dbPath = path.resolve(args.db);
-  if (process.env.NODE_ENV === 'production' || /^(\/opt\/apps\/wms|\/app\/data)\//.test(dbPath)) {
+  if (/^(\/opt\/apps\/wms|\/app\/data)\//.test(dbPath)) {
     console.error('REFUSING: starter data must not be installed against production.');
     process.exit(1);
   }

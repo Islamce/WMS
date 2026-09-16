@@ -144,7 +144,11 @@ try:
     con = sqlite3.connect(db)
     line_id = con.execute('SELECT id FROM material_request_lines WHERE request_id=?', (rid,)).fetchone()[0]
     task_id = con.execute('SELECT id FROM picking_tasks WHERE request_id=?', (rid,)).fetchone()[0]
+    allocations = con.execute('SELECT id, bin_location FROM picking_allocations WHERE line_id=?', (line_id,)).fetchall()
     con.close()
+    for allocation_id, bin_location in allocations:
+        code, body = call('POST', f'/api/picking/allocations/{allocation_id}/scan', token, {'qr_value': bin_location})
+        check('D3 scan the allocated bin', code == 200, (code, body))
     code, body = call('POST', f'/api/picking/lines/{line_id}/confirm', token, {'picked_quantity': 10})
     check('D3 pick it', code == 200, (code, body))
     call('POST', f'/api/picking/tasks/{task_id}/complete', token)
