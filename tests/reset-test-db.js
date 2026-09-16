@@ -13,7 +13,13 @@ function resetTestDatabase(root, env = process.env) {
   root = fs.realpathSync(root);
   const requested = path.resolve(root, env.DB_PATH);
   // Resolve the parent too: a directory symlink must not escape the repository.
-  const target = path.join(fs.realpathSync(path.dirname(requested)), path.basename(requested));
+  let ancestor = path.dirname(requested);
+  while (!fs.existsSync(ancestor)) {
+    const parent = path.dirname(ancestor);
+    if (parent === ancestor) refuse('DB_PATH has no existing parent.');
+    ancestor = parent;
+  }
+  const target = path.resolve(fs.realpathSync(ancestor), path.relative(ancestor, requested));
   const relative = path.relative(root, target);
   if (!relative || relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
     refuse('DB_PATH must stay inside the repo.');
@@ -27,6 +33,7 @@ function resetTestDatabase(root, env = process.env) {
     const stat = fs.lstatSync(file);
     if (!stat.isFile() || stat.nlink > 1) refuse('Scratch database files must be regular files without hard links.');
   }
+  fs.mkdirSync(path.dirname(target), { recursive: true });
   for (const file of targets) fs.rmSync(file, { force: true });
 }
 

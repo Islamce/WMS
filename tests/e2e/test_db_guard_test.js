@@ -43,6 +43,9 @@ try {
   }
   resetTestDatabase(root, { DB_PATH: scratch });
   files.forEach(file => assert.equal(fs.existsSync(file), false));
+  const freshScratch = path.join(root, 'fresh-checkout', 'data', 'scratch.db');
+  resetTestDatabase(root, { DB_PATH: freshScratch });
+  assert.ok(fs.statSync(path.dirname(freshScratch)).isDirectory(), 'Fresh scratch directory is created safely');
   console.log('PASS: test database guard refuses unsafe paths and resets only scratch files');
 } finally {
   // This is a freshly generated fixture directory, never the application data directory.
