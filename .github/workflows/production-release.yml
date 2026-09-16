@@ -188,6 +188,7 @@ jobs:
           echo "$out"
           manifest="$(printf '%s\n' "$out" | grep -oE '[A-Za-z0-9_.-]*manifest[A-Za-z0-9_.-]*\.json' | tail -1 || true)"
           echo "backup_manifest=${manifest:-unknown}" >> "$GITHUB_OUTPUT"
+          echo "Backup manifest: ${manifest:-unknown}" >> "$GITHUB_STEP_SUMMARY"
           echo "Backup taken and verified (manifest: ${manifest:-not reported by the scripts})."
 
       - name: Plan only — stop here
@@ -211,11 +212,15 @@ jobs:
           # becomes dangling. Rollback then has to rebuild the old commit from
           # source, over the network, inside an already-failing window. Tagging
           # it first makes rollback a retag with no network dependency.
-          ssh hostinger "set -e; cd '$REMOTE_APP_DIR'; \
-            img=\$(docker compose images -q wms); \
-            if [ -n \"\$img\" ]; then docker image tag \"\$img\" wms:rollback-${{ inputs.release_ref }}; \
-              echo \"Tagged \$img as wms:rollback-${{ inputs.release_ref }}\"; \
-            else echo 'No running image to tag.'; fi"
+          image_ref="$(ssh hostinger "set -e; cd '$REMOTE_APP_DIR'; \
+            container=\$(docker compose ps -q wms); \
+            test -n \"\$container\"; \
+            img=\$(docker inspect --format '{{.Image}}' \"\$container\"); \
+            ref=\$(docker inspect --format '{{.Config.Image}}' \"\$container\"); \
+            docker image tag \"\$img\" wms:rollback-${{ inputs.release_ref }}; \
+            printf '%s' \"\$ref\"")"
+          test -n "$image_ref"
+          echo "image_ref=$image_ref" >> "$GITHUB_OUTPUT"
 
       - name: Deploy
         id: deploy
@@ -240,7 +245,7 @@ jobs:
           # as well. What settles it is the build marker the image carries.
           want='${{ inputs.release_ref }}'
           for i in $(seq 1 30); do
-            body="$(curl -sS "$HEALTH_URL" || true)"
+            body="$(curl --fail -sS "$HEALTH_URL" || true)"
             got="$(printf '%s' "$body" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{process.stdout.write(String(JSON.parse(d).release||''))}catch{process.stdout.write('')}})" || true)"
             if [ "$got" = "$want" ]; then echo "Healthy after ${i} attempt(s), serving $got."; exit 0; fi
             sleep 5
@@ -305,27 +310,19 @@ jobs:
           " '${{ steps.before.outputs.counts }}' "$counts" '${{ inputs.expected_row_delta }}'
 
       - name: Roll back
-        if: ${{ !inputs.plan_only && (steps.deploy.outcome != 'success' || steps.health.outcome != 'success' || steps.after.outcome != 'success') }}
+        if: ${{ !inputs.plan_only && steps.keep_image.outcome == 'success' && steps.deploy.outcome != 'skipped' && (steps.deploy.outcome != 'success' || steps.health.outcome != 'success' || steps.after.outcome != 'success') }}
         env:
           CURRENT: ${{ steps.current.outputs.current_sha }}
         run: |
           set -Eeuo pipefail
           echo "::warning::Rolling back to $CURRENT."
-          # Prefer the image tagged before the build: no network, no compiler,
-          # nothing that can fail inside an already-failing window. Fall back
-          # to a rebuild only if the tag is not there.
+          # Restore the tag referenced by the previous container, never an image
+          # ID as a destination tag. Missing rollback evidence must fail loudly.
           ssh hostinger "set -e; cd '$REMOTE_APP_DIR'; \
             git checkout --quiet $CURRENT; \
-            if docker image inspect wms:rollback-${{ inputs.release_ref }} >/dev/null 2>&1; then \
-              echo 'Restoring the previously serving image by tag.'; \
-              img=\$(docker compose images -q wms || true); \
-              docker image tag wms:rollback-${{ inputs.release_ref }} \"\${img:-wms-wms}\" 2>/dev/null || true; \
-              docker compose up -d --no-build; \
-            else \
-              echo 'No rollback tag found; rebuilding the previous commit.'; \
-              BUILD_SHA=$CURRENT docker compose build; \
-              BUILD_SHA=$CURRENT docker compose up -d; \
-            fi"
+            docker image inspect wms:rollback-${{ inputs.release_ref }} >/dev/null; \
+            docker image tag wms:rollback-${{ inputs.release_ref }} '${{ steps.keep_image.outputs.image_ref }}'; \
+            docker compose up -d --no-build --force-recreate wms"
           for i in $(seq 1 30); do
             code="$(curl -sS -o /dev/null -w '%{http_code}' "$HEALTH_URL" || true)"
             if [ "$code" = "200" ]; then
@@ -343,4 +340,5 @@ jobs:
           CURRENT: ${{ steps.current.outputs.current_sha }}
         run: |
           echo "Deployed ${{ inputs.release_ref }} (was $CURRENT)."
-          echo "Health 200, row counts unchanged, database integrity ok."
+          echo "Expected build is serving, row counts match declared deltas, database integrity ok."
+          echo "Deployed ${{ inputs.release_ref }}; backup manifest: ${{ steps.backup.outputs.backup_manifest }}" >> "$GITHUB_STEP_SUMMARY"

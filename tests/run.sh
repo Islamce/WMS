@@ -45,6 +45,7 @@ echo "=== Phase 1: workflow + refinements + P0/P1 regression ==="
 fresh_db || exit 1
 node tests/e2e/test_db_guard_test.js || exit 1
 node tests/e2e/pr_a_stock_guards_test.js || exit 1
+node tests/e2e/release_gate_test.js || exit 1
 start_server || exit 1
 run_suite workflow_test.py
 run_suite refinements_test.py
