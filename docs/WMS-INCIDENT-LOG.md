@@ -1,3 +1,5 @@
+> **Hosting supersession:** Shared-hosting / Passenger instructions in this document are historical. For the Docker Compose VPS deployment, see [the 2026-09-06 migration](HOSTINGER-VPS-MIGRATION-2026-09-06.md). Preserve the historical record; do not execute retired-host commands.
+
 # WMS Incident Log
 
 This log records production failures, data-risk events, deployment failures, recoveries, and important near misses. Do not include secrets.

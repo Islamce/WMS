@@ -1,3 +1,5 @@
+> **Hosting supersession:** Shared-hosting / Passenger instructions in this document are historical. For the Docker Compose VPS deployment, see [the 2026-09-06 migration](HOSTINGER-VPS-MIGRATION-2026-09-06.md). Preserve the historical record; do not execute retired-host commands.
+
 # Deployment prompt — WMS to the production VPS
 
 Hand this whole file to whoever (or whatever) has SSH access to the VPS. It is

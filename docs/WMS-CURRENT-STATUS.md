@@ -1,8 +1,14 @@
+> **Hosting supersession:** Shared-hosting / Passenger instructions in this document are historical. For the Docker Compose VPS deployment, see [the 2026-09-06 migration](HOSTINGER-VPS-MIGRATION-2026-09-06.md). Preserve the historical record; do not execute retired-host commands.
+
 # WMS Current Status
 
-Last updated: 2026-09-11
+Last updated: 2026-09-16 (deployment-log evidence; current runtime not rechecked)
 
 ## Executive status
+
+- **Latest reviewed deployment evidence (2026-09-15):** [release run 34923743643](https://github.com/Islamce/WMS/actions/runs/34923743643) completed successfully and recorded deployment of `b46ed7d29f4450095aabaf4bdd6c60a1ead6be60`. The run reported migrations 27 → 27, unchanged counts (`users=11`, `materials=9746`, `batches=3274`, `requests=8`), and `integrity=ok`. This supersedes the September 11 deployment baseline below. It is historical workflow evidence, not a new read-only verification of today's serving container. The corrective programme's owner STOP still requires current runtime confirmation; no corrective release was dispatched by the agent.
+
+### Earlier deployment evidence
 
 - **CONTRACTING EDITION DEPLOYED (2026-09-11).** Production moved from
   `bd7034d14039d25e886aafb3a44d3146c091b613` to

@@ -1,3 +1,5 @@
+> **Hosting supersession:** Shared-hosting / Passenger instructions in this document are historical. For the Docker Compose VPS deployment, see [the 2026-09-06 migration](HOSTINGER-VPS-MIGRATION-2026-09-06.md). Preserve the historical record; do not execute retired-host commands.
+
 # WMS Decision Log
 
 This document records durable product, architecture, data, security, deployment, and operating decisions. New entries must state context, decision, consequences, and status.

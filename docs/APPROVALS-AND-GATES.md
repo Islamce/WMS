@@ -1,3 +1,5 @@
+> **Hosting supersession:** Shared-hosting / Passenger instructions in this document are historical. For the Docker Compose VPS deployment, see [the 2026-09-06 migration](HOSTINGER-VPS-MIGRATION-2026-09-06.md). Preserve the historical record; do not execute retired-host commands.
+
 # Who approves what, and which gate catches what
 
 Written 2026-09-14, after the release that deployed `5bd5549`. Two questions it

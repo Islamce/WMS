@@ -5,7 +5,9 @@ or universal `app-release.apk`). **Run against a throwaway tenant provisioned wi
 `scripts/provision-tenant.js`, never against production.** Rows A16, A18, A20 and
 A24 reverse issues, receive stock, post counts and cancel requests; on
 `https://wms.kynox.io` that is a debug-signed APK mutating live stock. Point the
-app's server URL at the test tenant (Settings → Server URL) before row A1.
+app's server URL at the test tenant before row A1. **Blocked:** the current app
+has no Settings → Server URL control; a test-targeted build must be supplied and its
+endpoint verified before any device test. Do not use the production-targeted APK.
 Configure that server's Firebase service account for section C. Record **Actual
 result**, **Pass/Fail**, **Evidence** (screenshot/log ref) and a **Defect ID** for
 every row.
@@ -33,7 +35,6 @@ never the full token; no payload dump).
 | A5 | Approval | manager | A3 submitted | Approve | Allocated and moves to Pending Picker Assignment (no ERP queue on a contracting tenant) | | | | |
 | A6 | Value approval matrix | manager/admin | high-value request | Manager approves high-value | Blocked (needs high-value perm); admin approves | | | | |
 | A7 | Self-approval prevention | manager | manager is requester | Try to approve own | Blocked | | | | |
-| A8 | *(removed)* | — | — | ERP reservation does not occur on a contracting tenant; approval reserves stock directly (see A5) | — | | | | |
 | A9 | Allocation | supervisor | reserved | Allocate | FIFO/FEFO bin+batch assigned | | | | |
 | A10 | Picker assignment | supervisor | allocated | Assign picker | Task created; picker notified | | | | |
 | A11 | QR/bin scan | picker | assigned | Scan bin then batch QR; scan a wrong bin | Correct passes; wrong bin rejected (WRONG_BIN) | | | | |
@@ -55,11 +56,9 @@ never the full token; no payload dump).
 
 | # | Area | Steps | Expected | Actual | P/F | Evidence | Defect |
 |---|---|---|---|---|---|---|---|
-| B1 | *(removed)* | — | English-only is a settled decision (`public/js/i18n.js`); the app's Arabic/French options are being removed | | | | |
-| B2 | *(removed)* | — | Default theme is light; a dark-mode row tested a preference, not a requirement | | | | |
 | B3 | Back button | On a deep screen press Back repeatedly | Pops screens; does not instantly kill app from Home (confirm-to-exit) | | | | |
 | B4 | Offline / network loss | Enable airplane mode, use app | Graceful error, no crash; recovers when back online | | | | |
-| B5 | Server URL | Fresh install | Defaults to https://wms.kynox.io | | | | |
+| B5 | Test server URL | Test-targeted build | Verify the configured endpoint is the provisioned throwaway tenant before login; blocked until such a build is available | | | | |
 
 ## C. Push notifications (the PR #25 gate)
 
