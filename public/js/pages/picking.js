@@ -5,10 +5,50 @@ Pages.picking = {
   async render(el, taskId) {
     this.el = el;
     if (taskId) return this.openTask(taskId);
+    const claimsHere = App.routesStraightToStore();
     el.innerHTML = `<div class="card"><h3>My Picking Tasks</h3>
-      <p class="muted">Tasks assigned to you, including reminders and supervisor escalations that still need a picker response.</p></div>
+      <p class="muted">${claimsHere
+        ? 'Approved requests wait below until someone in the store claims them. Claim one and it becomes your task.'
+        : 'Tasks assigned to you, including reminders and supervisor escalations that still need a picker response.'}</p></div>
+      ${claimsHere ? '<div id="pk-claimable"><div class="loading">Loading requests ready to pick…</div></div>' : ''}
       <div id="pk-list"><div class="loading">Loading assigned tasks…</div></div>`;
+    if (claimsHere) await this.loadClaimable();
     await this.loadInbox();
+  },
+
+  /**
+   * On a contracting tenant approval reserves stock and parks the request at
+   * Pending Picker Assignment. POST /api/picking/requests/:id/claim was the only
+   * forward edge from there and, until this existed, had no button anywhere - the
+   * first request every new tenant raised reached that state and could not be
+   * advanced from any screen.
+   */
+  async loadClaimable() {
+    const box = this.el.querySelector('#pk-claimable');
+    if (!box) return;
+    let requests = [];
+    try { ({ requests } = await Api.get('/api/picking/claimable')); }
+    catch (err) { box.innerHTML = `<div class="inline-alert error">${UI.esc(err.message)}</div>`; return; }
+    box.innerHTML = `<div class="card"><h3>Ready to pick</h3>
+      ${requests.length
+        ? requests.map((r) => UI.requestCard(r, {
+          actionHtml: `<button class="btn success sm" data-claim="${r.id}">Claim</button>`,
+          pickerHtml: `<strong>${r.line_count} line${r.line_count === 1 ? '' : 's'}</strong><div class="muted sm">Approved and reserved. Not yet anyone's.</div>`,
+        })).join('')
+        : UI.meaningfulEmptyState({
+          title: 'Nothing waiting to be claimed',
+          description: 'Approved requests appear here the moment they are ready. Your own tasks are below.',
+        })}
+    </div>`;
+    box.querySelectorAll('[data-claim]').forEach((b) => b.addEventListener('click', async () => {
+      b.disabled = true;
+      try {
+        const { message } = await Api.post(`/api/picking/requests/${b.dataset.claim}/claim`, {});
+        UI.toast(message || 'Claimed. It is your task now.');
+        await this.loadClaimable();
+        await this.loadInbox();
+      } catch (err) { b.disabled = false; UI.toast(err.message, 'error'); }
+    }));
   },
 
   async loadInbox() {
@@ -27,7 +67,9 @@ Pages.picking = {
       }).join('')
       : UI.meaningfulEmptyState({
         title: 'No tasks are currently assigned to you',
-        description: 'New picker work appears here after a supervisor assigns it. Reminder and escalation states remain visible here until the task is accepted or reassigned.',
+        description: App.routesStraightToStore()
+          ? 'Claim a request from the list above and it appears here as your task.'
+          : 'New picker work appears here after a supervisor assigns it. Reminder and escalation states remain visible here until the task is accepted or reassigned.',
       });
     list.querySelectorAll('[data-open]').forEach((button) => button.addEventListener('click', () => this.openTask(button.dataset.open)));
   },

@@ -73,6 +73,30 @@ router.get('/tasks/:id', requirePermission('picking'), (req, res) => {
  * truthfully — set by the person doing the work, at the moment of doing it,
  * rather than guessed at approval time by someone who will not be there.
  */
+/**
+ * GET /api/picking/claimable — approved requests waiting for the store to claim.
+ *
+ * Not /api/warehouse/queue: that is gated on warehouse_dashboard /
+ * bin_batch_assignment / picker_assignment, none of which a picker holds, so the
+ * one person this list is FOR would have got a 403 from it. This is gated on
+ * `picking`, the same permission the claim itself needs. Empty on an ERP-staged
+ * tenant, where assignment is a supervisor's act and nothing is claimable.
+ */
+router.get('/claimable', requirePermission('picking'), (req, res) => {
+  if (usesErpStaging(getTenant().profileKey)) return res.json({ requests: [], claims_here: false });
+  const rows = db.prepare(`
+    SELECT h.id, h.request_number, h.requester_name, h.department, h.wbs_element, h.wbs_element AS project,
+           h.cost_center, h.required_date, h.priority, h.request_status, h.issue_warehouse_code,
+           h.erp_reservation_number, h.erp_reference_number, h.movement_type, h.plant, h.storage_location,
+           (SELECT COUNT(*) FROM material_request_lines l
+             WHERE l.request_id = h.id AND l.line_status NOT IN ('Rejected','Cancelled')) AS line_count
+    FROM material_request_headers h
+    WHERE h.request_status = ?
+    ORDER BY CASE h.priority WHEN 'URGENT' THEN 0 WHEN 'HIGH' THEN 1 WHEN 'NORMAL' THEN 2 ELSE 3 END, h.id
+  `).all(HEADER_STATUS.PENDING_PICKER_ASSIGNMENT);
+  res.json({ requests: withExecutionContexts(rows), claims_here: true });
+});
+
 router.post('/requests/:id/claim', requirePermission('picking'), (req, res) => {
   if (usesErpStaging(getTenant().profileKey)) {
     return res.status(400).json({ error: 'This tenant assigns pickers through the picker-assignment screen.' });

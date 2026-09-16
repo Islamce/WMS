@@ -151,7 +151,25 @@ async function stopServer(server) {
     const rid = (created.request || created).id;
     await api('POST', `/api/requests/${rid}/submit`, token);
     await api('POST', `/api/approvals/${rid}/decision`, token, { decision: 'approve' });
-    await api('POST', `/api/picking/requests/${rid}/claim`, token);
+    // The claim is done THROUGH THE SCREEN. This test used to call the claim
+    // endpoint with a bearer token and then check the page text mentioned
+    // claiming - so it passed while no button existed and every new tenant's
+    // first request could not be advanced from any screen.
+    await page.evaluate(() => { window.location.hash = '#/picking'; });
+    await page.waitForSelector('#pk-claimable', { timeout: 15000 });
+    await page.waitForFunction(() => !document.querySelector('#pk-claimable .loading'), { timeout: 15000 });
+    check('the approved request is offered for claiming on My Picking Tasks',
+      await page.locator('#pk-claimable [data-claim]').count() === 1,
+      await page.locator('#pk-claimable').innerText().catch(() => ''));
+    await page.locator('#pk-claimable [data-claim]').first().click();
+    await page.waitForFunction(() => document.querySelectorAll('#pk-claimable [data-claim]').length === 0
+      && document.querySelectorAll('#pk-list [data-open]').length >= 1, { timeout: 15000 });
+    check('claiming it from the screen turns it into a task in the inbox',
+      await page.locator('#pk-list [data-open]').count() >= 1);
+    // Back to where the rest of this test expects to be standing: the reload
+    // below waits for the launchpad, which only renders on #/home.
+    await page.evaluate(() => { window.location.hash = '#/home'; });
+    await page.waitForSelector('.launchpad', { timeout: 15000 });
     const detail = await api('GET', `/api/requests/${rid}`, token);
     const lineId = (detail.lines || detail.request?.lines || [])[0].id;
     await api('POST', `/api/picking/lines/${lineId}/confirm`, token, { picked_quantity: 5 });
