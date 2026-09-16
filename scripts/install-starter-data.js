@@ -95,6 +95,10 @@ function main() {
   }
 
   const dbPath = path.resolve(args.db);
+  if (process.env.NODE_ENV === 'production' || /^(\/opt\/apps\/wms|\/app\/data)\//.test(dbPath)) {
+    console.error('REFUSING: starter data must not be installed against production.');
+    process.exit(1);
+  }
   const db = new Database(dbPath);
   db.pragma('foreign_keys = ON');
 
@@ -145,10 +149,11 @@ function main() {
       `${WAREHOUSE.warehouse_code}-${b.bin_code}`, b.capacity));
 
     const insMat = db.prepare(`
-      INSERT INTO materials (item_code, description, unit, material_group, material_type)
-      VALUES (?, ?, ?, ?, 'Construction material')
+      INSERT INTO materials (item_code, description, unit, material_group, material_type, is_batch_managed, is_expiry_managed)
+      VALUES (?, ?, ?, ?, 'Construction material', 1, ?)
     `);
-    MATERIALS.forEach((m) => insMat.run(m.item_code, m.description, m.unit, m.material_group));
+    MATERIALS.forEach((m) => insMat.run(m.item_code, m.description, m.unit, m.material_group,
+      ['CHM-ADHESIVE-20', 'CHM-MEMBRANE'].includes(m.item_code) ? 1 : 0));
 
     if (plan.subcontractors) {
       db.prepare('INSERT INTO subcontractors (name, trade_category, contract_reference) VALUES (?, ?, ?)')

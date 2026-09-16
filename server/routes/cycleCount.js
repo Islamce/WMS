@@ -31,7 +31,9 @@ router.get('/', (req, res) => {
   const params = where ? [status] : [];
   const { page, limit, offset } = parsePagination(req.query, { page: 1, limit: 100 });
   const total = db.prepare(`SELECT COUNT(*) AS n FROM cycle_counts ${where}`).get(...params).n;
-  const counts = db.prepare(`SELECT * FROM cycle_counts ${where} ORDER BY id DESC LIMIT ? OFFSET ?`)
+  const counts = db.prepare(`SELECT cycle_counts.*,
+    (SELECT name FROM users WHERE users.id=cycle_counts.posted_by) AS posted_by_name
+    FROM cycle_counts ${where} ORDER BY id DESC LIMIT ? OFFSET ?`)
     .all(...params, limit, offset);
   res.json({ counts, total, page, limit });
 });

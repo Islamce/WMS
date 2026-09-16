@@ -10,7 +10,7 @@ WMS - a warehouse management system with a Node.js backend, a browser client, an
 - Modules: 7 declared, 0 discovered only
 - Drift: 0 error, 0 warning, 0 info
 - Generator: `kaaf` v0.7.0
-- Input digest: `01e16e55db59d8ff…`
+- Input digest: `6f9b46ac6a53fcd7…`
 
 ## Modules
 
@@ -140,4 +140,4 @@ No drift: every declaration matches what discovery found in the source.
 Declarations come from `kaaf.repo.json` and `kaaf.module.json`. Discovery is a static
 read of the source: dynamic imports and runtime wiring are invisible to it, so the
 absence of a drift finding is not proof that none exists.
-<!-- kaaf:bodyDigest=adc40704622d665d14ca8ace42b762b63de76dda30790c61542575789f95595b -->
+<!-- kaaf:bodyDigest=e861805b06f46876106cdf22aa95624eb35f5e7c777212fe8ba1adac4174d291 -->

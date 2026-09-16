@@ -31,7 +31,7 @@ Pages.cycleCount = {
                 <td>${c.system_quantity}</td>
                 <td>${c.counted_quantity ?? '—'}</td>
                 <td>${c.variance == null ? '—' : `<span class="${c.variance < 0 ? 'neg' : c.variance > 0 ? 'pos' : ''}">${c.variance > 0 ? '+' : ''}${c.variance}</span>`}</td>
-                <td><span class="badge">${UI.esc(c.status)}</span>${c.counted_by_name ? `<div class="muted sm">${t('Counted by')} ${UI.esc(c.counted_by_name)}</div>` : ''}</td>
+                <td><span class="badge">${UI.esc(c.status)}</span>${c.counted_by_name ? `<div class="muted sm">${t('Counted by')} ${UI.esc(c.counted_by_name)}</div>` : ''}${c.posted_by_name ? `<div class="muted sm">${t('Posted by')} ${UI.esc(c.posted_by_name)}</div>` : ''}</td>
                 <td>
                   ${c.status === 'OPEN' ? `<button class="btn sm" data-count="${c.id}">${t('Enter count')}</button>` : ''}
                   ${c.status === 'COUNTED' ? (

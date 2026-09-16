@@ -1,12 +1,12 @@
 {
   "_meta": {
     "artifact": "architecture.json",
-    "bodyDigest": "80f8a8166856f787645df9f181825b74ca1a1f21afb1804bc11c5a61a43f12ad",
+    "bodyDigest": "33b2da2d7e3e12360f4074a83fe3ccc2d6762ce0d197fcfc0e97696579793f33",
     "confidence": "verified",
     "doNotEdit": true,
     "generator": "kaaf",
     "generatorVersion": "0.7.0",
-    "inputDigest": "01e16e55db59d8ffeaaf04a4dd1c84d62b93477f575812ef0dcbdba8179845cc",
+    "inputDigest": "6f9b46ac6a53fcd7c57664e63b5772b50c81e224433e21432fa88bf3ac282d1c",
     "provenanceNote": "Generated from the declared kaaf.repo.json and kaaf.module.json manifests. No wall-clock time or commit SHA is embedded: both would break byte-identical regeneration. Use git history for when and from which commit.",
     "schemaVersion": "1.0.0"
   },
@@ -424,7 +424,8 @@
           "tests/e2e/document_number_test.js",
           "tests/e2e/edition_route_coverage_test.js",
           "tests/e2e/operational_semantics_migration_test.js",
-          "tests/e2e/pr_a_stock_guards_test.js"
+          "tests/e2e/pr_a_stock_guards_test.js",
+          "tests/e2e/pr_e_controls_test.js"
         ],
         "from": "wms-tests",
         "to": "wms-api"
@@ -782,7 +783,7 @@
     },
     {
       "confidence": "verified",
-      "confidenceReason": "Declared and corroborated by 60 discovered code file(s).",
+      "confidenceReason": "Declared and corroborated by 61 discovered code file(s).",
       "declared": true,
       "declaredConfidence": "verified",
       "dependedOnBy": [],
@@ -791,7 +792,7 @@
         "wms-ops-scripts"
       ],
       "discovery": {
-        "codeFileCount": 60,
+        "codeFileCount": 61,
         "discovered": true,
         "entryPoints": [
           "tests/e2e/edition_route_coverage_test.js",
@@ -810,7 +811,7 @@
         ],
         "parseErrors": [],
         "publicSymbols": [],
-        "sourceFileCount": 62
+        "sourceFileCount": 63
       },
       "id": "wms-tests",
       "ownedEntities": [
