@@ -1,12 +1,12 @@
 {
   "_meta": {
     "artifact": "architecture.json",
-    "bodyDigest": "5d4579ca375e807dec8e438cb8f583642b8b2b4219526d4586f4b2720a1838ac",
+    "bodyDigest": "d21df5ee1d5be7aa751eabee9c0a5a7c77c94b9b6bd9c45b6284c8ba8a81b3ba",
     "confidence": "verified",
     "doNotEdit": true,
     "generator": "kaaf",
     "generatorVersion": "0.7.0",
-    "inputDigest": "115a9b3dcc10e49853597a6bc4bd926a2dcb8a66d5df5bacde04e240fdc9f113",
+    "inputDigest": "8a7de2cf48379599b537b91f32d17ebeea445e3a814022ce1819fa5ea7ea4900",
     "provenanceNote": "Generated from the declared kaaf.repo.json and kaaf.module.json manifests. No wall-clock time or commit SHA is embedded: both would break byte-identical regeneration. Use git history for when and from which commit.",
     "schemaVersion": "1.0.0"
   },
@@ -514,10 +514,19 @@
     {
       "confidence": "verified",
       "criticality": "required",
+      "kind": "reverse-proxy",
+      "module": "wms-runtime-entry",
+      "name": "Caddy (central proxy at /opt/proxy, external Docker network `web`)",
+      "onUnavailable": "wms.kynox.io is unreachable over HTTPS; the container still answers on 127.0.0.1:3000 on the host.",
+      "sourceManifest": "kaaf.module.json"
+    },
+    {
+      "confidence": "verified",
+      "criticality": "required",
       "kind": "process-manager",
       "module": "wms-runtime-entry",
-      "name": "Phusion Passenger / PM2",
-      "onUnavailable": "The production process is not supervised or restarted.",
+      "name": "Docker Compose (service `wms`, /opt/apps/wms/docker-compose.yml)",
+      "onUnavailable": "The production container is not built, started or restarted; there is no other supervisor since the shared host and its Passenger/PM2 layouts were retired on 2026-09-06.",
       "sourceManifest": "kaaf.module.json"
     }
   ],
@@ -737,7 +746,7 @@
     },
     {
       "confidence": "verified",
-      "confidenceReason": "Declared and corroborated by 4 discovered code file(s).",
+      "confidenceReason": "Declared and corroborated by 3 discovered code file(s).",
       "declared": true,
       "declaredConfidence": "verified",
       "dependedOnBy": [],
@@ -745,7 +754,7 @@
         "wms-api"
       ],
       "discovery": {
-        "codeFileCount": 4,
+        "codeFileCount": 3,
         "discovered": true,
         "entryPoints": [],
         "languages": [
@@ -756,7 +765,7 @@
         ],
         "parseErrors": [],
         "publicSymbols": [],
-        "sourceFileCount": 102
+        "sourceFileCount": 100
       },
       "id": "wms-runtime-entry",
       "ownedEntities": [
@@ -766,7 +775,6 @@
       "path": ".",
       "publicEntryPoints": [
         "app.js",
-        "ecosystem.config.js",
         "index.js"
       ],
       "purpose": "Boot the production process. Production runs under Docker Compose on a VPS since 2026-09-06; the managed-host process manager named below is history, not current. Production path, runtime path and required environment flags are defined in CLAUDE.md and are authoritative over this manifest.",
