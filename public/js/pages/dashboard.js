@@ -59,6 +59,17 @@ Pages.dashboard = {
     const k = data.kpis || {};
     const ek = execution?.kpis || null;
     const nav = (perm, route) => (App.can(perm) ? ` data-nav="${route}" role="button" tabindex="0"` : '');
+    // One figure per unit. "530" over bags, tonnes and cubic metres added
+    // together is not a quantity of anything; "400 BAG · 3.5 TON · 12 M3" is.
+    // Deliberately not converted to money: materials.price has no provenance,
+    // no date and no valuation basis, and the analytics screen that multiplies
+    // by it shows a stock value of zero over real stock.
+    const byUnit = (rows, fallback) => {
+      if (!Array.isArray(rows) || rows.length === 0) return UI.fmtQty(fallback || 0);
+      const shown = rows.slice(0, 3).map((r) => `${UI.fmtQty(r.quantity)} <small class="muted">${UI.esc(r.unit)}</small>`);
+      if (rows.length > 3) shown.push(`<small class="muted">+${rows.length - 3} more</small>`);
+      return `<span class="kpi-by-unit">${shown.join(' · ')}</span>`;
+    };
     const metric = (cls, label, value, sub, perm, route, spark) => `
       <div class="kpi ${cls}"${nav(perm, route)}>
         <div class="label">${UI.esc(label)}</div>
@@ -128,8 +139,8 @@ Pages.dashboard = {
         <div class="cc-section-head"><div><h2>Operational snapshot</h2><p>Physical inventory and today's warehouse movement.</p></div></div>
         <div class="grid kpis cc-kpis">
           ${metric('accent', 'Total materials', UI.fmtQty(k.total_materials || 0), 'Active material records', 'materials', 'materials')}
-          ${metric('accent', 'Stock on hand', UI.fmtQty(k.total_stock || 0), 'Everything in the store, whoever owns it', 'batch_tracking', 'batches')}
-          ${metric('green', 'Available to issue', UI.fmtQty(k.available_stock || 0), 'Released, unblocked, not reserved', 'batch_tracking', 'batches')}
+          ${metric('accent', 'Stock on hand', byUnit(k.stock_by_unit, k.total_stock), 'Everything in the store, whoever owns it', 'batch_tracking', 'batches')}
+          ${metric('green', 'Available to issue', byUnit(k.available_by_unit, k.available_stock), 'Released, unblocked, not reserved', 'batch_tracking', 'batches')}
           ${Number(k.reserved_stock) > 0 ? metric('accent', 'Reserved', UI.fmtQty(k.reserved_stock), 'Promised to an approved request', 'material_requests', 'requests') : ''}
           ${Number(k.held_stock) > 0 ? metric('amber', 'Held back', UI.fmtQty(k.held_stock), 'Awaiting inspection or blocked', 'quality', 'quality') : ''}
           ${Number(k.subcontractor_stock) > 0 ? metric('accent', 'Subcontractor-owned', UI.fmtQty(k.subcontractor_stock), 'On site, not ours to issue', 'subcontractor_receiving', 'subcontractor-stock') : ''}

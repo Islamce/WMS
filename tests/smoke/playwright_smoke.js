@@ -103,22 +103,22 @@ function check(name, cond, detail) {
     await page.locator('[data-scroll="demo"]').first().click();
     check('landing section navigation does not collide with the SPA hash router',
       await page.locator('#wms-landing').count() === 1 && !page.url().includes('#/login'));
-    await page.getByRole('tab', { name: 'Mobile execution' }).click();
+    await page.locator('[role="tab"][data-demo="mobile"]').click();
     check('landing demo tabs update the selected product view',
-      await page.getByRole('tab', { name: 'Mobile execution' }).getAttribute('aria-selected') === 'true' &&
+      await page.locator('[role="tab"][data-demo="mobile"]').getAttribute('aria-selected') === 'true' &&
       (await page.locator('.wl-demo-frame img').getAttribute('src')).includes('mobile'));
     check('landing exposes five operational demo views', await page.getByRole('tab').count() === 5);
-    await page.getByRole('tab', { name: 'Inbound & quality' }).click();
+    await page.locator('[role="tab"][data-demo="inbound"]').click();
     check('landing inbound demo uses the hypothetical light presentation',
-      await page.getByRole('tab', { name: 'Inbound & quality' }).getAttribute('aria-selected') === 'true' &&
+      await page.locator('[role="tab"][data-demo="inbound"]').getAttribute('aria-selected') === 'true' &&
       await page.locator('.wl-demo-inbound img[src="/img/landing/demo/inbound-light.png"]').count() === 1);
     await page.locator('[data-slide-theme="dark"]').click();
     check('landing theme switch selects the dark inbound presentation',
       await page.locator('[data-slide-theme="dark"]').getAttribute('aria-pressed') === 'true' &&
       await page.locator('.wl-demo-inbound img[src="/img/landing/demo/inbound-dark.png"]').count() === 1);
-    await page.getByRole('tab', { name: 'Outbound & issue' }).click();
+    await page.locator('[role="tab"][data-demo="outbound"]').click();
     check('landing outbound demo keeps the selected dark presentation',
-      await page.getByRole('tab', { name: 'Outbound & issue' }).getAttribute('aria-selected') === 'true' &&
+      await page.locator('[role="tab"][data-demo="outbound"]').getAttribute('aria-selected') === 'true' &&
       await page.locator('.wl-demo-outbound img[src="/img/landing/demo/outbound-dark.png"]').count() === 1);
     await page.locator('[data-slide-theme="light"]').click();
     check('landing theme switch restores the light outbound presentation',
@@ -126,6 +126,13 @@ function check(name, cond, detail) {
       await page.locator('.wl-demo-outbound img[src="/img/landing/demo/outbound-light.png"]').count() === 1);
     check('landing presents the expanded eight-control workflow',
       await page.locator('.wl-journey-steps > li').count() === 8);
+    // The page sells a contractor's site store. It used to promise "create the
+    // ERP reservation" in step 2 - to a buyer being told they do not need SAP.
+    const landingText = (await page.locator('#wms-landing').innerText()).toLowerCase();
+    check('landing never promises an ERP reservation to a contractor',
+      !landingText.includes('erp reservation') && !landingText.includes('sap'));
+    check('landing speaks of projects, site stores and segregation of duties',
+      landingText.includes('project') && landingText.includes('site store') && landingText.includes('segregation of duties'));
     await page.locator('a[href="#/login"]').first().click();
     await page.waitForSelector('#login-form');
     check('login form renders', await page.locator('#login-form').count() > 0);

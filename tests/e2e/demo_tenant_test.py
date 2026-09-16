@@ -168,6 +168,35 @@ try:
     code, body = call('GET', '/api/auth/me', store_token)
     check('D4 and is NOT an admin, so segregation of duties applies to it',
           (body.get('user') or {}).get('role') != 'admin', body.get('user'))
+    # The contracting edition's words reach the client with the session, so the
+    # screens can call a Warehouse a Site Store without asking a second time.
+    terms = (body.get('tenant') or {}).get('terminology') or {}
+    check('D4 /api/auth/me carries the edition terminology (Warehouse -> Site Store)',
+          terms.get('Warehouse') == 'Site Store' and terms.get('ERP Operator') == 'Procurement Officer', terms)
+
+    # ===== 5. The refusal the product is sold on, reachable in its own demo =====
+    # The storekeeper approves a request and then tries to issue it himself.
+    code, created = call('POST', '/api/requests', token, {
+        'request_type': 'COST_CENTER', 'plant': 'P100', 'issue_warehouse_code': 'SITE-01', 'wbs_element': 'PRJ-001',
+        'lines': [{'material_id': material_id, 'requested_quantity': 5}]})
+    rid2 = (created.get('request') or created).get('id')
+    call('POST', f'/api/requests/{rid2}/submit', token)
+    code, body = call('POST', f'/api/approvals/{rid2}/decision', store_token, {'decision': 'approve'})
+    check('D5 the storekeeper can approve (the demo grant)', code == 200, (code, body))
+    code, body = call('POST', f'/api/picking/requests/{rid2}/claim', store_token)
+    check('D5 and claim the pick', code == 200, (code, body))
+    con = sqlite3.connect(db)
+    line2 = con.execute('SELECT id FROM material_request_lines WHERE request_id=?', (rid2,)).fetchone()[0]
+    task2 = con.execute('SELECT id FROM picking_tasks WHERE request_id=?', (rid2,)).fetchone()[0]
+    con.close()
+    call('POST', f'/api/picking/lines/{line2}/confirm', store_token, {'picked_quantity': 5})
+    call('POST', f'/api/picking/tasks/{task2}/complete', store_token)
+    code, body = call('POST', f'/api/gi/{rid2}/post', store_token, {})
+    check('D5 but is REFUSED the issue of what he approved, in the quotable sentence',
+          code == 403 and 'Segregation of duties: you performed the approval step' in body.get('error', ''),
+          (code, body))
+    code, body = call('POST', f'/api/gi/{rid2}/post', token, {})
+    check('D5 and a second person posts it', code == 200, (code, body))
 finally:
     server.terminate()
     try:

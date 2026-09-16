@@ -125,7 +125,7 @@ Pages.home = {
         ${this.setupHtml()}
         ${this.alertPreviewHtml()}
         <div class="lp-process-head">
-          <div><h2>${hasFocusedView ? `${UI.esc(this.profile.label)} processes` : t('All permitted processes')}</h2>
+          <div><h2>${hasFocusedView ? `${UI.esc(term(this.profile.label))} processes` : t('All permitted processes')}</h2>
             <p class="muted">${hasFocusedView ? 'A focused view of your permitted work. Use Show all to browse the full catalog.' : 'Every destination shown is available under your current permissions.'}</p></div>
           ${this.profile.modules && focusedCount < total ? `<button class="btn secondary sm" id="lp-show-all" aria-pressed="${this.showAll}">${this.showAll ? 'Show role-focused processes' : 'Show all processes'}</button>` : ''}
         </div>

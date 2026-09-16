@@ -72,6 +72,8 @@ Pages.requests = {
     let projects = [];
     try { ({ headerStatuses: statuses, projects } = await Api.get('/api/meta')); } catch {}
     projects = projects || [];
+    // Eight of the thirty-five statuses only the ERP-staged workflow reaches.
+    if (UI.erpFieldsHidden()) statuses = statuses.filter((s) => !UI.ERP_ONLY_STATUSES.includes(s));
     el.innerHTML = `
       <div class="card">
         <div class="toolbar">

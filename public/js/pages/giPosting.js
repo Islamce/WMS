@@ -18,7 +18,7 @@ Pages.giPosting = {
         <tr data-id="${r.id}">
           <td><span class="chip accent">${UI.esc(r.request_number)}</span></td>
           <td>${UI.esc(r.requester_name || '')}</td><td>${UI.esc(r.department || '—')}</td><td>${UI.esc(r.project || '—')}</td>
-          <td>${UI.esc(r.issue_warehouse_code || '')}<div class="muted sm">Plant ${UI.esc(r.plant || '—')} · SLoc ${UI.esc(r.storage_location || '—')}</div></td>
+          <td>${UI.esc(r.issue_warehouse_code || '')}<div class="muted sm">${UI.esc(term('Plant'))} ${UI.esc(r.plant || '—')}${UI.erpFieldsHidden() ? '' : ` · SLoc ${UI.esc(r.storage_location || '—')}`}</div></td>
           <td>${UI.esc(r.movement_type || '')}</td><td>${UI.esc(r.erp_reservation_number || r.erp_reference_number || '')}</td>
           <td><span class="badge ${statusClass(r.request_status)}">${UI.esc(r.request_status)}</span></td>
           <td><button class="btn sm" data-open="${r.id}">Review</button></td>
@@ -128,7 +128,7 @@ Pages.warehouse = {
       ? visible.map((request) => UI.requestCard(request, {
         link: `#/request-detail/${request.id}`,
         materialsHtml: this.materialDisclosure(request),
-        extraHtml: `<div class="request-card-meta">ERP ${UI.esc(request.erp_reservation_number || request.erp_reference_number || '—')} · Movement ${UI.esc(request.movement_type || '—')} · Plant ${UI.esc(request.plant || '—')} · SLoc ${UI.esc(request.storage_location || '—')}</div>`,
+        extraHtml: UI.requestCardMeta(request),
       })).join('')
       : UI.meaningfulEmptyState({
         title: 'No requests match these controls',

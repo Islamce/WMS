@@ -141,15 +141,26 @@ function main() {
     created.push({ email, role: 'admin', note: 'every screen; exempt from segregation of duties' });
 
     if (args.secondUser) {
-      // Not an admin, so the SoD control is live for this account. It holds the
-      // warehouse execution permissions, which is what a storekeeper has.
+      // Not an admin, so the SoD control is live for this account. A site
+      // storekeeper (receives, releases, picks, posts) PLUS an approvals grant
+      // the real role deliberately lacks. The grant is what makes the refusal
+      // reachable in a demo: this one account can approve a request and then
+      // be refused when it tries to issue the same request, which is the
+      // sentence the product is bought for. Without it the storekeeper never
+      // reaches the control - the approvals screen is simply absent from his
+      // menu, and an absent menu item shows a buyer nothing.
       const storeEmail = `store@${args.slug}.demo`;
       db.prepare(`
         INSERT INTO users (name, email, password_hash, role_id, status, must_change_password)
-        VALUES (?, ?, ?, (SELECT id FROM roles WHERE name = 'warehouse_operator'), 'active', 0)
+        VALUES (?, ?, ?, (SELECT id FROM roles WHERE name = 'site_storekeeper'), 'active', 0)
       `).run('Demo Storekeeper', storeEmail, hash);
-      created.push({ email: storeEmail, role: 'warehouse_operator',
-        note: 'subject to segregation of duties — use this to post the issue' });
+      db.prepare(`
+        INSERT INTO user_permissions (user_id, permission_id)
+        SELECT u.id, p.id FROM users u, permissions p
+        WHERE u.email = ? AND p.key IN ('approvals', 'material_requests')
+      `).run(storeEmail);
+      created.push({ email: storeEmail, role: 'site_storekeeper + approvals (demo grant)',
+        note: 'subject to segregation of duties — approves, then is refused the issue' });
     }
 
     db.prepare(`
@@ -178,14 +189,16 @@ function main() {
   console.log('  4. Create Material Request — ask for 10 back out, then approve it');
   console.log('  5. My Picking Tasks   — claim it, pick it, post the issue');
   if (args.secondUser) {
-    console.log('\n  To show segregation of duties: approve as the demo account, then post');
-    console.log('  the issue from Goods Issue Posting as the storekeeper account. Two');
-    console.log('  people, two steps — that is the control that stops a storekeeper');
-    console.log('  issuing material to himself.');
-    console.log('  The storekeeper holds gi_posting but NOT approvals, material_requests');
-    console.log('  or picking, so those screens are simply absent from his menu. Do not');
-    console.log('  try to approve as him expecting a refusal message: he never gets that');
-    console.log('  far, and an empty menu is a poor thing to show a buyer.');
+    console.log('\n  To show segregation of duties - the control a contractor is buying:');
+    console.log('  6. Sign in as the storekeeper. Approve the request (step 4) as HIM.');
+    console.log('  7. Still as him, claim and pick it, then open Goods Issue Posting and');
+    console.log('     post. The product refuses, on screen, in these words:');
+    console.log('       "Segregation of duties: you performed the approval step for this');
+    console.log('        request; a different user must perform this step."');
+    console.log('     That refusal is what stops a storekeeper issuing material to himself.');
+    console.log('  8. Sign in as the presenter and post the issue. Two people, two steps.');
+    console.log('  The presenter is an admin and admins are exempt, so approve as the');
+    console.log('  storekeeper, not as the presenter, or there is nothing to refuse.');
   }
 }
 

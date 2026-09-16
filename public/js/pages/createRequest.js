@@ -28,7 +28,7 @@ Pages.createRequest = {
         <form id="cr-form" novalidate>
           <div class="form-row">
             <div class="form-group"><label>Request Type</label>
-              <select id="cr-type">${this.meta.requestTypes.map((t) => `<option>${t}</option>`).join('')}</select></div>
+              <select id="cr-type">${this.meta.requestTypes.map((t) => `<option value="${UI.esc(t)}">${UI.esc(UI.enumLabel('request_type', t))}</option>`).join('')}</select></div>
             <div class="form-group"><label>Priority</label>
               <select id="cr-priority">${this.meta.priorities.map((p) => `<option ${p === 'NORMAL' ? 'selected' : ''}>${p}</option>`).join('')}</select></div>
           </div>
@@ -38,9 +38,9 @@ Pages.createRequest = {
             <div class="form-group"><label>Required Date</label><input type="date" id="cr-required" /></div>
           </div>
           <div class="form-row">
-            <div class="form-group"><label>Plant</label>
+            <div class="form-group"><label>${UI.esc(term('Plant'))}</label>
               <select id="cr-plant"><option value="">— Select —</option>${opts(this.meta.plants, 'code', 'label')}</select></div>
-            <div class="form-group"><label>Cost Center</label>
+            <div class="form-group"><label>${UI.esc(term('Cost Center'))}</label>
               <select id="cr-cost-center"><option value="">— Select —</option>${opts(this.meta.costCenters, 'code', 'label')}</select></div>
           </div>
           ${this.subcontractors.length ? `

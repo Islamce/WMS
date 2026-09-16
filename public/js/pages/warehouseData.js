@@ -152,9 +152,9 @@ Pages.quality = {
       <tbody>${batches.map((b) => `
         <tr><td><span class="chip accent">${UI.esc(b.batch_number)}</span></td><td>${UI.esc(b.material_code)}</td><td>${UI.esc(b.warehouse_code || '')}</td>
           <td class="text-right">${UI.fmtQty(b.remaining_quantity)}</td>
-          <td><span class="badge ${b.quality_status === 'RELEASED' ? 'active' : b.quality_status === 'QUALITY_HOLD' ? 'pending' : 'OUT'}">${UI.esc(b.quality_status)}</span></td>
+          <td><span class="badge ${b.quality_status === 'RELEASED' ? 'active' : b.quality_status === 'QUALITY_HOLD' ? 'pending' : 'OUT'}">${UI.esc(UI.enumLabel('quality_status', b.quality_status))}</span></td>
           <td><select class="ql-set" data-id="${b.id}" data-current="${b.quality_status}" aria-label="Set quality status for batch ${UI.esc(b.batch_number)}" style="max-width:160px">
-            ${['RELEASED', 'QUALITY_HOLD', 'BLOCKED', 'REJECTED'].map((s) => `<option ${s === b.quality_status ? 'selected' : ''}>${s}</option>`).join('')}
+            ${['RELEASED', 'QUALITY_HOLD', 'BLOCKED', 'REJECTED'].map((s) => `<option value="${s}" ${s === b.quality_status ? 'selected' : ''}>${UI.esc(UI.enumLabel('quality_status', s))}</option>`).join('')}
           </select></td></tr>`).join('') || `<tr><td colspan="6">${UI.meaningfulEmptyState({ title: 'No batches yet', description: 'Batches appear here after the first goods receipt or opening-stock import.' })}</td></tr>`}
       </tbody></table>`;
     // The select used to POST on `change` with a hardcoded reason and no
