@@ -90,8 +90,7 @@ check('R1 refusal explains why', 'company-owned' in json.dumps(r).lower(), r)
 
 # Mark a batch as owned by the subcontractor (phase-1 schema; no UI yet).
 import sqlite3
-db_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
-    os.path.abspath(__file__)))), 'data', 'wms.db')
+db_path = os.environ['DB_PATH']
 con = sqlite3.connect(db_path)
 con.execute("UPDATE batches SET owner_type='SUBCONTRACTOR', owner_subcontractor_id=? WHERE id=?",
             (sub_id, owned_batch))

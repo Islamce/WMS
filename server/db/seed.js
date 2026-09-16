@@ -3,6 +3,10 @@
  * Run with: npm run seed
  * Idempotent: uses INSERT OR IGNORE / upserts, safe to re-run.
  */
+// A direct invocation must refuse before connection.js can create/open a database.
+// Function declarations are hoisted; importing seed() still uses the boot-time gate.
+if (require.main === module) refuseInProduction();
+
 const bcrypt = require('bcryptjs');
 const db = require('./connection');
 
@@ -101,8 +105,8 @@ function seed() {
 
 // Refuse a DIRECT invocation against production. Scoped to the direct path on
 // purpose: server/index.js requires this module and calls seed() itself on an
-// empty database, and that path has its own gate in shouldAutoSeed(). A guard at
-// the top of this file would run at require time and exit the server process
+// empty database, and that path has its own gate in shouldAutoSeed(). An unconditional
+// guard would run at require time and exit the server process
 // during boot - turning a safety check into an outage.
 //
 // SKIP_AUTO_SEED and ALLOW_AUTO_SEED look like they already cover this and do
@@ -122,6 +126,6 @@ function refuseInProduction() {
 // Run automatically when executed directly (`npm run seed` /
 // `node server/db/seed.js`), but not when required as a module — the server's
 // first-run bootstrap imports and calls seed() itself only on an empty DB.
-if (require.main === module) { refuseInProduction(); seed(); }
+if (require.main === module) seed();
 
 module.exports = { seed };

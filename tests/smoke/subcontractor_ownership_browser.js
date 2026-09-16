@@ -111,7 +111,8 @@ async function stopServer(server) {
     const { batches } = await api('GET', '/api/master/batches?limit=3', admin);
     const batch = batches[0];
     const Database = require('better-sqlite3');
-    const db = new Database(path.join(ROOT, 'data', 'wms.db'));
+    if (!process.env.DB_PATH) throw new Error('DB_PATH must select the test database');
+    const db = new Database(process.env.DB_PATH);
     db.prepare("UPDATE batches SET owner_type='SUBCONTRACTOR', owner_subcontractor_id=? WHERE id=?")
       .run(subcontractor.id, batch.id);
     db.close();

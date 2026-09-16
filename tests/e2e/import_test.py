@@ -2,7 +2,7 @@
 """Import Center and opening-stock regression tests."""
 import json, urllib.request, urllib.error, os, sys, sqlite3
 
-B, DB = "http://localhost:3000", "data/wms.db"
+B, DB = "http://localhost:3000", os.environ['DB_PATH']
 os.environ['no_proxy'] = 'localhost,127.0.0.1'
 passed = failed = 0
 fails = []

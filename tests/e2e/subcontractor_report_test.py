@@ -30,8 +30,7 @@ os.environ['no_proxy'] = 'localhost,127.0.0.1'
 passed = failed = 0
 fails = []
 
-DB = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
-    os.path.abspath(__file__)))), 'data', 'wms.db')
+DB = os.environ['DB_PATH']
 
 
 def call(method, path, token=None, body=None):

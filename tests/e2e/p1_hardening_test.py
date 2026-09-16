@@ -14,7 +14,7 @@ import json, urllib.request, urllib.error, os, sys, sqlite3, subprocess
 
 B = "http://localhost:3000"
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-DB = os.path.join(ROOT, 'data', 'wms.db')
+DB = os.environ['DB_PATH']
 os.environ['no_proxy'] = 'localhost,127.0.0.1'
 passed = failed = 0
 fails = []
