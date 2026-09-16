@@ -479,9 +479,15 @@ const UI = {
   },
 
   /** A contextual empty state that distinguishes an empty queue from a failed request. */
-  meaningfulEmptyState({ title, description, actionHtml = '' }) {
+  /**
+   * `done: true` draws the green tick - for a queue that is genuinely clear.
+   * The default is a neutral mark: "no stock recorded yet" is not an
+   * achievement, and a green tick on it told new customers that having no
+   * data was the goal.
+   */
+  meaningfulEmptyState({ title, description, actionHtml = '', done = false }) {
     return `<div class="meaningful-empty" role="status">
-      <div class="meaningful-empty-mark" aria-hidden="true">✓</div>
+      <div class="meaningful-empty-mark${done ? '' : ' neutral'}" aria-hidden="true">${done ? '✓' : '○'}</div>
       <div><h3>${UI.esc(title)}</h3><p>${UI.esc(description)}</p>${actionHtml}</div>
     </div>`;
   },

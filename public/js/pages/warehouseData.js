@@ -140,7 +140,7 @@ Pages.quality = {
             <button class="btn success sm" data-q="RELEASED" data-id="${b.id}">Release</button>
             <button class="btn secondary sm" data-q="BLOCKED" data-id="${b.id}">Block</button>
             <button class="btn danger sm" data-q="REJECTED" data-id="${b.id}">Reject</button>
-          </td></tr>`).join('') || `<tr><td colspan="7">${UI.meaningfulEmptyState({ title: 'Nothing awaiting inspection', description: 'Every received batch has passed through quality decision.' })}</td></tr>`}
+          </td></tr>`).join('') || `<tr><td colspan="7">${UI.meaningfulEmptyState({ done: true, title: 'Nothing awaiting inspection', description: 'Every received batch has passed through quality decision.' })}</td></tr>`}
       </tbody></table>`;
     this.el.querySelectorAll('#ql-pending [data-q]').forEach((btn) =>
       btn.addEventListener('click', () => this.decide(btn.dataset.id, btn.dataset.q)));
@@ -153,14 +153,19 @@ Pages.quality = {
         <tr><td><span class="chip accent">${UI.esc(b.batch_number)}</span></td><td>${UI.esc(b.material_code)}</td><td>${UI.esc(b.warehouse_code || '')}</td>
           <td class="text-right">${UI.fmtQty(b.remaining_quantity)}</td>
           <td><span class="badge ${b.quality_status === 'RELEASED' ? 'active' : b.quality_status === 'QUALITY_HOLD' ? 'pending' : 'OUT'}">${UI.esc(b.quality_status)}</span></td>
-          <td><select class="ql-set" data-id="${b.id}" style="max-width:160px">
+          <td><select class="ql-set" data-id="${b.id}" data-current="${b.quality_status}" aria-label="Set quality status for batch ${UI.esc(b.batch_number)}" style="max-width:160px">
             ${['RELEASED', 'QUALITY_HOLD', 'BLOCKED', 'REJECTED'].map((s) => `<option ${s === b.quality_status ? 'selected' : ''}>${s}</option>`).join('')}
-          </select></td></tr>`).join('')}
+          </select></td></tr>`).join('') || `<tr><td colspan="6">${UI.meaningfulEmptyState({ title: 'No batches yet', description: 'Batches appear here after the first goods receipt or opening-stock import.' })}</td></tr>`}
       </tbody></table>`;
-    this.el.querySelectorAll('.ql-set').forEach((sel) => sel.addEventListener('change', async () => {
-      try { await Api.post(`/api/master/batches/${sel.dataset.id}/quality`, { quality_status: sel.value, reason: 'Quality decision' });
-        UI.toast('Quality status updated.'); this.load(); }
-      catch (err) { UI.toast(err.message, 'error'); this.load(); }
+    // The select used to POST on `change` with a hardcoded reason and no
+    // confirmation - a mouse-wheel over it while scrolling a long list could
+    // block or release stock. It now goes through the same modal as the
+    // buttons above, which asks for the reason the audit trail will carry, and
+    // the select snaps back until that modal confirms.
+    this.el.querySelectorAll('.ql-set').forEach((sel) => sel.addEventListener('change', () => {
+      const wanted = sel.value;
+      sel.value = sel.dataset.current;
+      if (wanted !== sel.dataset.current) this.decide(sel.dataset.id, wanted);
     }));
   },
 };
@@ -278,7 +283,7 @@ Pages.binsMaster = {
       <tbody>${bins.map((b) => `<tr><td><span class="chip">${UI.esc(b.bin_code)}</span></td>
         <td>${UI.esc(b.warehouse_code)}</td><td>${UI.esc(b.zone || '—')}</td><td>${UI.esc(b.rack || '—')}</td>
         <td>${UI.esc(b.level || '—')}</td><td>${UI.esc(b.column_number || '—')}</td>
-        <td class="text-right">${UI.fmtQty(b.capacity)}</td></tr>`).join('')}</tbody></table>`;
+        <td class="text-right">${UI.fmtQty(b.capacity)}</td></tr>`).join('') || `<tr><td colspan="7">${UI.meaningfulEmptyState({ title: 'No bin locations yet', description: 'Add the yard, rack and cage locations material actually sits in. Step 2 of the first-run guide.', actionHtml: '<button class="btn sm" style="margin-top:8px" onclick="Pages.binsMaster.form()">+ Add bin</button>' })}</td></tr>`}</tbody></table>`;
   },
   form() {
     UI.modal({ title: 'Add bin location', submitLabel: 'Create',
@@ -317,7 +322,7 @@ Pages.movementTypes = {
     this.el.querySelector('#mt-table').innerHTML = `
       <table><thead><tr><th>Code</th><th>Description</th><th>Direction</th><th>Cost Object</th><th>Reversal</th></tr></thead>
       <tbody>${movement_types.map((m) => `<tr><td><span class="chip">${UI.esc(m.code)}</span></td><td>${UI.esc(m.description)}</td>
-        <td>${UI.esc(m.direction)}</td><td>${UI.esc(m.cost_object || '—')}</td><td>${m.is_reversal ? 'Yes' : 'No'}</td></tr>`).join('')}</tbody></table>`;
+        <td>${UI.esc(m.direction)}</td><td>${UI.esc(m.cost_object || '—')}</td><td>${m.is_reversal ? 'Yes' : 'No'}</td></tr>`).join('') || `<tr><td colspan="5">${UI.meaningfulEmptyState({ title: 'No movement types defined', description: 'Issue categories are optional on a contracting tenant; add them only if your issues need classifying.' })}</td></tr>`}</tbody></table>`;
   },
   form() {
     UI.modal({ title: 'Add movement type', submitLabel: 'Create',

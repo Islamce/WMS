@@ -53,7 +53,6 @@ Pages.giPosting = {
           <div class="form-group"><label>GI Document Number *</label><input type="text" id="gi-doc" placeholder="e.g. 4900001234"></div>
           <div class="form-group"><label>Fiscal Year</label><input type="text" id="gi-fy" value="${new Date().getFullYear()}"></div>
         </div>
-        <label class="perm-item" style="max-width:320px"><input type="checkbox" id="gi-sim"> <span>Simulate ERP posting error (test)</span></label>
         <div class="actions" style="justify-content:flex-start;margin-top:12px">
           <button class="btn success" id="gi-post">Post Goods Issue</button>
           <button class="btn secondary" id="gi-return">Return to Picker</button>
@@ -64,8 +63,7 @@ Pages.giPosting = {
       try {
         const r2 = await Api.post(`/api/gi/${id}/post`, {
           gi_document_number: box.querySelector('#gi-doc').value,
-          fiscal_year: box.querySelector('#gi-fy').value,
-          simulate_error: box.querySelector('#gi-sim').checked });
+          fiscal_year: box.querySelector('#gi-fy').value });
         UI.toast(r2.message); box.innerHTML = ''; this.loadQueue();
       } catch (err) { UI.toast(err.message, 'error'); this.loadQueue(); }
     }));

@@ -70,7 +70,13 @@ Pages.home = {
    */
   setupHtml() {
     if (!this.setup) return '';
-    const next = this.setup.next_step;
+    // The server lists every step; a link this user cannot open would bounce
+    // them silently back to this page (app.js redirects without a message). A
+    // picker used to see seven steps, every one of which returned them here.
+    const steps = this.setup.steps.filter((s) => App.canOpenRoute(s.route));
+    const hidden = this.setup.steps.length - steps.length;
+    const next = steps.find((s) => !s.done) || null;
+    if (!steps.length) return '';
     return `
       <div class="card setup-guide">
         <div class="lp-process-head">
@@ -78,12 +84,13 @@ Pages.home = {
             <h2>Finish setting up</h2>
             <p class="muted">${this.setup.completed_steps} of ${this.setup.total_steps} done.
               These are in order because the product depends on it — stock arrives on quality
-              hold and in no bin, and cannot be issued until both are handled.</p>
+              hold and in no bin, and cannot be issued until both are handled.${hidden
+                ? ` ${hidden} step${hidden === 1 ? '' : 's'} belong to screens you cannot open; your administrator handles those.` : ''}</p>
           </div>
           ${next ? `<a class="btn sm" href="${next.route}">${UI.esc(next.title)}</a>` : ''}
         </div>
         <ol class="setup-steps">
-          ${this.setup.steps.map((s) => `
+          ${steps.map((s) => `
             <li class="${s.done ? 'done' : ''}${s === next ? ' next' : ''}">
               <span class="setup-mark" aria-hidden="true">${s.done ? '✓' : '○'}</span>
               <div>

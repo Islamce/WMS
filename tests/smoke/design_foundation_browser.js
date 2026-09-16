@@ -1,4 +1,4 @@
-/* global UI */
+/* global UI, Pages */
 /** Browser regression for authorized D01 shared presentation and D03 Home work. */
 const { chromium } = require('playwright');
 const { spawn, spawnSync } = require('child_process');
@@ -227,6 +227,25 @@ async function loginUi(page, email, password) {
     check('a warn button has a rule of its own (Reverse GI is not pixel-identical to Submit)',
       legibility['btn.warn'].bg !== legibility['btn.plain'].bg && legibility['btn.warn'].bg !== legibility['btn.success'].bg,
       JSON.stringify({ plain: legibility['btn.plain'].bg, warn: legibility['btn.warn'].bg }));
+
+    // Approvals: the tick boxes must mean something. The server approves every
+    // line on 'approve' and ignores approvedLineIds, so the client decides what
+    // a click means from what is ticked. Pure function, asserted directly.
+    const resolved = await erpPage.evaluate(() => ({
+      allTicked: Pages.approvals.resolveDecision('approve', [1, 2, 3], [1, 2, 3]),
+      someUnticked: Pages.approvals.resolveDecision('approve', [1, 3], [1, 2, 3]),
+      partialAll: Pages.approvals.resolveDecision('partial', [1, 2, 3], [1, 2, 3]),
+      reject: Pages.approvals.resolveDecision('reject', [1], [1, 2, 3]),
+    }));
+    check('Approve with every line ticked is a full approval',
+      resolved.allTicked.decision === 'approve' && resolved.allTicked.approvedLineIds === undefined, JSON.stringify(resolved.allTicked));
+    check('Approve with a line unticked is recorded as a partial approval of the ticked lines only',
+      resolved.someUnticked.decision === 'partial' && JSON.stringify(resolved.someUnticked.approvedLineIds) === '[1,3]' && resolved.someUnticked.demoted === true,
+      JSON.stringify(resolved.someUnticked));
+    check('Partial Approve with every line ticked is simply an approval',
+      resolved.partialAll.decision === 'approve', JSON.stringify(resolved.partialAll));
+    check('reject and return ignore the tick boxes',
+      resolved.reject.decision === 'reject' && resolved.reject.approvedLineIds === undefined, JSON.stringify(resolved.reject));
     await erpContext.close();
   } catch (error) {
     check('D01/D03 browser regression completed', false, error.message);

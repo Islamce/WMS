@@ -81,10 +81,13 @@ Pages.dashboard = {
       { level: ek.partially_completed > 0 ? 'warning' : 'clear', value: ek.partially_completed, label: 'Partially completed', detail: 'Requests awaiting remaining quantities', route: 'requests', state: { status: 'Partially Completed' } },
     ] : [];
 
+    const charts = data.charts || {};
+    const hasActivity = Number(k.total_stock) > 0 || (charts.in_out_over_time || []).some((d) => d.in_qty || d.out_qty)
+      || (charts.transactions_by_user || []).length > 0;
     el.innerHTML = `
       <section class="cc-hero">
         <div>
-          <span class="cc-eyebrow">LIVE OPERATIONS</span>
+          <span class="cc-eyebrow">${hasActivity ? 'LIVE OPERATIONS' : 'NOTHING RECORDED YET'}</span>
           <h1>Dashboard</h1>
           <p>Current stock position, execution workload and exceptions requiring action.</p>
           <div class="page-head-context">
@@ -92,7 +95,7 @@ Pages.dashboard = {
           </div>
         </div>
         <div class="cc-refresh">
-          <span class="cc-live"><i></i> Data loaded</span>
+          <span class="cc-live${hasActivity ? '' : ' idle'}"><i></i> ${hasActivity ? 'Data loaded' : 'No activity yet'}</span>
           <button class="btn secondary sm" id="cc-refresh">Refresh</button>
           ${App.can('create_request') ? '<button class="btn sm" data-nav="create-request">+ Create request</button>' : ''}
         </div>
@@ -198,22 +201,36 @@ Pages.dashboard = {
     return { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { color: VIZ.muted } }, y: { beginAtZero: true, grid: { color: VIZ.grid }, ticks: { color: VIZ.muted } } } };
   },
 
+  /** A chart with nothing to draw says so, instead of drawing empty axes under a green light. */
+  emptyChart(canvasId, title, description) {
+    const canvas = document.getElementById(canvasId); if (!canvas) return false;
+    const box = canvas.closest('.chart-box') || canvas.parentElement;
+    box.innerHTML = UI.meaningfulEmptyState({ title, description });
+    return true;
+  },
+
   renderCharts(charts) {
     this.destroyCharts();
     if (typeof Chart === 'undefined') return;
     const VIZ = VIZCOLORS();
     const days = charts.in_out_over_time || [];
+    if (!days.some((d) => d.in_qty || d.out_qty)) {
+      this.emptyChart('ch-inout', 'No movement in the last 30 days', 'Receipts and issues will draw here as they are posted.');
+    }
+    if (!(charts.stock_by_group || []).length) this.emptyChart('ch-group', 'No stock by group yet', 'Fills in after the first receipt or opening-stock import.');
+    if (!(charts.stock_by_location || []).length) this.emptyChart('ch-location', 'No stock by warehouse yet', 'Fills in after the first receipt or opening-stock import.');
+    if (!(charts.transactions_by_user || []).length) this.emptyChart('ch-users', 'No transactions yet', 'Who moved what will rank here once stock moves.');
     const lineOpts = this.baseOptions();
     lineOpts.plugins.legend = { display: true, labels: { color: VIZ.ink, boxWidth: 12 } };
     lineOpts.interaction = { mode: 'index', intersect: false };
     const inout = document.getElementById('ch-inout');
-    if (inout) this.charts.push(new Chart(inout, { type: 'line', data: { labels: days.map((d) => d.day), datasets: [
+    if (inout && days.some((d) => d.in_qty || d.out_qty)) this.charts.push(new Chart(inout, { type: 'line', data: { labels: days.map((d) => d.day), datasets: [
       { label: 'IN', data: days.map((d) => d.in_qty), borderColor: VIZ.in, backgroundColor: VIZ.in, borderWidth: 2, pointRadius: 2, tension: 0.25 },
       { label: 'OUT', data: days.map((d) => d.out_qty), borderColor: VIZ.out, backgroundColor: VIZ.out, borderWidth: 2, pointRadius: 2, tension: 0.25 },
     ] }, options: lineOpts }));
 
     const bar = (canvasId, rows, labelKey, valueKey, color, horizontal = false, navRoute = null) => {
-      const canvas = document.getElementById(canvasId); if (!canvas) return;
+      const canvas = document.getElementById(canvasId); if (!canvas || !(rows || []).length) return;
       const opts = this.baseOptions();
       if (horizontal) { opts.indexAxis = 'y'; opts.scales = { x: { beginAtZero: true, grid: { color: VIZ.grid }, ticks: { color: VIZ.muted } }, y: { grid: { display: false }, ticks: { color: VIZ.muted } } }; }
       if (navRoute && App.can(this.NAV_PERM[navRoute])) { opts.onClick = (_e, els) => { if (els.length) location.hash = `#/${navRoute}`; }; opts.onHover = (e, els) => { e.native.target.style.cursor = els.length ? 'pointer' : 'default'; }; }

@@ -99,6 +99,8 @@ body {
 .page-head-context { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 6px; color: var(--text-muted); font-size: 12.5px; }
 .page-head-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 h1, h2, h3, .page-title { letter-spacing: -.018em; }
+.meaningful-empty-mark.neutral { background: var(--surface-2); color: var(--text-muted); border: 1px solid var(--border); }
+.cc-live.idle i { background: var(--text-muted); box-shadow: none; animation: none; }
 .btn, button.btn { border-radius: 10px; font-weight: 650; transition: transform .15s ease, box-shadow .15s ease, background .15s ease; }
 .btn:hover, button.btn:hover { transform: translateY(-1px); }
 .btn:not(.secondary):not(.danger):not(.ghost) { background: linear-gradient(135deg, var(--primary), var(--primary-dark)); box-shadow: 0 8px 20px rgba(23, 157, 165, .18); }

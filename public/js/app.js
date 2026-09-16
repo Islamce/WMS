@@ -265,6 +265,14 @@ const App = {
     return modules.includes(moduleKey);
   },
 
+  /** Whether this user may open a hash route such as '#/receiving'. */
+  canOpenRoute(hashRoute) {
+    const key = String(hashRoute || '').replace(/^#\//, '').split('/')[0];
+    const def = ROUTE_PAGES[key];
+    if (!def) return false;
+    return !def.permission || this.can(def.permission);
+  },
+
   can(permission) {
     if (!this.user) return false;
     if (Array.isArray(permission)) return permission.some((p) => this.can(p));

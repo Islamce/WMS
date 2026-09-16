@@ -138,9 +138,16 @@ Pages.notifications = {
             <td>${n.status === 'SENT' ? '🔵' : ''}</td>
             <td><span class="badge role">${UI.esc(n.notification_type)}</span></td>
             <td>${UI.esc(n.notification_title || '')}</td><td class="wrap">${UI.esc(n.notification_message || '')}</td>
-            <td>${n.request_number ? `<a href="#/request-detail-lookup" data-req="${UI.esc(n.request_number)}">${UI.esc(n.request_number)}</a>` : ''}</td>
+            <td>${n.request_number ? `<a href="#/requests" class="nf-req" data-req="${UI.esc(n.request_number)}">${UI.esc(n.request_number)}</a>` : ''}</td>
             <td>${UI.fmtDate(n.sent_at)}</td></tr>`).join('')}</tbody></table></div>`
       : '<p class="muted">No notifications.</p>';
+    // #/request-detail-lookup was never a route: the one link in the notification
+    // centre anyone would click threw the user to Home. Same destination the
+    // audit trail's request chips use - the requests list, pre-filtered.
+    this.el.querySelectorAll('a.nf-req').forEach((a) => a.addEventListener('click', (e) => {
+      e.stopPropagation();
+      Pages.requests.state = { page: 1, search: a.dataset.req, status: '' };
+    }));
     this.el.querySelectorAll('tr[data-id]').forEach((tr) => tr.addEventListener('click', async () => {
       await Api.post(`/api/notifications/${tr.dataset.id}/read`, {}); App.refreshNotificationBadge();
       tr.style.fontWeight = ''; tr.querySelector('td').textContent = '';
