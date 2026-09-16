@@ -1,5 +1,13 @@
 # Hostinger native-addon recovery
 
+> **Superseded on 2026-09-06.** Production moved to a Hostinger VPS under Docker Compose
+> (`/opt/apps/wms`, service `wms`, database bind-mounted at `/opt/apps/wms/data/wms.db`,
+> behind the central Caddy proxy). The Passenger / shared-hosting / PM2 layout this
+> document describes no longer exists: `~/domains/...`, `/opt/alt/alt-nodejs20/...`,
+> `tmp/restart.txt` and `pm2` commands will fail or act on the wrong path. Kept as
+> history. Current procedure: `docs/HOSTINGER-VPS-MIGRATION-2026-09-06.md`,
+> `docs/DEPLOY-PROMPT-VPS.md`, and the production section of `CLAUDE.md`.
+
 This procedure repairs `better-sqlite3 11.10.0` on the current Hostinger
 shared host (`Node 20.19.4`, ABI 115, Linux x64, glibc 2.28). It changes only
 the installed native addon under `node_modules`. It does not seed, migrate,

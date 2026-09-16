@@ -96,8 +96,8 @@ The SHA above is a historical baseline only. Verify the live `main` head before 
 
 ### Production
 
-- Platform: Hostinger managed Node.js / Passenger
-- App path: `~/domains/wms.kynox.io/nodejs`
+- Platform: Hostinger VPS, Docker Compose service `wms` (since 2026-09-06 — the Passenger layout below this line is history)
+- App path: `/opt/apps/wms` (host) / `/app` (container)
 - Database: `data/wms.db`
 - Database engine: SQLite in WAL mode
 - Runtime last recorded: Node `v20.19.4`, npm `10.8.2`
