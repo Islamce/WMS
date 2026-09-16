@@ -177,6 +177,56 @@ async function loginUi(page, email, password) {
       d01.closedBeforeClick && d01.openAfterClick, JSON.stringify(d01));
     check('escalation, ERP error, and shortage receive distinct stage exceptions',
       d01.dangerExceptions === 2 && d01.warningExceptions === 1, JSON.stringify(d01));
+
+    // Light-theme status legibility. kynox-v2.css defines :root as the dark
+    // palette and once redefined only twelve tokens for light - none of the
+    // status ones - so badges drew dark-theme text on white at ~1.3:1. This
+    // measures the rendered result, not the stylesheet.
+    const legibility = await erpPage.evaluate(() => {
+      const root = document.documentElement;
+      const prevTheme = root.dataset.theme;
+      root.dataset.theme = 'light';
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = [
+        '<span class="badge role" data-k="badge.role">Warehouse Assigned</span>',
+        '<span class="badge pending" data-k="badge.pending">Pending</span>',
+        '<span class="badge active" data-k="badge.active">Active</span>',
+        '<span class="badge OUT" data-k="badge.OUT">OUT</span>',
+        '<div class="inline-alert error" data-k="inline-alert.error">Error</div>',
+        '<div class="inline-alert warning" data-k="inline-alert.warning">Warning</div>',
+        '<button class="btn" data-k="btn.plain">Submit</button>',
+        '<button class="btn success" data-k="btn.success">Approve</button>',
+        '<button class="btn warn" data-k="btn.warn">Reverse GI</button>',
+      ].join('');
+      document.body.appendChild(card);
+      const lum = (rgb) => {
+        const [r, g, b] = rgb.match(/[\d.]+/g).slice(0, 3).map(Number).map((v) => {
+          const c = v / 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+        });
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      };
+      const contrast = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+      const out = {};
+      card.querySelectorAll('[data-k]').forEach((el) => {
+        const cs = getComputedStyle(el);
+        out[el.dataset.k] = { bg: cs.backgroundImage !== 'none' ? cs.backgroundImage : cs.backgroundColor, fg: cs.color,
+          ratio: Number(contrast(cs.color, cs.backgroundColor).toFixed(2)) };
+      });
+      card.remove();
+      if (prevTheme === undefined) delete root.dataset.theme; else root.dataset.theme = prevTheme;
+      return out;
+    });
+    const weak = Object.entries(legibility)
+      .filter(([k]) => k.startsWith('badge.') || k.startsWith('inline-alert.'))
+      .filter(([, v]) => v.ratio < 4.5).map(([k, v]) => `${k}=${v.ratio}`);
+    check('light-theme status badges and alerts are legible (>= 4.5:1, measured)',
+      weak.length === 0, weak.join(', ') || JSON.stringify(legibility));
+    check('a success button does not render as the plain primary button',
+      legibility['btn.success'].bg !== legibility['btn.plain'].bg, JSON.stringify({ plain: legibility['btn.plain'].bg, success: legibility['btn.success'].bg }));
+    check('a warn button has a rule of its own (Reverse GI is not pixel-identical to Submit)',
+      legibility['btn.warn'].bg !== legibility['btn.plain'].bg && legibility['btn.warn'].bg !== legibility['btn.success'].bg,
+      JSON.stringify({ plain: legibility['btn.plain'].bg, warn: legibility['btn.warn'].bg }));
     await erpContext.close();
   } catch (error) {
     check('D01/D03 browser regression completed', false, error.message);
