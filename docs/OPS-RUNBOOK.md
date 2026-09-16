@@ -10,8 +10,12 @@ file — every credential is an environment variable or an operator-held value.
 ## 1. Monitoring & alerting (OPS-1)
 
 ### 1.1 Health endpoint
-`GET /healthz` → `200 {"status":"ok","service":"wms"}` (unauthenticated). This is
-the single source of truth for "is the app up".
+`GET /healthz` → `200 {"status":"ok","service":"wms","release":"<commit sha>"}`
+(unauthenticated). This is the single source of truth for "is the app up", and
+`release` is the source of truth for *which build* is up: it is the commit the
+image was built from, and the release workflow refuses to call a deploy healthy
+until it matches the ref that was dispatched. `"unknown"` means a hand-built
+image with no `BUILD_SHA` passed.
 
 ### 1.2 External uptime monitor (configure once)
 Use any external monitor (UptimeRobot free tier, Hetzner, BetterStack, a cron on

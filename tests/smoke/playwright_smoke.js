@@ -131,16 +131,22 @@ function check(name, cond, detail) {
     check('login form renders', await page.locator('#login-form').count() > 0);
     check('login email field present', await page.locator('#li-email').count() > 0);
 
-    const releaseId = await page.locator('meta[name="kynox-release"]').getAttribute('content');
-    const versionedAsset = await page.evaluate(async (id) => {
-      const url = `/release-assets/${id}/js/pages/requestDetail.js`;
+    // The build marker used to be a <meta> in index.html pointing at a
+    // /release-assets/<sha>/ path. That sha was frozen at one commit from
+    // 2026-08-18 and quietly served that version of three files for every
+    // release after it. The marker now lives in /healthz, injected at image
+    // build time, and assets are served at their real paths.
+    const health = await page.evaluate(async () => (await fetch('/healthz')).json());
+    check('healthz reports which build is serving',
+      typeof health.release === 'string' && health.release.length > 0, JSON.stringify(health));
+    const asset = await page.evaluate(async () => {
+      const url = '/js/pages/requestDetail.js';
       const response = await fetch(url);
       const text = await response.text();
       return { url, status: response.status, marker: text.includes('Back to filtered requests') };
-    }, releaseId);
-    check('release marker is present', /^[0-9a-f]{7,40}$/.test(releaseId || ''), releaseId || 'missing');
-    check('versioned request-detail asset is served', versionedAsset.status === 200 && versionedAsset.marker,
-      `${versionedAsset.url} status=${versionedAsset.status} marker=${versionedAsset.marker}`);
+    });
+    check('request-detail asset is served from its real path', asset.status === 200 && asset.marker,
+      `${asset.url} status=${asset.status} marker=${asset.marker}`);
 
     // Accessibility gate: no serious/critical WCAG 2.0 A/AA violations on the login page.
     await page.addScriptTag({ path: require.resolve('axe-core') });
