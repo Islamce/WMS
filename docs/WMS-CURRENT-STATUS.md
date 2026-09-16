@@ -4,6 +4,25 @@ Last updated: 2026-09-11
 
 ## Executive status
 
+- **CORRECTIVE PROGRAMME DEPLOYED (2026-09-16).** Production moved from
+  `b46ed7d29f4450095aabaf4bdd6c60a1ead6be60` to
+  `0b56bc39fc36cec5a81a50f0e974908f5e5ffb7e` — PR #131 (sections A–L of
+  `docs/WMS-EXECUTION-HANDOFF.md`) and PR #137. Release run `35143009655`,
+  preceded by two `plan_only` runs (`35141145083`, `35142682335`). Migrations
+  27 → 31. **Verified (production)** from the run's own before/after comparison:
+  `users=11`, `materials=9746`, `batches=3274`, `requests=8`,
+  `request_lines=11`, `permissions=42`, `material_location_stock=3273` — all
+  **unchanged**; `roles` 11 → 12 and `role_permissions` 105 → 115, exactly the
+  declared delta `{"roles":1,"role_permissions":10}` (029 added
+  `site_storekeeper` with 12 grants; 028 removed `stock_in`/`stock_out` from the
+  `user` role, which held both). `integrity=ok`. `/healthz` now reports
+  `release: 0b56bc39…`, asserted by the gate and re-read publicly afterwards.
+  DRIFT: the handoff's STOP 1 assumed production at `76a1420` with 026/027
+  unapplied; the first plan run showed it at `b46ed7d` with 027 applied — the
+  catch-up backlog it described had already been deployed. The read-only STOP 2
+  figures, taken from production by the plan run: `materials_with_both=2843`,
+  `fully_explained_by_import=2843`, `holds_real_legacy_stock_too=0`,
+  `coalesce_would_return_zero=0` — the simple `COALESCE` is safe.
 - **CONTRACTING EDITION DEPLOYED (2026-09-11).** Production moved from
   `bd7034d14039d25e886aafb3a44d3146c091b613` to
   `76a1420a9d7f1f34b71ffae609fd9ee2896269a6` — PRs #116, #117, #118, #120, #121
@@ -50,12 +69,12 @@ Last updated: 2026-09-11
 - Production app path: `/opt/apps/wms` (Docker Compose; host-mounted persistent data at `/opt/apps/wms/data`)
 - Production database: SQLite at `data/wms.db` using WAL mode
 - Production runtime: Node `v20.20.2`, npm `10.8.2` in container `wms-wms-1` (**Verified 2026-09-07**).
-- Current deployed commit: `76a1420a9d7f1f34b71ffae609fd9ee2896269a6` (**Verified 2026-09-11** by the deploy run reading `git rev-parse HEAD` at `/opt/apps/wms` before and after, plus an independent public asset check). Previously `bd7034d14039d25e886aafb3a44d3146c091b613` (verified 2026-09-07).
+- Current deployed commit: `0b56bc39fc36cec5a81a50f0e974908f5e5ffb7e` (**Verified 2026-09-16** by release run `35143009655` reading `git rev-parse HEAD` at `/opt/apps/wms` before and after, and by `/healthz` returning `release: 0b56bc39…` publicly over HTTPS). Previously `b46ed7d29f4450095aabaf4bdd6c60a1ead6be60` (observed by the same run; before that `76a1420a9d7f1f34b71ffae609fd9ee2896269a6`, verified 2026-09-11).
 - Production deploy mechanism: fast-forward the read-only deploy-key checkout at `/opt/apps/wms`, build `wms-wms`, then recreate only the `wms` Compose service. Persistent SQLite and backup paths are bind-mounted from the host and remain outside container replacement. The retired Passenger release mechanism below is historical only.
-- Health endpoint: healthy, returning `{"status":"ok","service":"wms"}` (**Verified 2026-09-07** locally on the VPS and publicly over HTTPS).
+- Health endpoint: healthy, returning `{"status":"ok","service":"wms","release":"0b56bc39fc36cec5a81a50f0e974908f5e5ffb7e"}` (**Verified 2026-09-16** publicly over HTTPS). The `release` field is the build's commit and the release gate asserts it equals the requested ref.
 - Passenger runtime environment (**Verified, 2026-08-31, via `/proc/<pid>/environ` on the live process**): `NODE_ENV=production`, `SKIP_AUTO_SEED=1`, `ALLOW_AUTO_SEED=0`, `PRODUCTION_INITIALIZATION_ENABLED=false`, `DB_PATH` correctly set. All five required invariants confirmed correct on the actual serving process, not just an interactive shell.
 - Production database (**Verified, 2026-08-31, via direct `sqlite3` query over SSH**): `users=11`, `materials=9746`, `PRAGMA integrity_check=ok`. Healthy and consistent with the last recorded snapshot.
-- Database migrations: **25** recorded in production (**Verified 2026-09-11** by the deploy run querying `schema_migrations` in the container before and after: 20 → 25). Migrations 021–025 are additive; no row count changed.
+- Database migrations: **31** recorded in production (**Verified 2026-09-16** by release run `35143009655` querying `schema_migrations` in the container before and after: 27 → 31). 028 removed two `role_permissions` rows, 029 added one role and twelve grants, 030/031 are indexes only.
 - Offsite backup: **Verified (repo + production), 2026-08-31:** the workflow had failed its last three scheduled runs (#57–#59) with `client_loop: send disconnect: Broken pipe` mid-SSH-session — not the IP-allowlist/ban cause originally suspected (this Hostinger plan tier has no IP-allowlist or firewall feature at all, and no active ban was found). The likely cause is account-wide process-count pressure on the shared hosting plan (Max Processes averaging 186–200 of a 200 cap, cyclical) — unresolved, see "Known remaining work." A manual re-run (`production-backup.yml` run #60, `33431636062`) completed successfully with no configuration changes, producing verified offsite set `20260831193821`. A non-blocking warning about local retention pruning was also surfaced (offsite copy unaffected) — see "Known remaining work." **Update, 2026-09-03: this has recurred — every run since has failed. See item 13 below; there is very likely no successful verified offsite backup since run #60.** **Update, 2026-09-04: root cause CONFIRMED via live hPanel evidence — the account is pegged at/near its 200-process cap almost continuously since 2026-08-29 (all other resources healthy). See item 13 for the full evidence and remediation options (plan upgrade or reducing standing load).** **Update, 2026-09-04 (later): owner authorized deleting `logix.kynox.io` and `analytics.kynox.io`; done. Max Processes dropped from ~189-197/200 to 79/200. RESOLVED — confirmed by an on-demand `Production Offsite Backup` run (`33852928458`) completing fully successfully, the first since run #60 on 2026-08-31. See item 13.**
 - **Offsite backup on VPS — VERIFIED 2026-09-06:** workflow retargeted from retired Passenger paths to `/opt/apps/wms` and the production Docker container. Run `34047172529` completed every phase successfully in 49 seconds, including remote and runner restore verification, encrypted offsite upload, object verification, heartbeat, and dry-run retention. The backup scripts now use the container's matching Node 20/`better-sqlite3` runtime; see `docs/HOSTINGER-SCHEDULED-BACKUP.md`.
 - PR #53 merged 2026-08-01; its CI and native-build checks were green at merge (see `WMS-INCIDENT-LOG.md` → `INC-2026-07-31-01` for the full artifact/inspection history).
