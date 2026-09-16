@@ -1,12 +1,12 @@
 {
   "_meta": {
     "artifact": "modules/wms-runtime-entry.json",
-    "bodyDigest": "86e6898b352641c1141d58032db4f036c4398a2875bab11e522f8e3d0a29dff5",
+    "bodyDigest": "79c66455543a112d390f16bfb5eeefe04902aa0190b2007efec8009af4a1c824",
     "confidence": "verified",
     "doNotEdit": true,
     "generator": "kaaf",
     "generatorVersion": "0.7.0",
-    "inputDigest": "8a6da73e0c42889ae2c083edfdfc7827a6ff7d0431623ca7f6fc7b62eee4b74b",
+    "inputDigest": "88786e90ebe444729fb9b50e9dd751060bcc83e74df04f2c9c5f0d0088f336bc",
     "provenanceNote": "Generated from the declared kaaf.repo.json and kaaf.module.json manifests. No wall-clock time or commit SHA is embedded: both would break byte-identical regeneration. Use git history for when and from which commit.",
     "schemaVersion": "1.0.0"
   },
@@ -98,6 +98,7 @@
       "docs/WMS-DECISION-LOG.md",
       "docs/WMS-DESIGN-QUALIFICATION-2026-08-18.md",
       "docs/WMS-DESIGN-RECOVERY-MATRIX-2026-08-18.md",
+      "docs/WMS-EXECUTION-HANDOFF.md",
       "docs/WMS-GATED-CICD-PIPELINE.md",
       "docs/WMS-INCIDENT-LOG.md",
       "docs/WMS-MASTER-UAT-V1.0.md",

@@ -1,12 +1,12 @@
 {
   "_meta": {
     "artifact": "architecture.json",
-    "bodyDigest": "4d09a7bb33638acae8457bc50ce4a834b9118492621c3fad59adec11a03b2b81",
+    "bodyDigest": "21f930d611fd358d586959b1cd28e4288a56266566a10c485179ddbce1cff6df",
     "confidence": "verified",
     "doNotEdit": true,
     "generator": "kaaf",
     "generatorVersion": "0.7.0",
-    "inputDigest": "8a6da73e0c42889ae2c083edfdfc7827a6ff7d0431623ca7f6fc7b62eee4b74b",
+    "inputDigest": "88786e90ebe444729fb9b50e9dd751060bcc83e74df04f2c9c5f0d0088f336bc",
     "provenanceNote": "Generated from the declared kaaf.repo.json and kaaf.module.json manifests. No wall-clock time or commit SHA is embedded: both would break byte-identical regeneration. Use git history for when and from which commit.",
     "schemaVersion": "1.0.0"
   },
@@ -755,7 +755,7 @@
         ],
         "parseErrors": [],
         "publicSymbols": [],
-        "sourceFileCount": 103
+        "sourceFileCount": 104
       },
       "id": "wms-runtime-entry",
       "ownedEntities": [
