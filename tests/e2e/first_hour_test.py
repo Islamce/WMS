@@ -89,6 +89,11 @@ check('F2 a second run is REFUSED, not merged', again.returncode != 0 and 'REFUS
 con = sqlite3.connect(db)
 counts = {t: con.execute(f'SELECT COUNT(*) FROM {t}').fetchone()[0]
           for t in ('materials', 'warehouses', 'bin_locations', 'subcontractors')}
+check('F2 every new starter material is batch managed',
+      con.execute('SELECT COUNT(*) FROM materials WHERE is_batch_managed<>1').fetchone()[0] == 0)
+check('F2 only the two shelf-life materials are expiry managed',
+      {r[0] for r in con.execute('SELECT item_code FROM materials WHERE is_expiry_managed=1')} ==
+      {'CHM-ADHESIVE-20', 'CHM-MEMBRANE'})
 audited = con.execute("SELECT COUNT(*) FROM audit_trail WHERE action='STARTER_DATA_INSTALLED'").fetchone()[0]
 # It must write master data only: no users, no stock, no transactions.
 stock = con.execute('SELECT COUNT(*) FROM batches').fetchone()[0]
@@ -200,6 +205,14 @@ try:
 
         code, body = call('POST', f'/api/picking/requests/{rid}/claim', token)
         check('F4 the store claims it', code == 200, (code, body))
+        con = sqlite3.connect(db)
+        allocations = con.execute('SELECT id, bin_location FROM picking_allocations WHERE line_id=?',
+                                  (line_id,)).fetchall()
+        con.close()
+        for allocation_id, bin_location in allocations:
+            code, body = call('POST', f'/api/picking/allocations/{allocation_id}/scan', token,
+                              {'qr_value': bin_location})
+            check('F4 the allocated bin is scanned before picking', code == 200, (code, body))
         code, body = call('POST', f'/api/picking/lines/{line_id}/confirm', token, {'picked_quantity': 10})
         check('F4 and picks it', code == 200, (code, body))
 

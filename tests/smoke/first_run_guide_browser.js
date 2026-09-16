@@ -154,6 +154,11 @@ async function stopServer(server) {
     await api('POST', `/api/picking/requests/${rid}/claim`, token);
     const detail = await api('GET', `/api/requests/${rid}`, token);
     const lineId = (detail.lines || detail.request?.lines || [])[0].id;
+    const pendingTasks = await api('GET', '/api/picking/tasks', token);
+    const pickDetail = await api('GET', `/api/picking/tasks/${pendingTasks.tasks[0].id}`, token);
+    for (const allocation of pickDetail.allocations) {
+      await api('POST', `/api/picking/allocations/${allocation.id}/scan`, token, { qr_value: allocation.bin_location });
+    }
     await api('POST', `/api/picking/lines/${lineId}/confirm`, token, { picked_quantity: 5 });
     const tasks = await api('GET', '/api/picking/tasks', token);
     await api('POST', `/api/picking/tasks/${tasks.tasks[0].id}/complete`, token);
