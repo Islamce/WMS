@@ -173,6 +173,47 @@ jobs:
             if (s.integrity !== 'ok') { console.error('::error::Database integrity is ' + s.integrity + '. Do not deploy on top of a sick database.'); process.exit(1); }
           " "$counts"
 
+      # Read-only. A plan run should say what the pending migrations will do to
+      # the rows the gate watches, not leave the operator to guess the declared
+      # delta - a wrong guess rolls the code back and leaves the rows written.
+      # Also answers the materials-stock question (handoff STOP 2) from the
+      # database itself rather than from an assumption. Opens the file readonly
+      # and writes nothing.
+      - name: Plan diagnostics (read-only, plan_only only)
+        if: ${{ inputs.plan_only }}
+        run: |
+          set -Eeuo pipefail
+          ssh hostinger "cd '$REMOTE_APP_DIR' && docker compose exec -T wms node -e \"
+            const db = require('better-sqlite3')('$REMOTE_DB_PATH', {readonly:true});
+            const applied = db.prepare('SELECT version FROM schema_migrations ORDER BY version').all().map((r) => r.version);
+            const userStockGrants = db.prepare(
+              'SELECT p.key FROM role_permissions rp JOIN roles r ON r.id = rp.role_id JOIN permissions p ON p.id = rp.permission_id ' +
+              'WHERE r.name = ? AND p.key IN (?, ?)').all('user', 'stock_in', 'stock_out').map((r) => r.key);
+            const storekeeper = db.prepare('SELECT id FROM roles WHERE name = ?').get('site_storekeeper');
+            const stop2 = db.prepare(
+              'SELECT SUM(CASE WHEN nb>0 AND ns>0 THEN 1 ELSE 0 END) AS materials_with_both, ' +
+              'SUM(CASE WHEN nb>0 AND ns>0 AND overlap=ns THEN 1 ELSE 0 END) AS fully_explained_by_import, ' +
+              'SUM(CASE WHEN nb>0 AND ns>0 AND overlap<ns THEN 1 ELSE 0 END) AS holds_real_legacy_stock_too, ' +
+              'SUM(CASE WHEN nb>0 AND batch_qty=0 AND ns>0 THEN 1 ELSE 0 END) AS coalesce_would_return_zero ' +
+              'FROM (SELECT m.id, ' +
+              '(SELECT COUNT(*) FROM batches b WHERE b.material_id=m.id) AS nb, ' +
+              '(SELECT COALESCE(SUM(b.remaining_quantity),0) FROM batches b WHERE b.material_id=m.id) AS batch_qty, ' +
+              '(SELECT COUNT(*) FROM material_location_stock s WHERE s.material_id=m.id AND s.quantity>0) AS ns, ' +
+              '(SELECT COUNT(*) FROM material_location_stock s JOIN locations l ON l.id=s.location_id ' +
+              ' WHERE s.material_id=m.id AND s.quantity>0 AND EXISTS (SELECT 1 FROM batches b WHERE b.material_id=m.id AND b.bin_location=l.code)) AS overlap ' +
+              'FROM materials m)').get();
+            console.log(JSON.stringify({
+              applied_migrations: applied,
+              user_role_stock_grants: userStockGrants,
+              site_storekeeper_role_exists: !!storekeeper,
+              materials_stock_ledgers: stop2,
+            }, null, 2));
+          \""
+          echo
+          echo "Declared delta for a release carrying 028+029 on this database:"
+          echo "  roles            +1 if site_storekeeper_role_exists is false, else 0"
+          echo "  role_permissions +12 (029, if the role is new) minus the number of user_role_stock_grants (028)"
+
       - name: Back up and verify before changing anything
         id: backup
         if: ${{ !inputs.plan_only }}
