@@ -9,8 +9,14 @@
     {
       "criticality": "required",
       "kind": "process-manager",
-      "name": "Phusion Passenger / PM2",
-      "onUnavailable": "The production process is not supervised or restarted."
+      "name": "Docker Compose (service `wms`, /opt/apps/wms/docker-compose.yml)",
+      "onUnavailable": "The production container is not built, started or restarted; there is no other supervisor since the shared host and its Passenger/PM2 layouts were retired on 2026-09-06."
+    },
+    {
+      "criticality": "required",
+      "kind": "reverse-proxy",
+      "name": "Caddy (central proxy at /opt/proxy, external Docker network `web`)",
+      "onUnavailable": "wms.kynox.io is unreachable over HTTPS; the container still answers on 127.0.0.1:3000 on the host."
     }
   ],
   "flows": [],
@@ -22,8 +28,7 @@
   "permissions": [],
   "publicEntryPoints": [
     "app.js",
-    "index.js",
-    "ecosystem.config.js"
+    "index.js"
   ],
   "purpose": "Boot the production process. Production runs under Docker Compose on a VPS since 2026-09-06; the managed-host process manager named below is history, not current. Production path, runtime path and required environment flags are defined in CLAUDE.md and are authoritative over this manifest.",
   "schemaVersion": "1.0.0"
