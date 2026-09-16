@@ -1,12 +1,12 @@
 {
   "_meta": {
     "artifact": "architecture.json",
-    "bodyDigest": "d21df5ee1d5be7aa751eabee9c0a5a7c77c94b9b6bd9c45b6284c8ba8a81b3ba",
+    "bodyDigest": "80f8a8166856f787645df9f181825b74ca1a1f21afb1804bc11c5a61a43f12ad",
     "confidence": "verified",
     "doNotEdit": true,
     "generator": "kaaf",
     "generatorVersion": "0.7.0",
-    "inputDigest": "8a7de2cf48379599b537b91f32d17ebeea445e3a814022ce1819fa5ea7ea4900",
+    "inputDigest": "ba346be096f1468548e3a9b4cc3dac57b51d05f282aacf0ed33ef58f16978e46",
     "provenanceNote": "Generated from the declared kaaf.repo.json and kaaf.module.json manifests. No wall-clock time or commit SHA is embedded: both would break byte-identical regeneration. Use git history for when and from which commit.",
     "schemaVersion": "1.0.0"
   },
@@ -765,7 +765,7 @@
         ],
         "parseErrors": [],
         "publicSymbols": [],
-        "sourceFileCount": 100
+        "sourceFileCount": 101
       },
       "id": "wms-runtime-entry",
       "ownedEntities": [
@@ -782,7 +782,7 @@
     },
     {
       "confidence": "verified",
-      "confidenceReason": "Declared and corroborated by 59 discovered code file(s).",
+      "confidenceReason": "Declared and corroborated by 60 discovered code file(s).",
       "declared": true,
       "declaredConfidence": "verified",
       "dependedOnBy": [],
@@ -791,7 +791,7 @@
         "wms-ops-scripts"
       ],
       "discovery": {
-        "codeFileCount": 59,
+        "codeFileCount": 60,
         "discovered": true,
         "entryPoints": [
           "tests/e2e/edition_route_coverage_test.js",
@@ -810,7 +810,7 @@
         ],
         "parseErrors": [],
         "publicSymbols": [],
-        "sourceFileCount": 61
+        "sourceFileCount": 62
       },
       "id": "wms-tests",
       "ownedEntities": [
