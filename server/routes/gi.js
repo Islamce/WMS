@@ -18,6 +18,7 @@ const { setHeaderStatus, refreshRollups, getHeaderOr404, reopenForRepick } = req
 const { HEADER_STATUS, LINE_STATUS } = require('./../workflow/states');
 const { withExecutionContext, withExecutionContexts } = require('./../services/workflowContext');
 const { getTenant } = require('./../services/tenant');
+const { activeFreeze, freezeMessage } = require('./../services/freeze');
 const { usesErpStaging } = require('./../services/tenantProfile');
 const { nextNumber } = require('./../services/documentNumber');
 
@@ -84,6 +85,11 @@ router.post('/:id/post', (req, res) => {
   if (header.erp_posting_status === 'PROCESSING') {
     return res.status(409).json({ error: 'Goods Issue posting is already in progress for this request.' });
   }
+  // Placed after the replay branch above on purpose: a retry of a posting that
+  // already succeeded must still return its result, even mid-count. What a freeze
+  // blocks is a NEW movement out of a warehouse whose snapshot is being counted.
+  const giFreeze = activeFreeze(header.issue_warehouse_code);
+  if (giFreeze) return res.status(400).json({ error: freezeMessage(giFreeze, header.issue_warehouse_code) });
 
   const lines = db.prepare("SELECT * FROM material_request_lines WHERE request_id=? AND line_status NOT IN ('Rejected','Cancelled')").all(header.id);
   const picked = lines.filter((l) => (l.picked_quantity || 0) > 0);
