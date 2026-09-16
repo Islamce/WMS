@@ -150,6 +150,13 @@ function main() {
     `);
     MATERIALS.forEach((m) => insMat.run(m.item_code, m.description, m.unit, m.material_group));
 
+    // A first project, so the project register is never empty on a new tenant.
+    // The request form requires a project once the register has one, and the
+    // spend-by-project report is the reason a contractor buys this - a tenant
+    // that started with an empty register would raise its first requests with
+    // no project and never see them in that report.
+    db.prepare(`INSERT OR IGNORE INTO reference_data (category, code, label, is_active) VALUES ('PROJECT', 'PRJ-001', 'Main project (rename me)', 1)`).run();
+
     if (plan.subcontractors) {
       db.prepare('INSERT INTO subcontractors (name, trade_category, contract_reference) VALUES (?, ?, ?)')
         .run(SUBCONTRACTOR.name, SUBCONTRACTOR.trade_category, SUBCONTRACTOR.contract_reference);

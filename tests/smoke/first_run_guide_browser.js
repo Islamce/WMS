@@ -145,7 +145,7 @@ async function stopServer(server) {
       { bin_location: 'SITE-01-RACK-01' });
 
     const created = await api('POST', '/api/requests', token, {
-      request_type: 'COST_CENTER', plant: 'P100', issue_warehouse_code: 'SITE-01',
+      request_type: 'COST_CENTER', plant: 'P100', issue_warehouse_code: 'SITE-01', wbs_element: 'PRJ-001',
       lines: [{ material_id: materialId, requested_quantity: 5 }],
     });
     const rid = (created.request || created).id;

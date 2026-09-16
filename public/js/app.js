@@ -65,6 +65,7 @@ const MODULES = [
   { key: 'overview', label: 'Overview', icon: 'grid', items: [
     { route: 'dashboard', label: 'Dashboard', icon: 'grid', permission: 'dashboard' },
     { route: 'kpi', label: 'KPI Dashboard', icon: 'bar-chart', permission: 'kpi_dashboard' },
+    { route: 'project-spend', label: 'Spend by Project', icon: 'pie-chart', permission: 'kpi_dashboard' },
     { route: 'ai', label: 'AI Stock Analytics', icon: 'cpu', permission: 'ai_analytics' },
     { route: 'notifications', label: 'Notifications', icon: 'bell', permission: 'notifications' },
   ] },
@@ -177,6 +178,7 @@ const ROUTE_PAGES = {
   'home': { title: 'Home', page: 'home', permission: null }, // launchpad — any signed-in user
   'dashboard': { page: 'dashboard', permission: 'dashboard' },
   'kpi': { page: 'kpi', permission: 'kpi_dashboard' },
+  'project-spend': { page: 'projectSpend', permission: 'kpi_dashboard' },
   'ai': { page: 'ai', permission: 'ai_analytics' },
   'notifications': { page: 'notifications', permission: 'notifications' },
   'create-request': { page: 'createRequest', permission: 'create_request' },

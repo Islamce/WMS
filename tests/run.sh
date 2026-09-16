@@ -100,6 +100,7 @@ run_suite contracting_collapsed_chain_test.py
 run_suite first_hour_test.py
 run_suite import_examples_test.py
 run_suite analytics_truth_test.py
+run_suite project_spend_test.py
 run_suite subscription_test.py
 run_suite demo_tenant_test.py
 # Offline: migrated temp database; pins that ownership defaults leave live data alone.

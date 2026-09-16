@@ -11,6 +11,8 @@ const { reverseOneStep } = require('./../services/reverseWorkflow');
 const { withExecutionContext, withExecutionContexts } = require('./../services/workflowContext');
 const { HEADER_STATUS, LINE_STATUS } = require('./../workflow/states');
 const { withIdempotency } = require('./../middleware/idempotency');
+const { getTenant } = require('./../services/tenant');
+const { getProfile } = require('./../services/tenantProfile');
 
 const router = express.Router();
 router.use(authenticate);
@@ -34,6 +36,7 @@ router.get('/', requirePermission('material_requests'), (req, res) => {
   if (!privileged) { filters.push('requester_id = ?'); params.push(req.user.id); }
   if (req.query.status) { filters.push('request_status = ?'); params.push(req.query.status); }
   if (req.query.subcontractor_id) { filters.push('subcontractor_id = ?'); params.push(req.query.subcontractor_id); }
+  if (req.query.project) { filters.push('wbs_element = ?'); params.push(req.query.project); }
   if (req.query.search) {
     filters.push('(request_number LIKE ? OR purpose LIKE ? OR requester_name LIKE ?)');
     const like = `%${req.query.search}%`;
@@ -62,11 +65,43 @@ router.get('/:id', requirePermission(['material_requests', 'warehouse_dashboard'
   res.json({ request: withExecutionContext(header), lines, task });
 });
 
+/**
+ * The fields a tenant's profile declares as required (tenantProfile.js
+ * requiredRequestFields). Declared for as long as profiles have existed and
+ * read by nothing, so a contracting request could be raised with no project -
+ * on the edition whose comment says project attribution is the whole point.
+ *
+ * A declared field is enforced only when its register has at least one active
+ * entry. A field the tenant has nothing to choose for is not a control, it is
+ * a dead end at the first request; and the value must be one of the register's
+ * codes, or the spend report groups the same project under two spellings.
+ */
+const REQUIRED_FIELD_REGISTER = { wbs_element: 'PROJECT', plant: 'PLANT', cost_center: 'COST_CENTER' };
+const REQUIRED_FIELD_LABEL = { wbs_element: 'Project', plant: 'Site', cost_center: 'Cost code' };
+function requiredFieldError(body) {
+  const key = getTenant().profileKey;
+  if (!key) return null;
+  let declared = [];
+  try { declared = getProfile(key).requiredRequestFields || []; } catch { return null; }
+  for (const field of declared) {
+    const category = REQUIRED_FIELD_REGISTER[field];
+    if (!category) continue;
+    const codes = db.prepare("SELECT code FROM reference_data WHERE category=? AND is_active=1").all(category).map((r) => r.code);
+    if (!codes.length) continue;
+    const value = String(body[field] || '').trim();
+    if (!value) return `${REQUIRED_FIELD_LABEL[field] || field} is required. Choose one from the register.`;
+    if (!codes.includes(value)) return `${REQUIRED_FIELD_LABEL[field] || field} '${value}' is not in the register. Choose one of: ${codes.slice(0, 8).join(', ')}${codes.length > 8 ? ', …' : ''}.`;
+  }
+  return null;
+}
+
 router.post('/', requirePermission('create_request'), withIdempotency('POST /api/requests', (req, res) => {
   const b = req.body || {};
   if (!Array.isArray(b.lines) || b.lines.length === 0) {
     return res.status(400).json({ error: 'At least one material line is required.' });
   }
+  const missing = requiredFieldError(b);
+  if (missing) return res.status(400).json({ error: missing });
   for (const [i, l] of b.lines.entries()) {
     if (!isId(l.material_id)) return res.status(400).json({ error: `Line ${i + 1}: material is required.` });
     if (!isPositiveNumber(l.requested_quantity)) {

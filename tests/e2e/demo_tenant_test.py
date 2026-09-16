@@ -129,7 +129,7 @@ try:
     check('D3 put away', code == 200, code)
 
     code, created = call('POST', '/api/requests', token, {
-        'request_type': 'COST_CENTER', 'plant': 'P100', 'issue_warehouse_code': 'SITE-01',
+        'request_type': 'COST_CENTER', 'plant': 'P100', 'issue_warehouse_code': 'SITE-01', 'wbs_element': 'PRJ-001',
         'lines': [{'material_id': material_id, 'requested_quantity': 10}]})
     rid = (created.get('request') or created).get('id')
     check('D3 raise a request', code in (200, 201) and bool(rid), (code, created))

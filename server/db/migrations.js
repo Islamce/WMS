@@ -838,6 +838,17 @@ const MIGRATIONS = [
       db.exec('CREATE INDEX IF NOT EXISTS idx_batches_bin ON batches(warehouse_code, bin_location, remaining_quantity)');
     },
   },
+  {
+    id: '031_project_spend_indexes',
+    description: 'Indexes for the spend-by-project report and the requests project filter. Measured at 1M ledger rows: windowed report 630 -> 302 ms; drill-down 57 -> 43 ms with SEARCH instead of SCAN on headers.',
+    up(db) {
+      db.exec('CREATE INDEX IF NOT EXISTS idx_mrh_wbs ON material_request_headers(wbs_element)');
+      // Covering index for the windowed roll-up: category and date are the
+      // predicates, the rest are the columns the report reads, so the ledger
+      // itself is never touched for a windowed query.
+      db.exec('CREATE INDEX IF NOT EXISTS idx_stock_tx_spend ON stock_transactions(movement_category, transaction_date, request_line_id, material_id, quantity)');
+    },
+  },
 ];
 
 function ensureTable() {

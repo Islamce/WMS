@@ -1,19 +1,19 @@
 {
   "_meta": {
     "artifact": "drift.json",
-    "bodyDigest": "6a8b3bfd16c9cb80a11c96f3e06d3d47528ce932af689091a1a9c3715d1983b9",
+    "bodyDigest": "c7fbbc45a7f90bdd2bafcf3795b6e9f3d09fb5c54702c296514fc726695bd9cf",
     "confidence": "derived",
     "doNotEdit": true,
     "generator": "kaaf",
     "generatorVersion": "0.7.0",
-    "inputDigest": "0775645c953fd89807495f4fba3bcece64449f51d8c0fda4b676cc8dbcd6b3d8",
+    "inputDigest": "6964865f571632a906562bb9a3b2daa4af30d8ecb682dfeb065433530cbaa116",
     "provenanceNote": "Generated from the declared kaaf.repo.json and kaaf.module.json manifests. No wall-clock time or commit SHA is embedded: both would break byte-identical regeneration. Use git history for when and from which commit.",
     "schemaVersion": "1.0.0"
   },
   "confidenceByModule": {
     "wms-api": {
       "level": "verified",
-      "reason": "Declared and corroborated by 78 discovered code file(s)."
+      "reason": "Declared and corroborated by 79 discovered code file(s)."
     },
     "wms-kaaf-tooling": {
       "level": "verified",
@@ -33,11 +33,11 @@
     },
     "wms-tests": {
       "level": "verified",
-      "reason": "Declared and corroborated by 55 discovered code file(s)."
+      "reason": "Declared and corroborated by 56 discovered code file(s)."
     },
     "wms-web": {
       "level": "verified",
-      "reason": "Declared and corroborated by 38 discovered code file(s)."
+      "reason": "Declared and corroborated by 39 discovered code file(s)."
     }
   },
   "counts": {

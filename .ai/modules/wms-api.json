@@ -1,12 +1,12 @@
 {
   "_meta": {
     "artifact": "modules/wms-api.json",
-    "bodyDigest": "8492a2b5014b893476af1bfebc1ccb4801ccb5e4298f5c8175b193c6f055f87c",
+    "bodyDigest": "321a4d4c689a83997f0db142de5fa09d35c3d4c81681fd31687c2ccf6abae9b0",
     "confidence": "verified",
     "doNotEdit": true,
     "generator": "kaaf",
     "generatorVersion": "0.7.0",
-    "inputDigest": "0775645c953fd89807495f4fba3bcece64449f51d8c0fda4b676cc8dbcd6b3d8",
+    "inputDigest": "6964865f571632a906562bb9a3b2daa4af30d8ecb682dfeb065433530cbaa116",
     "provenanceNote": "Generated from the declared kaaf.repo.json and kaaf.module.json manifests. No wall-clock time or commit SHA is embedded: both would break byte-identical regeneration. Use git history for when and from which commit.",
     "schemaVersion": "1.0.0"
   },
@@ -293,7 +293,7 @@
     }
   ],
   "confidence": "verified",
-  "confidenceReason": "Declared and corroborated by 78 discovered code file(s).",
+  "confidenceReason": "Declared and corroborated by 79 discovered code file(s).",
   "declared": true,
   "declaredConfidence": "verified",
   "dependedOnBy": [
@@ -340,6 +340,7 @@
       "server/routes/openingStockReconcile.js",
       "server/routes/permissions.js",
       "server/routes/picking.js",
+      "server/routes/projectSpend.js",
       "server/routes/reallocation.js",
       "server/routes/receiving.js",
       "server/routes/requests.js",
@@ -431,6 +432,7 @@
       "server/routes/openingStockReconcile.js",
       "server/routes/permissions.js",
       "server/routes/picking.js",
+      "server/routes/projectSpend.js",
       "server/routes/reallocation.js",
       "server/routes/receiving.js",
       "server/routes/requests.js",

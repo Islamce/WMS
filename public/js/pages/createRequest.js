@@ -54,7 +54,11 @@ Pages.createRequest = {
             <div class="form-group"></div>
           </div>` : ''}
           <div class="form-row">
-            <div class="form-group"><label>WBS Element</label><input type="text" id="cr-wbs" /></div>
+            ${(this.meta.projects || []).length ? `
+            <div class="form-group"><label>Project *</label>
+              <select id="cr-wbs"><option value="">— Select —</option>${opts(this.meta.projects, 'code', 'label')}</select>
+              <div class="hint">Chosen from the register, so the spend report never splits one project across two spellings.</div></div>`
+            : `<div class="form-group"><label>WBS Element</label><input type="text" id="cr-wbs" /></div>`}
             <div class="form-group"><label>Internal / Production Order</label><input type="text" id="cr-order" /></div>
           </div>
           <div class="form-group"><label>Purpose / Justification <span class="muted">(optional)</span></label><textarea id="cr-purpose" rows="2"></textarea></div>

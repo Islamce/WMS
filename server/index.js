@@ -166,6 +166,7 @@ app.use('/api/admin', require('./routes/admin'));
 app.use('/api', require('./routes/attachments'));
 app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/kpi', require('./routes/kpi'));
+app.use('/api/reports', require('./routes/projectSpend'));
 app.use('/api/analytics', require('./routes/analytics'));
 
 // --- Static frontend ------------------------------------------------------
