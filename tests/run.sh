@@ -27,6 +27,8 @@ fresh_db() {
   # open data/wms.db directly, so overriding DB_PATH produces a run that looks
   # like six unrelated failures. The path is inside the repo, and the guards above
   # are what make running it safe - not moving it somewhere else.
+  # A fresh checkout has no data/ directory (it is gitignored); CI found that.
+  mkdir -p data
   rm -f data/wms.db data/wms.db-shm data/wms.db-wal
   node server/db/migrate.js >/dev/null && node server/db/seed.js >/dev/null
 }
@@ -100,6 +102,8 @@ run_suite contracting_collapsed_chain_test.py
 run_suite first_hour_test.py
 run_suite import_examples_test.py
 run_suite analytics_truth_test.py
+# Every docs/** path cited in code or generated context must exist (handoff guard C5).
+node tests/e2e/documentation_paths_test.js || FAILED=1
 run_suite project_spend_test.py
 run_suite subscription_test.py
 run_suite demo_tenant_test.py

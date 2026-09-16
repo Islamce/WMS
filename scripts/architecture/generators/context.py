@@ -77,8 +77,6 @@ def build(facts: RepositoryFacts) -> dict:
             "drift": ".ai/drift.json",
             "governance": "docs/kaaf/GOVERNANCE.md",
             "moduleDetail": ".ai/modules/<id>.json",
-            "prompts": "docs/ai/prompts/",
-            "roadmap": "docs/kaaf/ROADMAP.md",
             "standards": "docs/kaaf/STANDARDS.md",
             "summary": ".ai/summary.md",
         },

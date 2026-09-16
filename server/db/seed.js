@@ -3,6 +3,12 @@
  * Run with: npm run seed
  * Idempotent: uses INSERT OR IGNORE / upserts, safe to re-run.
  */
+// A direct invocation must refuse BEFORE connection.js opens (or creates) the
+// database - against a production path the open itself is the damage, and
+// with a read-only mount the failure was EACCES, not REFUSING. Function
+// declarations hoist, so the guard below is callable here.
+if (require.main === module) refuseInProduction();
+
 const bcrypt = require('bcryptjs');
 const db = require('./connection');
 
@@ -122,6 +128,6 @@ function refuseInProduction() {
 // Run automatically when executed directly (`npm run seed` /
 // `node server/db/seed.js`), but not when required as a module — the server's
 // first-run bootstrap imports and calls seed() itself only on an empty DB.
-if (require.main === module) { refuseInProduction(); seed(); }
+if (require.main === module) seed();
 
 module.exports = { seed };

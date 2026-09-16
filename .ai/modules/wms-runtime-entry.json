@@ -1,12 +1,12 @@
 {
   "_meta": {
     "artifact": "modules/wms-runtime-entry.json",
-    "bodyDigest": "5a0e5361bfd16df70ead4f63cac7d472524313b3b6f6956439b198f705484ab1",
+    "bodyDigest": "b0c23b1fc02008bd02c3aa5f87839a7af3c455eab55d0ca69b0b49ae21fa8994",
     "confidence": "verified",
     "doNotEdit": true,
     "generator": "kaaf",
     "generatorVersion": "0.7.0",
-    "inputDigest": "6964865f571632a906562bb9a3b2daa4af30d8ecb682dfeb065433530cbaa116",
+    "inputDigest": "7b10116ba945fda9ab6104b96cf2c168bc6454cb8933b8d7a951024efcafc7c2",
     "provenanceNote": "Generated from the declared kaaf.repo.json and kaaf.module.json manifests. No wall-clock time or commit SHA is embedded: both would break byte-identical regeneration. Use git history for when and from which commit.",
     "schemaVersion": "1.0.0"
   },
@@ -113,6 +113,7 @@
       "docs/WORKFLOW-GAP-ANALYSIS.md",
       "docs/incidents/2026-07-23-navigation-observer-loop.md",
       "docs/kaaf/GOVERNANCE.md",
+      "docs/kaaf/STANDARDS.md",
       "docs/vault/.obsidian/app.json",
       "docs/vault/.obsidian/core-plugins.json",
       "docs/vault/.obsidian/templates.json",

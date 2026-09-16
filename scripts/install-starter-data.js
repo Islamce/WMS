@@ -95,6 +95,12 @@ function main() {
   }
 
   const dbPath = path.resolve(args.db);
+  // The empty-tenant guard below would refuse production anyway (it holds
+  // ~9,700 materials), but a guard that depends on the data is not a guard.
+  if (/^(\/opt\/apps\/wms|\/app\/data)\//.test(dbPath)) {
+    console.error('REFUSING: starter data must not be installed against production.');
+    process.exit(1);
+  }
   const db = new Database(dbPath);
   db.pragma('foreign_keys = ON');
 
