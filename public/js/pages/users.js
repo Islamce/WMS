@@ -24,6 +24,7 @@ Pages.users = {
           </select>
           <span class="muted" id="u-count" aria-live="polite"></span>
           <div class="spacer"></div>
+          <button class="btn" id="u-add">Add user</button>
         </div>
         <div class="table-wrap" id="u-table"><div class="loading">Loading…</div></div>
       </div>`;
@@ -34,6 +35,7 @@ Pages.users = {
       this.state.status = filter.value;
       this.load();
     });
+    el.querySelector('#u-add').addEventListener('click', () => this.openCreate());
 
     try {
       ({ roles: this.roles } = await Api.get('/api/users/roles'));
@@ -154,6 +156,56 @@ Pages.users = {
           const { message } = await Api.patch(`/api/users/${userId}/password`, { new_password: nw });
           UI.toast(message);
           close();
+        } catch (err) { UI.toast(err.message, 'error'); }
+      },
+    });
+  },
+
+  /**
+   * Adding a person is how a site gets its storekeeper. Until this existed the
+   * only route in was self-registration, which was open to anyone on the
+   * internet; closing that without this would have left a customer unable to
+   * add an employee at all.
+   */
+  openCreate() {
+    UI.modal({
+      title: 'Add user',
+      submitLabel: 'Create account',
+      bodyHtml: `
+        <p class="muted" style="margin-bottom:12px">
+          The account is active immediately. The person is asked to choose their own
+          password the first time they sign in, so the one you set here is temporary.
+        </p>
+        <div class="form-group">
+          <label for="nu-name">Full name</label>
+          <input id="nu-name" required autocomplete="off" />
+        </div>
+        <div class="form-group">
+          <label for="nu-email">Email</label>
+          <input id="nu-email" type="email" required autocomplete="off" />
+        </div>
+        <div class="form-group">
+          <label for="nu-role">Role</label>
+          <select id="nu-role">
+            ${this.roles.map((r) => `<option value="${r.id}">${UI.esc(r.name)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="nu-password">Temporary password</label>
+          <input id="nu-password" type="password" required autocomplete="new-password" />
+        </div>`,
+      onSubmit: async (overlay, close) => {
+        const body = {
+          name: overlay.querySelector('#nu-name').value.trim(),
+          email: overlay.querySelector('#nu-email').value.trim(),
+          password: overlay.querySelector('#nu-password').value,
+          role_id: Number(overlay.querySelector('#nu-role').value),
+        };
+        try {
+          const { message } = await Api.post('/api/users', body);
+          UI.toast(message);
+          close();
+          this.load();
         } catch (err) { UI.toast(err.message, 'error'); }
       },
     });

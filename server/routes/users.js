@@ -6,7 +6,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const db = require('../db/connection');
 const { authenticate, requirePermission } = require('../middleware/auth');
-const { isId, validatePasswordPolicy } = require('../utils/validate');
+const { isId, isEmail, isNonEmptyString, validatePasswordPolicy } = require('../utils/validate');
 const audit = require('../services/audit');
 
 const router = express.Router();
@@ -40,6 +40,55 @@ router.get('/', (req, res) => {
 router.get('/roles', (req, res) => {
   res.json({ roles: db.prepare('SELECT id, name, description FROM roles ORDER BY id').all() });
 });
+
+/**
+ * POST /api/users — create an account.
+ *
+ * This is the only way to add a person to the system. Self-registration used to
+ * be the other one: it was open to the internet, assigned a role that could
+ * remove stock, and arrived in the admin's pending list looking exactly like a
+ * real hire. It is gone, so this exists.
+ *
+ * The account is created active - an administrator who typed the details is the
+ * approval - and must_change_password is set, because the administrator knows
+ * the password they just chose.
+ */
+router.post('/', asyncHandler(async (req, res) => {
+  const { name, email, password, role_id: roleId } = req.body || {};
+
+  if (!isNonEmptyString(name)) return res.status(400).json({ error: 'Name is required.' });
+  if (!isEmail(email)) return res.status(400).json({ error: 'A valid email is required.' });
+  const pol = validatePasswordPolicy(password);
+  if (!pol.ok) return res.status(400).json({ error: pol.error });
+  if (!isId(roleId)) return res.status(400).json({ error: 'A role is required.' });
+
+  const role = db.prepare('SELECT id, name FROM roles WHERE id = ?').get(roleId);
+  if (!role) return res.status(400).json({ error: 'Role not found.' });
+
+  const trimmedEmail = String(email).trim();
+  const exists = db.prepare('SELECT id FROM users WHERE email = ?').get(trimmedEmail);
+  if (exists) return res.status(409).json({ error: 'An account with this email already exists.' });
+
+  const hash = await bcrypt.hash(password, 10);
+  const result = db.prepare(`
+    INSERT INTO users (name, email, password_hash, role_id, status, must_change_password)
+    VALUES (?, ?, ?, ?, 'active', 1)
+  `).run(String(name).trim(), trimmedEmail, hash, role.id);
+
+  audit.record({
+    entityType: 'User',
+    entityId: Number(result.lastInsertRowid),
+    action: 'CREATE',
+    newValue: { name: String(name).trim(), email: trimmedEmail, role: role.name, status: 'active' },
+    user: req.user,
+    sourceScreen: 'users',
+  });
+
+  res.status(201).json({
+    message: `${String(name).trim()} can sign in now and will be asked to choose a new password.`,
+    user: { id: Number(result.lastInsertRowid), name: String(name).trim(), email: trimmedEmail, role: role.name, status: 'active' },
+  });
+}));
 
 /** PATCH /api/users/:id/status — approve / reject / disable / re-activate. */
 router.patch('/:id/status', (req, res) => {
