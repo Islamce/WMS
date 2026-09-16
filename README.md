@@ -30,10 +30,14 @@ Key building blocks:
   and accepts operator-keyed ERP numbers; swap in a SAP/Oracle/Dynamics connector
   implementing the same interface without touching the workflow.
 
-### Development-only demo role accounts (password `Passw0rd!`)
+### Development-only demo role accounts
 
 > These seeded accounts are for disposable local development and test databases
 > only. They must not be created or used in production.
+>
+> Their shared password is printed by `npm run seed` on first run and is defined in
+> `server/db/seed2.js`. It is not written here: this repository is public, and a
+> published credential plus any path that reseeds a live database is a way in.
 
 | Role | Email |
 |------|-------|
@@ -105,7 +109,7 @@ This repo ships a devcontainer, so testing on GitHub needs no manual setup:
 4. To share the URL with someone else, set port 3000's visibility to **Public**
    (Ports tab ▸ right-click the port ▸ *Port Visibility ▸ Public*). A private
    port returns **HTTP 401** to anyone not signed in to your Codespace.
-5. Log in with `admin@example.com` / `Admin@123456`.
+5. Log in as `admin@example.com`. `npm run seed` prints the password on first run.
 
 Health check: `https://<your-codespace>-3000.app.github.dev/healthz` returns
 `{"status":"ok"}` when the app is up — a 200 here with a 401 on `/` means the
@@ -130,11 +134,13 @@ Open **http://localhost:3000**.
 
 ### Development-only admin login
 
-| Email               | Password       |
-|---------------------|----------------|
-| `admin@example.com` | `Admin@123456` |
+| Email               | Password                                   |
+|---------------------|--------------------------------------------|
+| `admin@example.com` | printed by `npm run seed` on first run     |
 
-> Never use this account or password in production.
+> Never use this account in production. The password is defined in
+> `server/db/seed.js` and deliberately not reproduced here — this repository is
+> public, and `npm run seed` now refuses to run against a production database.
 
 ### Configuration
 
@@ -182,9 +188,9 @@ push to `main` and on every pull request, plus ESLint (with
 ### Deploying to Hostinger
 
 See **[DEPLOY-HOSTINGER.md](DEPLOY-HOSTINGER.md)** for step-by-step instructions
-covering a Hostinger VPS (Docker via `docker-compose.yml`, or PM2 via
-`ecosystem.config.js`) and shared hosting with the hPanel Node.js app (the root
-`app.js` is the Passenger startup file). The app honours `PORT`/`NODE_ENV`/
+covering a Hostinger VPS (Docker via `docker-compose.yml`; the PM2 and shared-hosting
+layouts it also describes were retired on 2026-09-06) and, historically, the hPanel Node.js app (the root
+`app.js` was the Passenger startup file). The app honours `PORT`/`NODE_ENV`/
 `JWT_SECRET`/`DB_PATH` from the environment and sets `trust proxy` so it runs
 correctly behind Hostinger's reverse proxy.
 

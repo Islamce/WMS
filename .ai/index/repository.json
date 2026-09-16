@@ -1,12 +1,12 @@
 {
   "_meta": {
     "artifact": "index/repository.json",
-    "bodyDigest": "48328b484f908694a050e2a29297913e1fefc0fa5f6db933e6aa7c5bc2298bfc",
+    "bodyDigest": "2c3918a69bdb8e3df4a2f8f812c1e1036f5389b7ea7faf9331e441ec04796e68",
     "confidence": "derived",
     "doNotEdit": true,
     "generator": "kaaf",
     "generatorVersion": "0.7.0",
-    "inputDigest": "d4431ce676b2d8517dccc3e4133035037181b5a716e5997f799596e50330f11c",
+    "inputDigest": "7b10116ba945fda9ab6104b96cf2c168bc6454cb8933b8d7a951024efcafc7c2",
     "provenanceNote": "Generated from the declared kaaf.repo.json and kaaf.module.json manifests. No wall-clock time or commit SHA is embedded: both would break byte-identical regeneration. Use git history for when and from which commit.",
     "schemaVersion": "1.0.0"
   },
@@ -319,9 +319,15 @@
     },
     {
       "criticality": "required",
+      "kind": "reverse-proxy",
+      "module": "wms-runtime-entry",
+      "name": "Caddy (central proxy at /opt/proxy, external Docker network `web`)"
+    },
+    {
+      "criticality": "required",
       "kind": "process-manager",
       "module": "wms-runtime-entry",
-      "name": "Phusion Passenger / PM2"
+      "name": "Docker Compose (service `wms`, /opt/apps/wms/docker-compose.yml)"
     }
   ],
   "health": {

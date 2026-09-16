@@ -22,6 +22,12 @@ function eligibleBatches(materialId, warehouseCode, method) {
       AND (warehouse_code = ? OR ? IS NULL)
       AND quality_status = 'RELEASED'
       AND is_blocked = 0
+      -- Ownership is decided at receipt and is deliberately immutable
+      -- (server/routes/receiving.js). Without this predicate the allocator
+      -- reserved and issued a subcontractor's property against a company
+      -- request - proved by running propose() - while every report excluded it,
+      -- so the engine and the reports disagreed about whose material left the store.
+      AND COALESCE(owner_type, 'COMPANY') = 'COMPANY'
       AND (remaining_quantity - reserved_quantity) > 0
   `).all(materialId, warehouseCode, warehouseCode);
 

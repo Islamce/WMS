@@ -95,6 +95,12 @@ function main() {
   }
 
   const dbPath = path.resolve(args.db);
+  // The empty-tenant guard below would refuse production anyway (it holds
+  // ~9,700 materials), but a guard that depends on the data is not a guard.
+  if (/^(\/opt\/apps\/wms|\/app\/data)\//.test(dbPath)) {
+    console.error('REFUSING: starter data must not be installed against production.');
+    process.exit(1);
+  }
   const db = new Database(dbPath);
   db.pragma('foreign_keys = ON');
 
@@ -150,6 +156,13 @@ function main() {
     `);
     MATERIALS.forEach((m) => insMat.run(m.item_code, m.description, m.unit, m.material_group));
 
+    // A first project, so the project register is never empty on a new tenant.
+    // The request form requires a project once the register has one, and the
+    // spend-by-project report is the reason a contractor buys this - a tenant
+    // that started with an empty register would raise its first requests with
+    // no project and never see them in that report.
+    db.prepare(`INSERT OR IGNORE INTO reference_data (category, code, label, is_active) VALUES ('PROJECT', 'PRJ-001', 'Main project (rename me)', 1)`).run();
+
     if (plan.subcontractors) {
       db.prepare('INSERT INTO subcontractors (name, trade_category, contract_reference) VALUES (?, ?, ?)')
         .run(SUBCONTRACTOR.name, SUBCONTRACTOR.trade_category, SUBCONTRACTOR.contract_reference);
@@ -165,10 +178,13 @@ function main() {
 
   console.log('\nWritten. Nothing existing was changed — there was nothing to change.');
   // This order is not advice, it is how the product works. A received batch
-  // lands on QUALITY HOLD in no bin, and allocation will not touch it until it
-  // is released AND put away. Steps 2 and 3 are the ones a new customer does
-  // not know are waiting, and skipping them looks exactly like a broken
-  // product: the request approves, then nothing can be picked.
+  // lands on QUALITY HOLD in no bin. Allocation will not touch it until it is
+  // released (step 2) - that part is a hard gate in services/allocation.js.
+  // Put-away (step 3) is not: the allocator has no bin predicate and never had
+  // one, and for a while this text said otherwise. What put-away IS for is the
+  // pick - the picker has to find the stock, and a batch-managed line must be
+  // scanned where it sits. Skip step 2 and the request approves, then nothing
+  // can be picked; skip step 3 and the picker is sent to "no bin".
   console.log('\nNext, in this order:');
   console.log('  1. Goods Receipt      — receive something into SITE-01.');
   console.log('  2. Quality Inspection — release the batch. It arrives on hold.');

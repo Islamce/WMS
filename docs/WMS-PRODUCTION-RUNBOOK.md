@@ -4,11 +4,20 @@ Last updated: 2026-08-01
 
 ## Environment
 
-- Host: Hostinger managed Node.js / Passenger
-- Application: `~/domains/wms.kynox.io/nodejs`
-- Database: `~/domains/wms.kynox.io/nodejs/data/wms.db`
-- Node binary path: `/opt/alt/alt-nodejs20/root/usr/bin`
-- Health endpoint: `https://wms.kynox.io/healthz`
+- Host: Hostinger VPS, Docker Compose service `wms` (since 2026-09-06)
+- Application: `/opt/apps/wms` on the host; `/app` inside the container
+- Database: `/opt/apps/wms/data/wms.db` on the host, bind-mounted as `/app/data/wms.db`
+- Backups: `/opt/apps/wms/backups` (`/app/backups` inside the container)
+- Runtime: run app commands with `docker compose exec wms node …`; restart with `docker compose`
+- Proxy: central Caddy at `/opt/proxy`, external Docker network `web`
+- Health endpoint: `https://wms.kynox.io/healthz` (reports the serving build in `release`)
+
+> **Read this before any procedure below.** Sections written before 2026-09-06 still
+> say Passenger, `~/domains/wms.kynox.io/nodejs`, `/opt/alt/alt-nodejs20` or
+> `tmp/restart.txt`. None of that exists. Translate as you go: the app directory is
+> `/opt/apps/wms`, a "Passenger restart" is `docker compose restart wms` (or
+> `up -d` after a build), and any `node …` command runs inside the container. The
+> facts above and `CLAUDE.md` win over any older paragraph in this file.
 
 ## Non-negotiable safeguards
 

@@ -1,12 +1,12 @@
 {
   "_meta": {
     "artifact": "architecture.json",
-    "bodyDigest": "247822a7542907983af047bd360c5631eb1c8a076f13aea7a9172bc9aa1f4be1",
+    "bodyDigest": "71f8647f0080ee972047ae732020d0346e29c65647e4bcd891b0bf7bd2805bd0",
     "confidence": "verified",
     "doNotEdit": true,
     "generator": "kaaf",
     "generatorVersion": "0.7.0",
-    "inputDigest": "d4431ce676b2d8517dccc3e4133035037181b5a716e5997f799596e50330f11c",
+    "inputDigest": "7b10116ba945fda9ab6104b96cf2c168bc6454cb8933b8d7a951024efcafc7c2",
     "provenanceNote": "Generated from the declared kaaf.repo.json and kaaf.module.json manifests. No wall-clock time or commit SHA is embedded: both would break byte-identical regeneration. Use git history for when and from which commit.",
     "schemaVersion": "1.0.0"
   },
@@ -513,17 +513,26 @@
     {
       "confidence": "verified",
       "criticality": "required",
+      "kind": "reverse-proxy",
+      "module": "wms-runtime-entry",
+      "name": "Caddy (central proxy at /opt/proxy, external Docker network `web`)",
+      "onUnavailable": "wms.kynox.io is unreachable over HTTPS; the container still answers on 127.0.0.1:3000 on the host.",
+      "sourceManifest": "kaaf.module.json"
+    },
+    {
+      "confidence": "verified",
+      "criticality": "required",
       "kind": "process-manager",
       "module": "wms-runtime-entry",
-      "name": "Phusion Passenger / PM2",
-      "onUnavailable": "The production process is not supervised or restarted.",
+      "name": "Docker Compose (service `wms`, /opt/apps/wms/docker-compose.yml)",
+      "onUnavailable": "The production container is not built, started or restarted; there is no other supervisor since the shared host and its Passenger/PM2 layouts were retired on 2026-09-06.",
       "sourceManifest": "kaaf.module.json"
     }
   ],
   "modules": [
     {
       "confidence": "verified",
-      "confidenceReason": "Declared and corroborated by 78 discovered code file(s).",
+      "confidenceReason": "Declared and corroborated by 79 discovered code file(s).",
       "declared": true,
       "declaredConfidence": "verified",
       "dependedOnBy": [
@@ -533,7 +542,7 @@
       ],
       "dependsOn": [],
       "discovery": {
-        "codeFileCount": 78,
+        "codeFileCount": 79,
         "discovered": true,
         "entryPoints": [
           "server/index.js"
@@ -544,7 +553,7 @@
         ],
         "parseErrors": [],
         "publicSymbols": [],
-        "sourceFileCount": 79
+        "sourceFileCount": 80
       },
       "id": "wms-api",
       "ownedEntities": [
@@ -736,7 +745,7 @@
     },
     {
       "confidence": "verified",
-      "confidenceReason": "Declared and corroborated by 4 discovered code file(s).",
+      "confidenceReason": "Declared and corroborated by 3 discovered code file(s).",
       "declared": true,
       "declaredConfidence": "verified",
       "dependedOnBy": [],
@@ -744,7 +753,7 @@
         "wms-api"
       ],
       "discovery": {
-        "codeFileCount": 4,
+        "codeFileCount": 3,
         "discovered": true,
         "entryPoints": [],
         "languages": [
@@ -755,7 +764,7 @@
         ],
         "parseErrors": [],
         "publicSymbols": [],
-        "sourceFileCount": 102
+        "sourceFileCount": 103
       },
       "id": "wms-runtime-entry",
       "ownedEntities": [
@@ -765,7 +774,6 @@
       "path": ".",
       "publicEntryPoints": [
         "app.js",
-        "ecosystem.config.js",
         "index.js"
       ],
       "purpose": "Boot the production process. Production runs under Docker Compose on a VPS since 2026-09-06; the managed-host process manager named below is history, not current. Production path, runtime path and required environment flags are defined in CLAUDE.md and are authoritative over this manifest.",
@@ -773,7 +781,7 @@
     },
     {
       "confidence": "verified",
-      "confidenceReason": "Declared and corroborated by 55 discovered code file(s).",
+      "confidenceReason": "Declared and corroborated by 57 discovered code file(s).",
       "declared": true,
       "declaredConfidence": "verified",
       "dependedOnBy": [],
@@ -782,7 +790,7 @@
         "wms-ops-scripts"
       ],
       "discovery": {
-        "codeFileCount": 55,
+        "codeFileCount": 57,
         "discovered": true,
         "entryPoints": [
           "tests/e2e/edition_route_coverage_test.js",
@@ -800,7 +808,7 @@
         ],
         "parseErrors": [],
         "publicSymbols": [],
-        "sourceFileCount": 57
+        "sourceFileCount": 59
       },
       "id": "wms-tests",
       "ownedEntities": [
@@ -816,13 +824,13 @@
     },
     {
       "confidence": "verified",
-      "confidenceReason": "Declared and corroborated by 38 discovered code file(s).",
+      "confidenceReason": "Declared and corroborated by 39 discovered code file(s).",
       "declared": true,
       "declaredConfidence": "verified",
       "dependedOnBy": [],
       "dependsOn": [],
       "discovery": {
-        "codeFileCount": 38,
+        "codeFileCount": 39,
         "discovered": true,
         "entryPoints": [],
         "languages": [
@@ -831,7 +839,7 @@
         ],
         "parseErrors": [],
         "publicSymbols": [],
-        "sourceFileCount": 39
+        "sourceFileCount": 40
       },
       "id": "wms-web",
       "ownedEntities": [

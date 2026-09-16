@@ -190,6 +190,16 @@ try:
              + k0.get('held_stock', 0) + k0.get('subcontractor_stock', 0))
     check('T1 available + reserved + held + subcontractor accounts for every unit on hand',
           parts == total_stock, (parts, total_stock, k0))
+    # The one number adds bags to tonnes. The per-unit rows are what the tile
+    # shows; they must partition the same total and every row must name a unit.
+    by_unit = k0.get('stock_by_unit') or []
+    check('T1 stock on hand is also given per unit of measure, and the units partition the total',
+          by_unit and all(r.get('unit') for r in by_unit)
+          and abs(sum(r['quantity'] for r in by_unit) - total_stock) < 0.001, (by_unit, total_stock))
+    avail_unit = k0.get('available_by_unit') or []
+    check('T1 so is what can be issued',
+          abs(sum(r['quantity'] for r in avail_unit) - k0.get('available_stock', 0)) < 0.001,
+          (avail_unit, k0.get('available_stock')))
     # And the SCREEN must show every part, not just the payload. The first
     # version of this fix computed reserved_stock server-side and never rendered
     # it, so the tiles a storekeeper actually reads still did not add up — the

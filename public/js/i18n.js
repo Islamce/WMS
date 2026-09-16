@@ -159,9 +159,9 @@ Lang.applyDir();
  * The product ships in English and is translated only when a customer asks for
  * it as part of a deal (see ENABLED_LANGS above). With English the only enabled
  * language and no `en` dictionary, this function returns its argument unchanged
- * — it is an identity function today and cannot display anything but what you
- * wrote. The existing t() calls are left alone because removing 286 of them
- * across 11 working files would create risk, not remove it.
+ * apart from the edition's terminology (see term() below) and cannot display
+ * anything but what you wrote. The existing t() calls are left alone because
+ * removing 286 of them across 11 working files would create risk, not remove it.
  *
  * Everything below is the machinery a translation deal needs on day one. It is
  * dormant, not in use.
@@ -187,11 +187,27 @@ function t(s, vars) {
       if (!window.__i18nMisses) window.__i18nMisses = new Set();
       window.__i18nMisses.add(s);
     }
-    out = s;
+    out = term(s);
   }
   return vars ? out.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m)) : out;
 }
 window.t = t;
+
+/**
+ * The edition's word for a canonical English term. A contracting tenant calls
+ * a Warehouse a "Site Store" and the ERP Operator a "Procurement Officer"
+ * (server/services/tenantProfile.js `terminology`); /api/auth/me sends the map
+ * and App keeps it on App.tenant. Exact-match on the whole string, so a label
+ * is renamed only where it stands alone - "Warehouse" is, "Warehouse code" is
+ * not. Rename only; it never decides behaviour. t() applies it for every
+ * string it does not translate, so an existing t('Warehouse') is covered; a
+ * raw label must call term() itself.
+ */
+function term(s) {
+  const map = window.App && App.tenant && App.tenant.terminology;
+  return (map && Object.prototype.hasOwnProperty.call(map, s)) ? map[s] : s;
+}
+window.term = term;
 
 /**
  * Theme preference (light / dark). Persists in localStorage; switching

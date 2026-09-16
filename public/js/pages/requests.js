@@ -69,13 +69,19 @@ Pages.requests = {
     this.restoreQueueContext();
     this.el = el;
     let statuses = [];
-    try { ({ headerStatuses: statuses } = await Api.get('/api/meta')); } catch {}
+    let projects = [];
+    try { ({ headerStatuses: statuses, projects } = await Api.get('/api/meta')); } catch {}
+    projects = projects || [];
+    // Eight of the thirty-five statuses only the ERP-staged workflow reaches.
+    if (UI.erpFieldsHidden()) statuses = statuses.filter((s) => !UI.ERP_ONLY_STATUSES.includes(s));
     el.innerHTML = `
       <div class="card">
         <div class="toolbar">
           <input type="text" class="search-input" id="rq-search" placeholder="Search request #, purpose, requester…" value="${UI.esc(this.state.search)}" aria-label="Search requests" />
           <select id="rq-status" style="max-width:220px" aria-label="Filter by status"><option value="">All statuses</option>
             ${statuses.map((s) => `<option ${s === this.state.status ? 'selected' : ''}>${UI.esc(s)}</option>`).join('')}</select>
+          ${projects.length ? `<select id="rq-project" style="max-width:220px" aria-label="Filter by project"><option value="">All projects</option>
+            ${projects.map((p) => `<option value="${UI.esc(p.code)}" ${p.code === (this.state.project || '') ? 'selected' : ''}>${UI.esc(p.code)}</option>`).join('')}</select>` : ''}
           <span class="muted" id="rq-count" aria-live="polite"></span>
           <div class="spacer"></div>
           ${App.can('create_request') ? '<a href="#/create-request" class="btn">+ New Request</a>' : ''}
@@ -91,23 +97,28 @@ Pages.requests = {
     el.querySelector('#rq-status').addEventListener('change', (e) => {
       this.state.status = e.target.value; this.state.page = 1; this.persistQueueContext(); this.load();
     });
+    const projectSel = el.querySelector('#rq-project');
+    if (projectSel) projectSel.addEventListener('change', (e) => {
+      this.state.project = e.target.value; this.state.page = 1; this.persistQueueContext(); this.load();
+    });
     await this.load();
   },
 
   async load() {
-    const { page, search, status } = this.state;
+    const { page, search, status, project = '' } = this.state;
     const tableEl = this.el.querySelector('#rq-table');
     try {
-      const data = await Api.get(`/api/requests?page=${page}&limit=10&search=${encodeURIComponent(search)}&status=${encodeURIComponent(status)}`);
+      const data = await Api.get(`/api/requests?page=${page}&limit=10&search=${encodeURIComponent(search)}&status=${encodeURIComponent(status)}&project=${encodeURIComponent(project)}`);
       const countEl = this.el.querySelector('#rq-count');
       if (countEl) countEl.textContent = data.total != null ? `${UI.fmtQty(data.total)} request${data.total === 1 ? '' : 's'}` : '';
       tableEl.innerHTML = data.requests.length ? `
         <table>
-          <thead><tr><th>Request #</th><th>Requester</th><th>Priority</th><th>Status</th><th>Lines</th><th>Required</th><th>Created</th></tr></thead>
+          <thead><tr><th>Request #</th><th>Project</th><th>Requester</th><th>Priority</th><th>Status</th><th>Lines</th><th>Required</th><th>Created</th></tr></thead>
           <tbody>
             ${data.requests.map((r) => `
               <tr class="row-link" data-id="${r.id}" role="button" tabindex="0" aria-label="Open request ${UI.esc(r.request_number)}">
                 <td><span class="chip accent">${UI.esc(r.request_number)}</span></td>
+                <td>${r.wbs_element ? `<span class="chip">${UI.esc(r.wbs_element)}</span>` : '<span class="muted">—</span>'}</td>
                 <td>${UI.esc(r.requester_name || '')}</td>
                 <td><span class="badge ${r.priority === 'URGENT' || r.priority === 'HIGH' ? 'pending' : 'role'}">${UI.esc(r.priority)}</span></td>
                 <td><span class="badge ${statusClass(r.request_status)}">${UI.esc(r.request_status)}</span></td>

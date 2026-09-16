@@ -70,7 +70,13 @@ Pages.home = {
    */
   setupHtml() {
     if (!this.setup) return '';
-    const next = this.setup.next_step;
+    // The server lists every step; a link this user cannot open would bounce
+    // them silently back to this page (app.js redirects without a message). A
+    // picker used to see seven steps, every one of which returned them here.
+    const steps = this.setup.steps.filter((s) => App.canOpenRoute(s.route));
+    const hidden = this.setup.steps.length - steps.length;
+    const next = steps.find((s) => !s.done) || null;
+    if (!steps.length) return '';
     return `
       <div class="card setup-guide">
         <div class="lp-process-head">
@@ -78,12 +84,13 @@ Pages.home = {
             <h2>Finish setting up</h2>
             <p class="muted">${this.setup.completed_steps} of ${this.setup.total_steps} done.
               These are in order because the product depends on it — stock arrives on quality
-              hold and in no bin, and cannot be issued until both are handled.</p>
+              hold and in no bin, and cannot be issued until both are handled.${hidden
+                ? ` ${hidden} step${hidden === 1 ? '' : 's'} belong to screens you cannot open; your administrator handles those.` : ''}</p>
           </div>
           ${next ? `<a class="btn sm" href="${next.route}">${UI.esc(next.title)}</a>` : ''}
         </div>
         <ol class="setup-steps">
-          ${this.setup.steps.map((s) => `
+          ${steps.map((s) => `
             <li class="${s.done ? 'done' : ''}${s === next ? ' next' : ''}">
               <span class="setup-mark" aria-hidden="true">${s.done ? '✓' : '○'}</span>
               <div>
@@ -118,7 +125,7 @@ Pages.home = {
         ${this.setupHtml()}
         ${this.alertPreviewHtml()}
         <div class="lp-process-head">
-          <div><h2>${hasFocusedView ? `${UI.esc(this.profile.label)} processes` : t('All permitted processes')}</h2>
+          <div><h2>${hasFocusedView ? `${UI.esc(term(this.profile.label))} processes` : t('All permitted processes')}</h2>
             <p class="muted">${hasFocusedView ? 'A focused view of your permitted work. Use Show all to browse the full catalog.' : 'Every destination shown is available under your current permissions.'}</p></div>
           ${this.profile.modules && focusedCount < total ? `<button class="btn secondary sm" id="lp-show-all" aria-pressed="${this.showAll}">${this.showAll ? 'Show role-focused processes' : 'Show all processes'}</button>` : ''}
         </div>

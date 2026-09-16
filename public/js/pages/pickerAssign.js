@@ -69,7 +69,7 @@ Pages.pickerAssign = {
       ? visible.map((request) => UI.requestCard(request, {
         pickerHtml: `<span class="muted">Current picker</span><br>${this.pickerEvidence(request)}`,
         actionHtml: this.assignmentAction(request),
-        extraHtml: `<div class="request-card-meta">ERP ${UI.esc(request.erp_reservation_number || request.erp_reference_number || '—')} · Movement ${UI.esc(request.movement_type || '—')} · Plant ${UI.esc(request.plant || '—')} · SLoc ${UI.esc(request.storage_location || '—')}</div>`,
+        extraHtml: UI.requestCardMeta(request),
       })).join('')
       : UI.meaningfulEmptyState({
         title: 'No picker assignments need attention',

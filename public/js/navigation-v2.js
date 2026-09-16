@@ -5,7 +5,7 @@
     {
       key: 'command',
       label: 'Command Center',
-      routes: ['dashboard', 'kpi', 'notifications'],
+      routes: ['dashboard', 'kpi', 'project-spend', 'notifications'],
     },
     {
       key: 'demand',

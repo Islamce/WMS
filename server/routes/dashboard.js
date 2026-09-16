@@ -163,6 +163,25 @@ router.get('/', (req, res) => {
   // same figure. `total_stock` keeps its old meaning and value — existing
   // deployments see no number change, only a clearer label.
   const totalStock = one('SELECT COALESCE(SUM(remaining_quantity), 0) AS n FROM batches').n;
+  // The same two figures, per unit of measure. `total_stock` adds bags to
+  // tonnes to cubic metres, and a contractor's store holds all three - the
+  // one number is kept for existing consumers but the screen shows these.
+  // Not a valuation: materials.price has no provenance, so no money here.
+  const stockByUnit = all(`
+    SELECT COALESCE(NULLIF(TRIM(m.unit), ''), '(no unit)') AS unit,
+           SUM(b.remaining_quantity) AS quantity
+    FROM batches b JOIN materials m ON m.id = b.material_id
+    GROUP BY 1 HAVING quantity > 0 ORDER BY quantity DESC
+  `);
+  const availableByUnit = all(`
+    SELECT COALESCE(NULLIF(TRIM(m.unit), ''), '(no unit)') AS unit,
+           SUM(b.remaining_quantity - b.reserved_quantity) AS quantity
+    FROM batches b JOIN materials m ON m.id = b.material_id
+    WHERE COALESCE(b.owner_type, 'COMPANY') = 'COMPANY'
+      AND b.quality_status = 'RELEASED' AND b.is_blocked = 0
+      AND b.remaining_quantity > b.reserved_quantity
+    GROUP BY 1 HAVING quantity > 0 ORDER BY quantity DESC
+  `);
   // What a picker could actually be given today: ours, released, not blocked,
   // and not already promised to a request. This is the number allocation.js
   // works from (quality_status='RELEASED' AND is_blocked=0).
@@ -191,9 +210,12 @@ router.get('/', (req, res) => {
       AND quality_status = 'RELEASED' AND is_blocked = 0
   `).n;
 
+  // transaction_date is stored as 'YYYY-MM-DD HH:MM:SS', so comparing the raw
+  // column against a 'YYYY-MM-DD' bound is correct and lets an index serve it.
+  // Wrapping the column in date() forced a full scan - four times per load.
   const movementSince = (type, dateExpr) => one(`
     SELECT COALESCE(SUM(quantity), 0) AS n FROM stock_transactions
-    WHERE transaction_type = ? AND date(transaction_date) >= ${dateExpr}
+    WHERE transaction_type = ? AND transaction_date >= ${dateExpr}
   `, type).n;
 
   const stockInToday = movementSince('IN', "date('now')");
@@ -255,7 +277,7 @@ router.get('/', (req, res) => {
       SUM(CASE WHEN transaction_type = 'IN' THEN quantity ELSE 0 END) AS in_qty,
       SUM(CASE WHEN transaction_type = 'OUT' THEN quantity ELSE 0 END) AS out_qty
     FROM stock_transactions
-    WHERE date(transaction_date) BETWEEN date('now', '-29 days') AND date('now')
+    WHERE transaction_date >= date('now', '-29 days') AND transaction_date < date('now', '+1 day')
     GROUP BY day ORDER BY day
   `);
   const byDay = Object.fromEntries(movementDays.map((r) => [r.day, r]));
@@ -298,6 +320,8 @@ router.get('/', (req, res) => {
       occupied_locations: totalLocations - emptyLocations,
       total_stock: totalStock,
       available_stock: availableStock,
+      stock_by_unit: stockByUnit,
+      available_by_unit: availableByUnit,
       held_stock: heldStock,
       reserved_stock: reservedStock,
       subcontractor_stock: subcontractorStock,

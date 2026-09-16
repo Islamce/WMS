@@ -1,18 +1,18 @@
 {
   "_meta": {
     "artifact": "modules/wms-runtime-entry.json",
-    "bodyDigest": "9ba15b4a810108a890b898b4fd7be024ed7a6f219b4c25d1e022f2682fb336c5",
+    "bodyDigest": "b0c23b1fc02008bd02c3aa5f87839a7af3c455eab55d0ca69b0b49ae21fa8994",
     "confidence": "verified",
     "doNotEdit": true,
     "generator": "kaaf",
     "generatorVersion": "0.7.0",
-    "inputDigest": "d4431ce676b2d8517dccc3e4133035037181b5a716e5997f799596e50330f11c",
+    "inputDigest": "7b10116ba945fda9ab6104b96cf2c168bc6454cb8933b8d7a951024efcafc7c2",
     "provenanceNote": "Generated from the declared kaaf.repo.json and kaaf.module.json manifests. No wall-clock time or commit SHA is embedded: both would break byte-identical regeneration. Use git history for when and from which commit.",
     "schemaVersion": "1.0.0"
   },
   "apis": [],
   "confidence": "verified",
-  "confidenceReason": "Declared and corroborated by 4 discovered code file(s).",
+  "confidenceReason": "Declared and corroborated by 3 discovered code file(s).",
   "declared": true,
   "declaredConfidence": "verified",
   "dependedOnBy": [],
@@ -23,7 +23,6 @@
     "codeFiles": [
       "app.js",
       "design-preview/render-preview.js",
-      "ecosystem.config.js",
       "index.js"
     ],
     "discovered": true,
@@ -51,10 +50,8 @@
       ".devcontainer/devcontainer.json",
       ".eslintrc.json",
       ".github/dependabot.yml",
-      ".github/workflows/build-hostinger-native.yml",
       ".github/workflows/ci.yml",
       ".github/workflows/flutter-apk.yml",
-      ".github/workflows/hostinger-release-layout-diagnostic.yml",
       ".github/workflows/mobile-ci.yml",
       ".github/workflows/production-backup.yml",
       ".github/workflows/production-release.yml",
@@ -92,11 +89,13 @@
       "docs/PRODUCT-CRITIQUE-2026-09-12.md",
       "docs/SUBCONTRACTOR-MATERIALS-UAT-V1.0.md",
       "docs/WMS-ACTIONS-ARTIFACT-INVENTORY-2026-08-01.md",
+      "docs/WMS-CORRECTIVE-PROGRAMME.md",
       "docs/WMS-CORRECTIVE-RECONCILIATION-2026-08-11.md",
       "docs/WMS-CURRENT-STATUS.md",
       "docs/WMS-DECISION-LOG.md",
       "docs/WMS-DESIGN-QUALIFICATION-2026-08-18.md",
       "docs/WMS-DESIGN-RECOVERY-MATRIX-2026-08-18.md",
+      "docs/WMS-EXECUTION-HANDOFF.md",
       "docs/WMS-GATED-CICD-PIPELINE.md",
       "docs/WMS-INCIDENT-LOG.md",
       "docs/WMS-MASTER-UAT-V1.0.md",
@@ -113,6 +112,8 @@
       "docs/WMS-WORKFLOW-HARDENING-PHASE2.md",
       "docs/WORKFLOW-GAP-ANALYSIS.md",
       "docs/incidents/2026-07-23-navigation-observer-loop.md",
+      "docs/kaaf/GOVERNANCE.md",
+      "docs/kaaf/STANDARDS.md",
       "docs/vault/.obsidian/app.json",
       "docs/vault/.obsidian/core-plugins.json",
       "docs/vault/.obsidian/templates.json",
@@ -133,7 +134,6 @@
       "docs/vault/README.md",
       "docs/vault/Traps/Invariants that look like bugs.md",
       "docs/vault/templates/Lesson.md",
-      "ecosystem.config.js",
       "index.js",
       "kaaf.module.json",
       "kaaf.repo.json",
@@ -145,9 +145,15 @@
   "externalIntegrations": [
     {
       "criticality": "required",
+      "kind": "reverse-proxy",
+      "name": "Caddy (central proxy at /opt/proxy, external Docker network `web`)",
+      "onUnavailable": "wms.kynox.io is unreachable over HTTPS; the container still answers on 127.0.0.1:3000 on the host."
+    },
+    {
+      "criticality": "required",
       "kind": "process-manager",
-      "name": "Phusion Passenger / PM2",
-      "onUnavailable": "The production process is not supervised or restarted."
+      "name": "Docker Compose (service `wms`, /opt/apps/wms/docker-compose.yml)",
+      "onUnavailable": "The production container is not built, started or restarted; there is no other supervisor since the shared host and its Passenger/PM2 layouts were retired on 2026-09-06."
     }
   ],
   "id": "wms-runtime-entry",
@@ -159,13 +165,11 @@
   "permissions": [],
   "publicEntryPoints": [
     "app.js",
-    "ecosystem.config.js",
     "index.js"
   ],
   "purpose": "Boot the production process. Production runs under Docker Compose on a VPS since 2026-09-06; the managed-host process manager named below is history, not current. Production path, runtime path and required environment flags are defined in CLAUDE.md and are authoritative over this manifest.",
   "readNext": [
     "app.js",
-    "ecosystem.config.js",
     "index.js"
   ],
   "sourceManifest": "kaaf.module.json"

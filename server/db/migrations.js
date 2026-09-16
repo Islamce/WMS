@@ -789,6 +789,66 @@ const MIGRATIONS = [
       seed('GI', 'gi_document_number', 'GI');
     },
   },
+  {
+    id: '028_revoke_legacy_stock_permissions',
+    description: 'Revoke stock_in/stock_out from the default user role. They bypass the request workflow entirely and their screens are in no menu, so nobody reviewing the UI would have seen the grant.',
+    up(db) {
+      // Seed changes never reach an existing tenant - npm run seed is forbidden in
+      // production - so the grant has to be withdrawn here. Scoped to the 'user'
+      // role only: an administrator who granted these to somebody deliberately
+      // keeps them.
+      db.prepare(`
+        DELETE FROM role_permissions
+        WHERE role_id = (SELECT id FROM roles WHERE name = 'user')
+          AND permission_id IN (SELECT id FROM permissions WHERE key IN ('stock_in', 'stock_out'))
+      `).run();
+    },
+  },
+  {
+    id: '029_site_storekeeper_role',
+    description: 'Add the site_storekeeper role with its default grants. Additive: touches no existing role, assigns no user. A seed edit alone never reaches a live tenant, because npm run seed is forbidden in production.',
+    up(db) {
+      db.prepare(`INSERT OR IGNORE INTO roles (name, description) VALUES (?, ?)`)
+        .run('site_storekeeper', 'Runs the site store end to end: receive, release, pick, issue, count. Cannot approve.');
+      // SELECT ... WHERE key IN (...) rather than one INSERT per key: a key that
+      // does not exist on this tenant is skipped instead of inserting a NULL
+      // permission_id, and the row count the deploy gate sees is exactly the
+      // number of keys that exist.
+      db.prepare(`
+        INSERT OR IGNORE INTO role_permissions (role_id, permission_id)
+        SELECT (SELECT id FROM roles WHERE name = 'site_storekeeper'), id
+        FROM permissions WHERE key IN ('dashboard', 'warehouse_dashboard', 'goods_receipt', 'quality', 'picking', 'gi_posting', 'qr_printing', 'bins_master', 'batch_tracking', 'cycle_count', 'inventory_count', 'notifications')
+      `).run();
+    },
+  },
+  {
+    id: '030_hot_path_indexes',
+    description: 'Two indexes the hottest screens were missing. Measured on a 10x-production synthetic dataset: warehouse queue 6,935 -> 15 ms; bins 1,277 -> 12 ms; empty locations 442 -> 1.8 ms.',
+    up(db) {
+      // The warehouse queue, pick-confirm, picker assignment and the reverse
+      // workflow all look up "the latest open picking task for this request".
+      // picking_tasks was indexed on picker and status but not on request_id,
+      // so each was a full scan of picking_tasks per queue row.
+      db.exec('CREATE INDEX IF NOT EXISTS idx_tasks_request ON picking_tasks(request_id, id)');
+      // The bin screens join batches on (warehouse_code, bin_location); with no
+      // index SQLite built an automatic one on every request. Deliberately NOT
+      // partial: a WHERE remaining_quantity > 0 variant was measured and made
+      // the bins query four times WORSE, because the planner then abandoned its
+      // automatic index and fell back to a per-bin scan.
+      db.exec('CREATE INDEX IF NOT EXISTS idx_batches_bin ON batches(warehouse_code, bin_location, remaining_quantity)');
+    },
+  },
+  {
+    id: '031_project_spend_indexes',
+    description: 'Indexes for the spend-by-project report and the requests project filter. Measured at 1M ledger rows: windowed report 630 -> 302 ms; drill-down 57 -> 43 ms with SEARCH instead of SCAN on headers.',
+    up(db) {
+      db.exec('CREATE INDEX IF NOT EXISTS idx_mrh_wbs ON material_request_headers(wbs_element)');
+      // Covering index for the windowed roll-up: category and date are the
+      // predicates, the rest are the columns the report reads, so the ledger
+      // itself is never touched for a windowed query.
+      db.exec('CREATE INDEX IF NOT EXISTS idx_stock_tx_spend ON stock_transactions(movement_category, transaction_date, request_line_id, material_id, quantity)');
+    },
+  },
 ];
 
 function ensureTable() {

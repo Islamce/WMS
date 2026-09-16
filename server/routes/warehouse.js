@@ -143,9 +143,17 @@ router.post('/:id/allocate', requirePermission('bin_batch_assignment'), (req, re
 
 /** GET /api/warehouse/pickers — active pickers for the assignment dropdown. */
 router.get('/pickers', requirePermission('picker_assignment'), (req, res) => {
+  // Whoever holds `picking` - by role or by direct grant - can be given a task.
+  // This used to be WHERE r.name='picker', one role by its literal name, so a
+  // storekeeper on any other role and the administrator (the only user a freshly
+  // provisioned tenant has) were not selectable, and the request stalled.
   const pickers = db.prepare(`
-    SELECT u.id, u.name, u.email FROM users u JOIN roles r ON r.id=u.role_id
-    WHERE r.name='picker' AND u.status='active' ORDER BY u.name
+    SELECT u.id, u.name, u.email FROM users u
+    WHERE u.status='active' AND (
+      u.role_id IN (SELECT rp.role_id FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id WHERE p.key='picking')
+      OR u.id IN (SELECT up.user_id FROM user_permissions up JOIN permissions p ON p.id=up.permission_id WHERE p.key='picking')
+    )
+    ORDER BY u.name
   `).all();
   res.json({ pickers });
 });
@@ -160,7 +168,12 @@ router.post('/:id/assign-picker', requirePermission('picker_assignment'), (req, 
   }
   const { picker_id } = req.body || {};
   if (!isId(picker_id)) return res.status(400).json({ error: 'A picker must be selected.' });
-  const picker = db.prepare("SELECT u.id, u.name FROM users u JOIN roles r ON r.id=u.role_id WHERE u.id=? AND r.name='picker' AND u.status='active'").get(picker_id);
+  const picker = db.prepare(`
+    SELECT u.id, u.name FROM users u
+    WHERE u.id=? AND u.status='active' AND (
+      u.role_id IN (SELECT rp.role_id FROM role_permissions rp JOIN permissions p ON p.id=rp.permission_id WHERE p.key='picking')
+      OR u.id IN (SELECT up.user_id FROM user_permissions up JOIN permissions p ON p.id=up.permission_id WHERE p.key='picking')
+    )`).get(picker_id);
   if (!picker) return res.status(404).json({ error: 'Picker not found or inactive.' });
 
   const existing = db.prepare(`

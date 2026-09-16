@@ -38,6 +38,9 @@ Pages.requestDetail = {
       ${REVERSIBLE_STATUSES.includes(r.request_status)
         ? `<button class="btn warn sm" id="rd-reverse-step" title="${t('Send this request back one step, undoing what the stage did')}">↩ ${t('Reverse one step')}</button>` : ''}`;
 
+    // Seven of the fourteen header fields can only be filled by the ERP
+    // staging step. On an edition without it they were fourteen dashes.
+    const erp = !UI.erpFieldsHidden();
     el.innerHTML = `
       ${UI.operationalObjectHeader(r, { title: 'Material Request', subtitle: r.purpose || 'Request workflow and execution context', primaryAction: actionHtml })}
       ${queueContext.isFiltered ? `<div class="queue-return-context" role="status"><strong>Queue context retained</strong><span>${UI.esc(queueContext.summary)}</span></div>` : ''}
@@ -49,16 +52,16 @@ Pages.requestDetail = {
           <div class="item"><div class="k">Priority</div><div class="v">${UI.esc(r.priority)}</div></div>
           <div class="item"><div class="k">Department</div><div class="v">${UI.esc(r.department || '—')}</div></div>
           <div class="item"><div class="k">Required Date</div><div class="v">${r.required_date || '—'}</div></div>
-          <div class="item"><div class="k">Plant</div><div class="v">${UI.esc(r.plant || '—')}</div></div>
-          <div class="item"><div class="k">Cost Center</div><div class="v">${UI.esc(r.cost_center || '—')}</div></div>
-          <div class="item"><div class="k">WBS</div><div class="v">${UI.esc(r.wbs_element || '—')}</div></div>
-          <div class="item"><div class="k">Movement Type</div><div class="v">${UI.esc(r.movement_type || '—')}</div></div>
+          <div class="item"><div class="k">${UI.esc(term('Plant'))}</div><div class="v">${UI.esc(r.plant || '—')}</div></div>
+          ${erp ? `<div class="item"><div class="k">${UI.esc(term('Cost Center'))}</div><div class="v">${UI.esc(r.cost_center || '—')}</div></div>` : ''}
+          <div class="item"><div class="k">${erp ? 'WBS' : 'Project'}</div><div class="v">${UI.esc(r.wbs_element || '—')}</div></div>
+          ${erp ? `<div class="item"><div class="k">${UI.esc(term('Movement Type'))}</div><div class="v">${UI.esc(r.movement_type || '—')}</div></div>
           <div class="item"><div class="k">Reservation #</div><div class="v">${r.erp_reservation_number || r.erp_reference_number ? `<span class="chip accent">${UI.esc(r.erp_reservation_number || r.erp_reference_number)}</span>` : '—'}</div></div>
-          <div class="item"><div class="k">ERP Reference #</div><div class="v">${UI.esc(r.erp_reference_number || '—')}</div></div>
-          <div class="item"><div class="k">Warehouse</div><div class="v">${UI.esc(r.issue_warehouse_code || '—')}</div></div>
-          <div class="item"><div class="k">Storage Location</div><div class="v">${UI.esc(r.storage_location || '—')}</div></div>
-          <div class="item"><div class="k">GI Document</div><div class="v">${r.gi_document_number ? `<span class="chip">${UI.esc(r.gi_document_number)}</span>` : '—'}</div></div>
-          <div class="item"><div class="k">ERP Status</div><div class="v">${UI.esc(r.erp_posting_status || '—')}</div></div>
+          <div class="item"><div class="k">ERP Reference #</div><div class="v">${UI.esc(r.erp_reference_number || '—')}</div></div>` : ''}
+          <div class="item"><div class="k">${UI.esc(term('Warehouse'))}</div><div class="v">${UI.esc(r.issue_warehouse_code || '—')}</div></div>
+          ${erp ? `<div class="item"><div class="k">Storage Location</div><div class="v">${UI.esc(r.storage_location || '—')}</div></div>` : ''}
+          <div class="item"><div class="k">${erp ? 'GI Document' : 'Issue Document'}</div><div class="v">${r.gi_document_number ? `<span class="chip">${UI.esc(r.gi_document_number)}</span>` : '—'}</div></div>
+          ${erp ? `<div class="item"><div class="k">ERP Status</div><div class="v">${UI.esc(r.erp_posting_status || '—')}</div></div>` : ''}
         </div>
         <p class="muted" style="margin-top:10px"><strong>Purpose:</strong> ${UI.esc(r.purpose || '')}</p>
         ${r.erp_error_message ? `<div class="inline-alert error" style="margin-top:10px">ERP Error: ${UI.esc(r.erp_error_message)}</div>` : ''}

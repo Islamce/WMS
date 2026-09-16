@@ -55,7 +55,7 @@ router.get('/status', (req, res) => {
       detail: 'Received stock arrives on hold. It cannot be issued until quality releases it.' },
     { key: 'putaway', done: binned > 0, route: '#/receiving',
       title: 'Put it away in a bin',
-      detail: 'Stock with no bin cannot be allocated to a request, so this step is not optional.' },
+      detail: 'Allocation works without a bin, but a pick has to find the stock, and a batch-managed pick must scan it where it sits. Put it somewhere before you ask for it back.' },
     { key: 'issue', done: issued > 0, route: '#/create-request',
       title: 'Request it, approve it, and issue it',
       detail: 'The full round trip. Once this works, the system is live.' },

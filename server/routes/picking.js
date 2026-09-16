@@ -18,6 +18,7 @@ const { HEADER_STATUS, LINE_STATUS, TASK_STATUS } = require('./../workflow/state
 const { withExecutionContext, withExecutionContexts } = require('./../services/workflowContext');
 const { getTenant } = require('./../services/tenant');
 const { usesErpStaging } = require('./../services/tenantProfile');
+const { activeFreeze, freezeMessage } = require('./../services/freeze');
 
 const router = express.Router();
 router.use(authenticate);
@@ -72,6 +73,30 @@ router.get('/tasks/:id', requirePermission('picking'), (req, res) => {
  * truthfully — set by the person doing the work, at the moment of doing it,
  * rather than guessed at approval time by someone who will not be there.
  */
+/**
+ * GET /api/picking/claimable — approved requests waiting for the store to claim.
+ *
+ * Not /api/warehouse/queue: that is gated on warehouse_dashboard /
+ * bin_batch_assignment / picker_assignment, none of which a picker holds, so the
+ * one person this list is FOR would have got a 403 from it. This is gated on
+ * `picking`, the same permission the claim itself needs. Empty on an ERP-staged
+ * tenant, where assignment is a supervisor's act and nothing is claimable.
+ */
+router.get('/claimable', requirePermission('picking'), (req, res) => {
+  if (usesErpStaging(getTenant().profileKey)) return res.json({ requests: [], claims_here: false });
+  const rows = db.prepare(`
+    SELECT h.id, h.request_number, h.requester_name, h.department, h.wbs_element, h.wbs_element AS project,
+           h.cost_center, h.required_date, h.priority, h.request_status, h.issue_warehouse_code,
+           h.erp_reservation_number, h.erp_reference_number, h.movement_type, h.plant, h.storage_location,
+           (SELECT COUNT(*) FROM material_request_lines l
+             WHERE l.request_id = h.id AND l.line_status NOT IN ('Rejected','Cancelled')) AS line_count
+    FROM material_request_headers h
+    WHERE h.request_status = ?
+    ORDER BY CASE h.priority WHEN 'URGENT' THEN 0 WHEN 'HIGH' THEN 1 WHEN 'NORMAL' THEN 2 ELSE 3 END, h.id
+  `).all(HEADER_STATUS.PENDING_PICKER_ASSIGNMENT);
+  res.json({ requests: withExecutionContexts(rows), claims_here: true });
+});
+
 router.post('/requests/:id/claim', requirePermission('picking'), (req, res) => {
   if (usesErpStaging(getTenant().profileKey)) {
     return res.status(400).json({ error: 'This tenant assigns pickers through the picker-assignment screen.' });
@@ -81,6 +106,12 @@ router.post('/requests/:id/claim', requirePermission('picking'), (req, res) => {
   if (header.request_status !== HEADER_STATUS.PENDING_PICKER_ASSIGNMENT) {
     return res.status(400).json({ error: `Request is not ready to pick (status '${header.request_status}').` });
   }
+  // A freeze that stops goods receipt and stops nothing on the way out is not a
+  // freeze: the pick decrements the batch, the GI writes an ISSUE, and posting the
+  // count then writes an ADJUSTMENT_OUT for the same units - or, under blind
+  // counting, puts the issued material back on the books with no adjustment at all.
+  const claimFreeze = activeFreeze(header.issue_warehouse_code);
+  if (claimFreeze) return res.status(400).json({ error: freezeMessage(claimFreeze, header.issue_warehouse_code) });
 
   const lineCount = db.prepare(
     "SELECT COUNT(*) AS n FROM material_request_lines WHERE request_id=? AND line_status NOT IN ('Rejected','Cancelled')"
@@ -257,6 +288,8 @@ router.post('/lines/:lineId/confirm', requirePermission('picking'), (req, res) =
   const header = db.prepare('SELECT * FROM material_request_headers WHERE id=?').get(line.request_id);
   const task = db.prepare("SELECT * FROM picking_tasks WHERE request_id=? AND task_status='Picking in Progress' ORDER BY id DESC LIMIT 1").get(line.request_id);
   if (!task) return res.status(400).json({ error: 'No in-progress picking task for this request.' });
+  const pickFreeze = activeFreeze(header.issue_warehouse_code);
+  if (pickFreeze) return res.status(400).json({ error: freezeMessage(pickFreeze, header.issue_warehouse_code) });
   if (req.user.role !== 'admin' && task.assigned_picker_id !== req.user.id) {
     return res.status(403).json({ error: 'This task is not assigned to you.' });
   }

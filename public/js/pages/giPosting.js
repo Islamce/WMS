@@ -18,7 +18,7 @@ Pages.giPosting = {
         <tr data-id="${r.id}">
           <td><span class="chip accent">${UI.esc(r.request_number)}</span></td>
           <td>${UI.esc(r.requester_name || '')}</td><td>${UI.esc(r.department || '—')}</td><td>${UI.esc(r.project || '—')}</td>
-          <td>${UI.esc(r.issue_warehouse_code || '')}<div class="muted sm">Plant ${UI.esc(r.plant || '—')} · SLoc ${UI.esc(r.storage_location || '—')}</div></td>
+          <td>${UI.esc(r.issue_warehouse_code || '')}<div class="muted sm">${UI.esc(term('Plant'))} ${UI.esc(r.plant || '—')}${UI.erpFieldsHidden() ? '' : ` · SLoc ${UI.esc(r.storage_location || '—')}`}</div></td>
           <td>${UI.esc(r.movement_type || '')}</td><td>${UI.esc(r.erp_reservation_number || r.erp_reference_number || '')}</td>
           <td><span class="badge ${statusClass(r.request_status)}">${UI.esc(r.request_status)}</span></td>
           <td><button class="btn sm" data-open="${r.id}">Review</button></td>
@@ -53,7 +53,6 @@ Pages.giPosting = {
           <div class="form-group"><label>GI Document Number *</label><input type="text" id="gi-doc" placeholder="e.g. 4900001234"></div>
           <div class="form-group"><label>Fiscal Year</label><input type="text" id="gi-fy" value="${new Date().getFullYear()}"></div>
         </div>
-        <label class="perm-item" style="max-width:320px"><input type="checkbox" id="gi-sim"> <span>Simulate ERP posting error (test)</span></label>
         <div class="actions" style="justify-content:flex-start;margin-top:12px">
           <button class="btn success" id="gi-post">Post Goods Issue</button>
           <button class="btn secondary" id="gi-return">Return to Picker</button>
@@ -64,8 +63,7 @@ Pages.giPosting = {
       try {
         const r2 = await Api.post(`/api/gi/${id}/post`, {
           gi_document_number: box.querySelector('#gi-doc').value,
-          fiscal_year: box.querySelector('#gi-fy').value,
-          simulate_error: box.querySelector('#gi-sim').checked });
+          fiscal_year: box.querySelector('#gi-fy').value });
         UI.toast(r2.message); box.innerHTML = ''; this.loadQueue();
       } catch (err) { UI.toast(err.message, 'error'); this.loadQueue(); }
     }));
@@ -130,7 +128,7 @@ Pages.warehouse = {
       ? visible.map((request) => UI.requestCard(request, {
         link: `#/request-detail/${request.id}`,
         materialsHtml: this.materialDisclosure(request),
-        extraHtml: `<div class="request-card-meta">ERP ${UI.esc(request.erp_reservation_number || request.erp_reference_number || '—')} · Movement ${UI.esc(request.movement_type || '—')} · Plant ${UI.esc(request.plant || '—')} · SLoc ${UI.esc(request.storage_location || '—')}</div>`,
+        extraHtml: UI.requestCardMeta(request),
       })).join('')
       : UI.meaningfulEmptyState({
         title: 'No requests match these controls',

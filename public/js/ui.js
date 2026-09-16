@@ -359,31 +359,77 @@ const UI = {
         ${item('Requester', r.requester_name)}
         ${item('Department', r.department)}
         ${item('Project / WBS', r.project || r.wbs_element)}
-        ${item('Cost Center', r.cost_center)}
+        ${UI.erpFieldsHidden() ? '' : item(term('Cost Center'), r.cost_center)}
         ${item('Priority', r.priority)}
         ${item('Required date', r.required_date)}
       </div>`;
   },
 
-  /** Canonical ERP / warehouse execution context rendered on downstream steps. */
+  /**
+   * Header statuses only the ERP-staged workflow can reach. An edition that
+   * routes approval straight to the store never produces them, so its filters
+   * and stage displays leave them out. Kept as one list so the two agree.
+   */
+  ERP_ONLY_STATUSES: [
+    'Approved - Pending ERP Processing', 'Pending ERP Reservation', 'ERP Reservation Created',
+    'Movement Type Assigned', 'Warehouse Assigned', 'Pending Warehouse Action',
+    'Pending ERP GI', 'ERP Error',
+  ],
+
+  /**
+   * Stored enum -> what a person reads. The value on the wire stays the enum;
+   * only the text changes. A site engineer's first form used to open with
+   * "COST_CENTER" as its first field, and the quality screen labelled stock
+   * "QUALITY_HOLD" on step 5 of the first hour.
+   */
+  ENUM_LABELS: {
+    request_type: { COST_CENTER: 'Cost centre', WBS: 'Project / WBS', ORDER: 'Work order', GENERAL: 'General' },
+    quality_status: { QUALITY_HOLD: 'On hold', RELEASED: 'Released', BLOCKED: 'Blocked', REJECTED: 'Rejected' },
+  },
+  enumLabel(kind, value) {
+    const map = UI.ENUM_LABELS[kind] || {};
+    return Object.prototype.hasOwnProperty.call(map, value) ? map[value] : String(value == null ? '' : value);
+  },
+
+  /** True when the edition has no ERP staging step - fields that only that step fills are hidden. */
+  erpFieldsHidden() {
+    return !!(window.App && typeof App.routesStraightToStore === 'function' && App.routesStraightToStore());
+  },
+
+  /**
+   * Canonical ERP / warehouse execution context rendered on downstream steps.
+   * Without ERP staging the reservation, reference, movement type, storage
+   * location and cost centre can never hold a value, so they are not printed
+   * as five dashes.
+   */
   executionContextCard(row) {
     const r = row.execution_context || row;
+    const erp = !UI.erpFieldsHidden();
     const item = (label, value) => `
-      <div class="req-ctx-item"><span class="muted">${UI.esc(label)}</span><strong>${UI.esc(value || '—')}</strong></div>`;
+      <div class="req-ctx-item"><span class="muted">${UI.esc(term(label))}</span><strong>${UI.esc(value || '—')}</strong></div>`;
     return `
-      <div class="req-ctx" role="group" aria-label="ERP execution context">
+      <div class="req-ctx" role="group" aria-label="${erp ? 'ERP execution context' : 'Execution context'}">
         ${item('MR Number', r.request_number)}
-        ${item('ERP Reservation', r.erp_reservation_number)}
-        ${item('ERP Reference', r.erp_reference_number)}
-        ${item('Movement Type', r.movement_type)}
+        ${erp ? item('ERP Reservation', r.erp_reservation_number) : ''}
+        ${erp ? item('ERP Reference', r.erp_reference_number) : ''}
+        ${erp ? item('Movement Type', r.movement_type) : ''}
         ${item('Plant', r.plant)}
         ${item('Issue Warehouse', r.issue_warehouse_code)}
-        ${item('Storage Location', r.storage_location)}
-        ${item('Cost Center', r.cost_center)}
+        ${erp ? item('Storage Location', r.storage_location) : ''}
+        ${erp ? item('Cost Center', r.cost_center) : ''}
         ${item('WBS / Project', r.wbs_project || r.wbs_element || r.project)}
         ${item('Required Date', r.required_date)}
         ${item('Requester', r.requester_name)}
       </div>`;
+  },
+
+  /** The "ERP · Movement · Plant · SLoc" line under a request card; only the parts this edition can fill. */
+  requestCardMeta(r) {
+    const parts = UI.erpFieldsHidden()
+      ? [`${term('Plant')} ${r.plant || '—'}`]
+      : [`ERP ${r.erp_reservation_number || r.erp_reference_number || '—'}`, `Movement ${r.movement_type || '—'}`,
+        `${term('Plant')} ${r.plant || '—'}`, `SLoc ${r.storage_location || '—'}`];
+    return `<div class="request-card-meta">${UI.esc(parts.join(' · '))}</div>`;
   },
 
   /**
@@ -410,7 +456,7 @@ const UI = {
         <span class="badge ${['URGENT', 'HIGH'].includes(priority) ? 'pending' : ''}">${UI.esc(priority)}</span>
         ${owner ? `<span><strong>Owner</strong> ${UI.esc(owner)}</span>` : ''}
         ${age ? `<span><strong>Created</strong> ${UI.esc(age)}</span>` : ''}
-        ${row.issue_warehouse_code ? `<span><strong>Warehouse</strong> ${UI.esc(row.issue_warehouse_code)}</span>` : ''}
+        ${row.issue_warehouse_code ? `<span><strong>${UI.esc(term('Warehouse'))}</strong> ${UI.esc(row.issue_warehouse_code)}</span>` : ''}
       </div>
       ${UI.requestStageIndicator(row)}
       ${exceptionHtml}
@@ -424,7 +470,13 @@ const UI = {
    */
   requestStageIndicator(row) {
     const status = row.request_status || row.task_status || row.status || 'Unknown';
-    const stages = ['Requested', 'ERP Processed', 'Assigned', 'Picking', 'Issued'];
+    // "ERP Processed" is a stage only the ERP-staged workflow passes through.
+    // Where approval routes straight to the store it is dropped, and the
+    // indices below it shift down one.
+    const erp = !UI.erpFieldsHidden();
+    const stages = erp
+      ? ['Requested', 'ERP Processed', 'Assigned', 'Picking', 'Issued']
+      : ['Requested', 'Assigned', 'Picking', 'Issued'];
     const stageByStatus = {
       'Draft': 0, 'Submitted': 0, 'Pending Manager Approval': 0, 'Under Review': 0,
       'Returned to Requester': 0, 'Approved': 0, 'Approved - Pending ERP Processing': 0,
@@ -446,7 +498,8 @@ const UI = {
       'Closed with Shortage': 'warning', 'Partially Picked': 'warning', 'Partially Completed': 'warning',
     };
     const terminalLabel = terminal[status];
-    const active = stageByStatus[status] == null ? 0 : stageByStatus[status];
+    const raw = stageByStatus[status] == null ? 0 : stageByStatus[status];
+    const active = erp ? raw : Math.max(0, raw - 1);
     const exceptionClass = exception[status] || '';
     const items = stages.map((label, index) => {
       const state = index < active ? 'done' : index === active ? 'current' : 'future';
@@ -479,9 +532,15 @@ const UI = {
   },
 
   /** A contextual empty state that distinguishes an empty queue from a failed request. */
-  meaningfulEmptyState({ title, description, actionHtml = '' }) {
+  /**
+   * `done: true` draws the green tick - for a queue that is genuinely clear.
+   * The default is a neutral mark: "no stock recorded yet" is not an
+   * achievement, and a green tick on it told new customers that having no
+   * data was the goal.
+   */
+  meaningfulEmptyState({ title, description, actionHtml = '', done = false }) {
     return `<div class="meaningful-empty" role="status">
-      <div class="meaningful-empty-mark" aria-hidden="true">✓</div>
+      <div class="meaningful-empty-mark${done ? '' : ' neutral'}" aria-hidden="true">${done ? '✓' : '○'}</div>
       <div><h3>${UI.esc(title)}</h3><p>${UI.esc(description)}</p>${actionHtml}</div>
     </div>`;
   },
@@ -500,7 +559,7 @@ const UI = {
     const priorityClass = ['URGENT', 'HIGH'].includes(priority) ? 'pending' : 'role';
     const context = [
       row.requester_name && `Requester: ${row.requester_name}`,
-      (row.issue_warehouse_code || row.warehouse_code) && `Warehouse: ${row.issue_warehouse_code || row.warehouse_code}`,
+      (row.issue_warehouse_code || row.warehouse_code) && `${term('Warehouse')}: ${row.issue_warehouse_code || row.warehouse_code}`,
       row.required_date && `Required: ${row.required_date}`,
     ].filter(Boolean).map((value) => `<span>${UI.esc(value)}</span>`).join('');
     return `<article class="request-card" data-request-id="${UI.esc(row.id || '')}">

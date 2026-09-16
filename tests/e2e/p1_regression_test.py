@@ -228,15 +228,20 @@ check('P5-3 attachment delete is audited', a is not None and a.get('action') == 
 # ===== 6. Audit-trail completeness (identity/access governance) =====
 # User status, role, and permission changes are the highest-blast-radius
 # actions in the app (account approval/disable, privilege escalation) and
-# previously left zero audit_trail record. A throwaway signup is used here
+# previously left zero audit_trail record. A throwaway account is created here
 # so nothing shared with later tests in this phase is mutated.
 import time
 gov_email = f'gov-audit-{int(time.time())}@example.com'
-c, r = call('POST', '/api/auth/signup', body={'name': 'Gov Audit Test', 'email': gov_email, 'password': 'Passw0rd!'})
-check('P6-0 governance test user signup succeeds', c == 201, (c, r))
-_, pending = call('GET', '/api/users?status=pending', admin)
-gov_user = next((u for u in pending['users'] if u['email'] == gov_email), None)
-check('P6-0 governance test user visible as pending', gov_user is not None, pending)
+_, gov_roles = call('GET', '/api/users/roles', admin)
+gov_role_id = next(x['id'] for x in gov_roles['roles'] if x['name'] == 'user')
+c, r = call('POST', '/api/users', admin,
+            {'name': 'Gov Audit Test', 'email': gov_email, 'password': 'Passw0rd!', 'role_id': gov_role_id})
+check('P6-0 governance test user is created', c == 201, (c, r))
+_, actives = call('GET', '/api/users?status=active', admin)
+gov_user = next((u for u in actives['users'] if u['email'] == gov_email), None)
+# An administrator who typed the details is the approval, so the account is
+# active on creation rather than pending.
+check('P6-0 governance test user visible as active', gov_user is not None, actives)
 gov_id = gov_user['id']
 
 c, r = call('PATCH', f'/api/users/{gov_id}/status', admin, {'status': 'active'})

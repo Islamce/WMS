@@ -10,7 +10,7 @@ WMS - a warehouse management system with a Node.js backend, a browser client, an
 - Modules: 7 declared, 0 discovered only
 - Drift: 0 error, 0 warning, 0 info
 - Generator: `kaaf` v0.7.0
-- Input digest: `d4431ce676b2d851…`
+- Input digest: `7b10116ba945fda9…`
 
 ## Modules
 
@@ -122,7 +122,8 @@ imports but are not declared — see the drift section below.
 | SQLite via better-sqlite3 | `wms-api` | required | The system cannot serve or record any warehouse operation. Production database path and safety invariants are defined in CLAUDE.md. |
 | Firebase Cloud Messaging | `wms-mobile` | optional | Device push notifications are not received; in-app screens still function. |
 | WMS API | `wms-mobile` | required | The mobile client cannot authenticate or perform any warehouse operation. |
-| Phusion Passenger / PM2 | `wms-runtime-entry` | required | The production process is not supervised or restarted. |
+| Caddy (central proxy at /opt/proxy, external Docker network `web`) | `wms-runtime-entry` | required | wms.kynox.io is unreachable over HTTPS; the container still answers on 127.0.0.1:3000 on the host. |
+| Docker Compose (service `wms`, /opt/apps/wms/docker-compose.yml) | `wms-runtime-entry` | required | The production container is not built, started or restarted; there is no other supervisor since the shared host and its Passenger/PM2 layouts were retired on 2026-09-06. |
 
 ## Drift — declared versus discovered
 
@@ -139,4 +140,4 @@ No drift: every declaration matches what discovery found in the source.
 Declarations come from `kaaf.repo.json` and `kaaf.module.json`. Discovery is a static
 read of the source: dynamic imports and runtime wiring are invisible to it, so the
 absence of a drift finding is not proof that none exists.
-<!-- kaaf:bodyDigest=d0b924fd97094423993856e6d40217a1a9cb4ba626c47b7d9b681627b3883b75 -->
+<!-- kaaf:bodyDigest=331ae1fe47533f24127d63adf86f06546017c02602eff6e43e437181b71a69cf -->

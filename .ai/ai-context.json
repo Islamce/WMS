@@ -1,12 +1,12 @@
 {
   "_meta": {
     "artifact": "ai-context.json",
-    "bodyDigest": "6cd275fc006c6dc86f24a22ff8f0cdc9143740650ae251254983bac54a75c025",
+    "bodyDigest": "6b12441d482f8210131049dff569bd28e2f5083d0e314c87dcb4970861dadf08",
     "confidence": "verified",
     "doNotEdit": true,
     "generator": "kaaf",
     "generatorVersion": "0.7.0",
-    "inputDigest": "d4431ce676b2d8517dccc3e4133035037181b5a716e5997f799596e50330f11c",
+    "inputDigest": "7b10116ba945fda9ab6104b96cf2c168bc6454cb8933b8d7a951024efcafc7c2",
     "provenanceNote": "Generated from the declared kaaf.repo.json and kaaf.module.json manifests. No wall-clock time or commit SHA is embedded: both would break byte-identical regeneration. Use git history for when and from which commit.",
     "schemaVersion": "1.0.0"
   },
@@ -24,7 +24,7 @@
   },
   "counts": {
     "apis": 28,
-    "externalIntegrations": 5,
+    "externalIntegrations": 6,
     "modules": 7,
     "modulesDeclared": 7,
     "modulesUndeclared": 0,
@@ -120,7 +120,6 @@
       "path": ".",
       "publicEntryPoints": [
         "app.js",
-        "ecosystem.config.js",
         "index.js"
       ],
       "purpose": "Boot the production process. Production runs under Docker Compose on a VPS since 2026-09-06; the managed-host process manager named below is history, not current. Production path, runtime path and required environment flags are defined in CLAUDE.md and are authoritative over this manifest."
@@ -164,8 +163,6 @@
     "drift": ".ai/drift.json",
     "governance": "docs/kaaf/GOVERNANCE.md",
     "moduleDetail": ".ai/modules/<id>.json",
-    "prompts": "docs/ai/prompts/",
-    "roadmap": "docs/kaaf/ROADMAP.md",
     "standards": "docs/kaaf/STANDARDS.md",
     "summary": ".ai/summary.md"
   },

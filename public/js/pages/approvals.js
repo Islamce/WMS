@@ -57,8 +57,9 @@ Pages.approvals = {
         <button class="btn secondary sm" id="ap-edit-header">Modify header</button>
         <button class="btn secondary sm" id="ap-add-line">+ Add line</button>
 
+        <p class="muted sm" style="margin:10px 0 0">Untick a line to leave it out. Approve then records only the ticked lines, as a partial approval.</p>
         <div class="table-wrap" style="margin-top:12px"><table>
-          <thead><tr><th><input type="checkbox" id="ap-all" checked></th><th>#</th><th>Item</th><th>Description</th>
+          <thead><tr><th><input type="checkbox" id="ap-all" checked aria-label="Tick or untick every line"></th><th>#</th><th>Item</th><th>Description</th>
             <th class="text-right">Requested</th><th style="width:130px">Approved</th><th></th></tr></thead>
           <tbody>
             ${lines.map((l) => `
@@ -166,11 +167,33 @@ Pages.approvals = {
     }, 50);
   },
 
-  decide(id, decision) {
-    const needsReason = decision === 'reject' || decision === 'return';
+  /**
+   * What a click on Approve / Partial Approve means, given which line boxes
+   * are ticked. Pure, so the browser guard can call it directly.
+   *
+   * The server approves EVERY line on 'approve' and ignores approvedLineIds -
+   * so a manager who unticked two lines and pressed the big Approve button
+   * used to approve all of them, silently. The tick boxes were a suggestion
+   * the button did not read. Now an Approve with lines unticked is recorded
+   * as the partial approval it visibly is, and the user is told.
+   */
+  resolveDecision(decision, checkedIds, allIds) {
+    if (decision !== 'approve' && decision !== 'partial') return { decision, approvedLineIds: undefined };
+    const partial = checkedIds.length < allIds.length;
+    if (!partial) return { decision: 'approve', approvedLineIds: undefined };
+    return { decision: 'partial', approvedLineIds: checkedIds.slice(), demoted: decision === 'approve' };
+  },
+
+  decide(id, rawDecision) {
     const comments = this.el.querySelector('#ap-comments').value;
-    const approvedLineIds = decision === 'partial'
-      ? [...this.el.querySelectorAll('.ap-line-chk:checked')].map((c) => Number(c.value)) : undefined;
+    const allIds = [...this.el.querySelectorAll('.ap-line-chk')].map((c) => Number(c.value));
+    const checkedIds = [...this.el.querySelectorAll('.ap-line-chk:checked')].map((c) => Number(c.value));
+    const resolved = this.resolveDecision(rawDecision, checkedIds, allIds);
+    const { decision, approvedLineIds } = resolved;
+    const needsReason = decision === 'reject' || decision === 'return';
+    if (resolved.demoted) {
+      UI.toast(`${checkedIds.length} of ${allIds.length} lines are ticked, so this is recorded as a partial approval. The unticked lines are not approved.`);
+    }
 
     const doSubmit = async (reason) => {
       try {

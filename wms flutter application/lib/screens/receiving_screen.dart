@@ -22,6 +22,13 @@ class _ReceivingScreenState extends State<ReceivingScreen> {
   final _expiry = TextEditingController();
   String? _warehouse;
   List<Map<String, dynamic>> _warehouses = [];
+  // Ownership is decided at receipt and cannot be changed afterwards (the
+  // server deliberately has no endpoint for it). This screen used to send no
+  // owner at all, so a subcontractor's delivery booked on a phone became
+  // company stock - permanently.
+  String _owner = 'COMPANY';
+  int? _subcontractorId;
+  List<Map<String, dynamic>> _subcontractors = [];
   bool _loading = true;
   bool _busy = false;
 
@@ -33,10 +40,22 @@ class _ReceivingScreenState extends State<ReceivingScreen> {
 
   Future<void> _loadMeta() async {
     try {
-      final meta = Map<String, dynamic>.from(await SessionScope.of(context).api.get('/api/meta'));
+      final api = SessionScope.of(context).api;
+      final meta = Map<String, dynamic>.from(await api.get('/api/meta'));
+      // Only a contracting tenant has a subcontractor register; elsewhere the
+      // module is absent and this call fails, which simply hides the question.
+      List<Map<String, dynamic>> subs = [];
+      try {
+        final r = Map<String, dynamic>.from(await api.get('/api/subcontractor/subcontractors'));
+        subs = List<Map<String, dynamic>>.from(
+            (r['subcontractors'] ?? []).map((e) => Map<String, dynamic>.from(e)));
+      } catch (_) {
+        subs = [];
+      }
       setState(() {
         _warehouses = List<Map<String, dynamic>>.from(
             (meta['warehouses'] ?? []).map((e) => Map<String, dynamic>.from(e)));
+        _subcontractors = subs;
         _loading = false;
       });
     } catch (e) {
@@ -63,7 +82,12 @@ class _ReceivingScreenState extends State<ReceivingScreen> {
     final qty = double.tryParse(_qty.text.trim());
     if (qty == null || qty <= 0) { showSnack(context, 'Enter a valid quantity.', error: true); return; }
     if (_warehouse == null) { showSnack(context, 'Select a warehouse.', error: true); return; }
-    if (_po.text.trim().isEmpty) { showSnack(context, 'PO number is mandatory.', error: true); return; }
+    final subOwned = _owner == 'SUBCONTRACTOR';
+    if (_po.text.trim().isEmpty) {
+      showSnack(context, subOwned ? 'Delivery note is mandatory.' : 'PO number is mandatory.', error: true);
+      return;
+    }
+    if (subOwned && _subcontractorId == null) { showSnack(context, 'Select the subcontractor.', error: true); return; }
 
     final session = SessionScope.of(context);
     // A stable idempotency_key travels with this receipt from the first
@@ -76,6 +100,8 @@ class _ReceivingScreenState extends State<ReceivingScreen> {
       'received_quantity': qty,
       'warehouse_code': _warehouse,
       'po_number': _po.text.trim(),
+      'owner_type': _owner,
+      if (subOwned) 'owner_subcontractor_id': _subcontractorId,
       if (_mfg.text.trim().isNotEmpty) 'manufacturing_date': _mfg.text.trim(),
       if (_expiry.text.trim().isNotEmpty) 'expiry_date': _expiry.text.trim(),
       'idempotency_key': 'mobile-gr-${DateTime.now().microsecondsSinceEpoch}',
@@ -84,6 +110,8 @@ class _ReceivingScreenState extends State<ReceivingScreen> {
 
     void resetForm() => setState(() {
           _material = null;
+          _owner = 'COMPANY';
+          _subcontractorId = null;
           _qty.clear(); _po.clear(); _mfg.clear(); _expiry.clear();
         });
 
@@ -145,10 +173,47 @@ class _ReceivingScreenState extends State<ReceivingScreen> {
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: const InputDecoration(labelText: 'Received quantity', border: OutlineInputBorder()),
                 ),
+                if (_subcontractors.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: _owner,
+                    isExpanded: true,
+                    decoration: const InputDecoration(labelText: 'Whose material is this?', border: OutlineInputBorder()),
+                    items: const [
+                      DropdownMenuItem(value: 'COMPANY', child: Text("The company's own stock")),
+                      DropdownMenuItem(value: 'SUBCONTRACTOR', child: Text("A subcontractor's material (we only hold it)")),
+                    ],
+                    onChanged: (v) => setState(() { _owner = v ?? 'COMPANY'; if (_owner == 'COMPANY') _subcontractorId = null; }),
+                  ),
+                  if (_owner == 'SUBCONTRACTOR') ...[
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<int>(
+                      initialValue: _subcontractorId,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Subcontractor',
+                        helperText: 'Ownership is set here and cannot be changed later.',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: _subcontractors
+                          .map((s) => DropdownMenuItem<int>(
+                              value: (s['id'] as num).toInt(),
+                              child: Text('${s['name'] ?? ''}', overflow: TextOverflow.ellipsis)))
+                          .toList(),
+                      onChanged: (v) => setState(() => _subcontractorId = v),
+                    ),
+                  ],
+                ],
                 const SizedBox(height: 12),
                 TextField(
                   controller: _po,
-                  decoration: const InputDecoration(labelText: 'PO number (mandatory)', border: OutlineInputBorder()),
+                  decoration: InputDecoration(
+                    // A purchase order proves the company bought it. For a
+                    // subcontractor's material there is none - ask for the
+                    // delivery note instead of making the storekeeper invent one.
+                    labelText: _owner == 'SUBCONTRACTOR' ? 'Delivery note (mandatory)' : 'PO number (mandatory)',
+                    border: const OutlineInputBorder(),
+                  ),
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(

@@ -21,33 +21,14 @@ const DUMMY_HASH = bcrypt.hashSync('$dummy-password-for-timing-safety$', 10);
 // instead of hanging the request.
 const asyncHandler = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
-/**
- * POST /api/auth/signup
- * Creates a new account with status 'pending'. The user cannot login
- * until an admin approves the account.
- */
-router.post('/signup', asyncHandler(async (req, res) => {
-  const { name, email, password } = req.body || {};
-
-  if (!isNonEmptyString(name)) return res.status(400).json({ error: 'Name is required.' });
-  if (!isEmail(email)) return res.status(400).json({ error: 'A valid email is required.' });
-  const pol = validatePasswordPolicy(password);
-  if (!pol.ok) return res.status(400).json({ error: pol.error });
-
-  const exists = db.prepare('SELECT id FROM users WHERE email = ?').get(email.trim());
-  if (exists) return res.status(409).json({ error: 'An account with this email already exists.' });
-
-  // Async hashing keeps the event loop free under concurrent signups.
-  const hash = await bcrypt.hash(password, 10);
-  db.prepare(`
-    INSERT INTO users (name, email, password_hash, role_id, status)
-    VALUES (?, ?, ?, (SELECT id FROM roles WHERE name = 'user'), 'pending')
-  `).run(name.trim(), email.trim(), hash);
-
-  res.status(201).json({
-    message: 'Account created. An administrator must approve your account before you can login.',
-  });
-}));
+// Self-registration was removed. It was unauthenticated on a public host, and the
+// role it assigned could remove stock through POST /api/stock/out - a screen that
+// appears in no menu, so nobody reviewing the UI would have seen the grant. The
+// account arrived in the administrator's pending list looking exactly like a real
+// hire, and one approval click made it active.
+//
+// Accounts are created by an administrator at POST /api/users, which did not exist
+// when this was written and now does.
 
 /**
  * POST /api/auth/login

@@ -5,6 +5,7 @@
 const path = require('path');
 const express = require('express');
 const helmet = require('helmet');
+const compression = require('compression');
 const config = require('./config');
 
 // Ensure the schema exists before handling requests (idempotent).
@@ -73,6 +74,10 @@ app.use(helmet({
 
 // The bulk CSV upload screens send up to ~2,000 rows in one JSON body, which
 // exceeds express.json()'s default 100 KB cap.
+// Nothing compressed responses before this - not Express, not the proxy. On a
+// site phone over a bad link that was the mobile bin screen at 3.5 MB where
+// 383 KB would do. Pure bytes and round trips; costs no CPU that matters.
+app.use(compression());
 app.use(express.json({ limit: '2mb' }));
 
 // Coarse global rate limit per client IP across the whole API surface
@@ -100,7 +105,12 @@ if (process.env.LOG_REQUESTS !== '0') {
 // Unauthenticated health check — handy for verifying the server is reachable
 // through a proxy/port-forward (e.g. GitHub Codespaces). A 200 here means the
 // app is up; a 401 on the site root then points at the proxy, not the app.
-app.get('/healthz', (req, res) => res.json({ status: 'ok', service: 'wms' }));
+// `release` is the commit the running image was built from, injected as a Docker
+// build arg. It is here because a 200 alone cannot tell a deploy whether the new
+// container is serving or the old one never went away.
+app.get('/healthz', (req, res) => res.json({
+  status: 'ok', service: 'wms', release: process.env.BUILD_SHA || 'unknown',
+}));
 
 // Malformed JSON in a request body is a client error, not a server error.
 app.use((err, req, res, next) => {
@@ -156,13 +166,18 @@ app.use('/api/admin', require('./routes/admin'));
 app.use('/api', require('./routes/attachments'));
 app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/kpi', require('./routes/kpi'));
+app.use('/api/reports', require('./routes/projectSpend'));
 app.use('/api/analytics', require('./routes/analytics'));
 
 // --- Static frontend ------------------------------------------------------
 const publicRoot = path.join(__dirname, '..', 'public');
-// Hostinger's edge cache has been observed serving stale same-path assets even
-// with max-age=0 and query-string cache busting. A release-scoped URL path
-// keeps the browser/CDN cache key distinct without copying or mutating assets.
+// Retained only so HTML cached from before 2026-09-16 still resolves its assets.
+// index.html no longer emits these paths: the pinned segment was frozen at one
+// commit from 2026-08-18 and silently served that version of three files for
+// every release after it - including, had it survived, the CSS and request
+// screens this programme has to change. The edge cache it was defending against
+// belonged to the shared host retired on 2026-09-06; the VPS sits behind its own
+// Caddy. Delete this once no stale HTML can reasonably remain.
 app.use('/release-assets/:release', (req, res, next) => {
   const relativeAsset = req.path.replace(/^\//, '');
   if (!relativeAsset || relativeAsset.includes('..') || relativeAsset.startsWith('release-assets/')) return next();

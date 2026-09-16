@@ -13,6 +13,43 @@ const { compactBin, expandedBin } = require('./../db/seed2');
 const router = express.Router();
 router.use(authenticate);
 
+// --- Reference data ---------------------------------------------------------
+// reference_data (PLANT, COST_CENTER, DEPARTMENT, and now PROJECT) fed the
+// request form's dropdowns and had no route to read or maintain it: the only
+// writer was the development seed. A project register that cannot be
+// maintained is a free-text field with extra steps.
+const REFERENCE_CATEGORIES = ['PROJECT', 'PLANT', 'COST_CENTER', 'DEPARTMENT'];
+
+router.get('/reference/:category', (req, res) => {
+  const category = String(req.params.category || '').toUpperCase();
+  if (!REFERENCE_CATEGORIES.includes(category)) return res.status(404).json({ error: 'Unknown reference category.' });
+  res.json({ items: db.prepare('SELECT id, code, label, is_active FROM reference_data WHERE category=? ORDER BY is_active DESC, code').all(category) });
+});
+
+router.post('/reference', requirePermission('users_management'), (req, res) => {
+  const b = req.body || {};
+  const category = String(b.category || '').toUpperCase();
+  if (!REFERENCE_CATEGORIES.includes(category)) return res.status(400).json({ error: 'Unknown reference category.' });
+  if (!isNonEmptyString(b.code) || !isNonEmptyString(b.label)) return res.status(400).json({ error: 'Code and label are required.' });
+  const code = String(b.code).trim().toUpperCase();
+  if (db.prepare('SELECT 1 FROM reference_data WHERE category=? AND code=?').get(category, code)) {
+    return res.status(409).json({ error: `${code} already exists in ${category}.` });
+  }
+  const info = db.prepare('INSERT INTO reference_data (category, code, label, is_active) VALUES (?,?,?,1)').run(category, code, String(b.label).trim());
+  audit.record({ entityType: 'ReferenceData', entityId: Number(info.lastInsertRowid), action: 'CREATE',
+    newValue: { category, code, label: String(b.label).trim() }, user: req.user, sourceScreen: 'reference' });
+  res.status(201).json({ message: `${code} added.`, id: Number(info.lastInsertRowid) });
+});
+
+router.patch('/reference/:id/active', requirePermission('users_management'), (req, res) => {
+  const active = req.body && req.body.is_active ? 1 : 0;
+  const r = db.prepare("UPDATE reference_data SET is_active=? WHERE id=?").run(active, req.params.id);
+  if (!r.changes) return res.status(404).json({ error: 'Not found.' });
+  audit.record({ entityType: 'ReferenceData', entityId: Number(req.params.id), action: 'STATUS_CHANGED',
+    newValue: { is_active: active }, user: req.user, sourceScreen: 'reference' });
+  res.json({ message: active ? 'Reactivated.' : 'Retired. It stays on old requests and reports.' });
+});
+
 // --- Warehouses -------------------------------------------------------------
 router.get('/warehouses', requirePermission(['warehouses_master', 'warehouse_dashboard']), (req, res) => {
   const filters = [];

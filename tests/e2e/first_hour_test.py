@@ -177,9 +177,16 @@ try:
                       {'bin_location': 'SITE-01-RACK-01'})
     check('F3 and it is put away in a starter bin', code == 200, (code, body))
 
-    # Now back out again, on the collapsed contracting chain.
-    code, req = call('POST', '/api/requests', token, {
+    # Now back out again, on the collapsed contracting chain. The contracting
+    # profile declares the project as required, and the starter data seeds a
+    # first project, so a request with none is refused by name.
+    code, body = call('POST', '/api/requests', token, {
         'request_type': 'COST_CENTER', 'plant': 'P100', 'issue_warehouse_code': 'SITE-01',
+        'lines': [{'material_id': material[0], 'requested_quantity': 10}],
+    })
+    check('F4 a request with no project is refused, and told so', code == 400 and 'Project' in body.get('error', ''), (code, body))
+    code, req = call('POST', '/api/requests', token, {
+        'request_type': 'COST_CENTER', 'plant': 'P100', 'issue_warehouse_code': 'SITE-01', 'wbs_element': 'PRJ-001',
         'lines': [{'material_id': material[0], 'requested_quantity': 10}],
     })
     rid = (req.get('request') or {}).get('id') or req.get('id')

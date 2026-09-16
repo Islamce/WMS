@@ -45,6 +45,14 @@ on:
         required: true
         type: boolean
         default: true
+      expected_row_delta:
+        description: >-
+          JSON naming rows a migration in this release is MEANT to add or remove,
+          e.g. {"roles":1,"role_permissions":12}. Anything not named here must not
+          move. Leave empty for a release that changes no data.
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -152,6 +160,9 @@ jobs:
             console.log(JSON.stringify({
               migrations: n('schema_migrations'), users: n('users'), materials: n('materials'),
               batches: n('batches'), requests: n('material_request_headers'),
+              request_lines: n('material_request_lines'),
+              roles: n('roles'), role_permissions: n('role_permissions'), permissions: n('permissions'),
+              material_location_stock: n('material_location_stock'),
               integrity: db.pragma('integrity_check')[0].integrity_check,
             }));
           \"")"
@@ -163,13 +174,21 @@ jobs:
           " "$counts"
 
       - name: Back up and verify before changing anything
+        id: backup
         if: ${{ !inputs.plan_only }}
         run: |
           set -Eeuo pipefail
-          ssh hostinger "set -e; cd '$REMOTE_APP_DIR'; \
+          # verify-backup.js checks whatever manifest is NEWEST in the directory,
+          # and the nightly backup shares that directory. Capture the name of the
+          # set this run just wrote so the rollback message can point at it, and
+          # so nobody has to guess which of two same-minute sets is the one.
+          out="$(ssh hostinger "set -e; cd '$REMOTE_APP_DIR'; \
             docker compose exec -T -e BACKUP_DIR='$CONTAINER_BACKUP_DIR' -e DB_PATH='$REMOTE_DB_PATH' wms node scripts/backup.js; \
-            docker compose exec -T -e BACKUP_DIR='$CONTAINER_BACKUP_DIR' wms node scripts/verify-backup.js"
-          echo "Backup taken and verified."
+            docker compose exec -T -e BACKUP_DIR='$CONTAINER_BACKUP_DIR' wms node scripts/verify-backup.js")"
+          echo "$out"
+          manifest="$(printf '%s\n' "$out" | grep -oE '[A-Za-z0-9_.-]*manifest[A-Za-z0-9_.-]*\.json' | tail -1 || true)"
+          echo "backup_manifest=${manifest:-unknown}" >> "$GITHUB_OUTPUT"
+          echo "Backup taken and verified (manifest: ${manifest:-not reported by the scripts})."
 
       - name: Plan only — stop here
         if: ${{ inputs.plan_only }}
@@ -182,6 +201,22 @@ jobs:
           echo "SSH, the checkout, container health and the database all responded."
           echo "Re-dispatch with plan_only unchecked to deploy."
 
+      - name: Keep the image that is currently serving
+        id: keep_image
+        if: ${{ !inputs.plan_only }}
+        run: |
+          set -Eeuo pipefail
+          # docker-compose.yml has no `image:` key, so `docker compose build`
+          # overwrites the derived tag and the image production was serving
+          # becomes dangling. Rollback then has to rebuild the old commit from
+          # source, over the network, inside an already-failing window. Tagging
+          # it first makes rollback a retag with no network dependency.
+          ssh hostinger "set -e; cd '$REMOTE_APP_DIR'; \
+            img=\$(docker compose images -q wms); \
+            if [ -n \"\$img\" ]; then docker image tag \"\$img\" wms:rollback-${{ inputs.release_ref }}; \
+              echo \"Tagged \$img as wms:rollback-${{ inputs.release_ref }}\"; \
+            else echo 'No running image to tag.'; fi"
+
       - name: Deploy
         id: deploy
         if: ${{ !inputs.plan_only }}
@@ -191,8 +226,8 @@ jobs:
           ssh hostinger "set -e; cd '$REMOTE_APP_DIR'; \
             git fetch origin main --quiet; \
             git checkout --quiet ${{ inputs.release_ref }}; \
-            docker compose build; \
-            docker compose up -d"
+            BUILD_SHA=${{ inputs.release_ref }} docker compose build; \
+            BUILD_SHA=${{ inputs.release_ref }} docker compose up -d"
           echo "Deployed ${{ inputs.release_ref }}."
 
       - name: Wait for health
@@ -201,12 +236,20 @@ jobs:
         continue-on-error: true
         run: |
           set -Eeuo pipefail
+          # A 200 is not evidence of a deploy: the old container answers it just
+          # as well. What settles it is the build marker the image carries.
+          want='${{ inputs.release_ref }}'
           for i in $(seq 1 30); do
-            code="$(curl -sS -o /dev/null -w '%{http_code}' "$HEALTH_URL" || true)"
-            if [ "$code" = "200" ]; then echo "Healthy after ${i} attempt(s)."; exit 0; fi
+            body="$(curl -sS "$HEALTH_URL" || true)"
+            got="$(printf '%s' "$body" | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{try{process.stdout.write(String(JSON.parse(d).release||''))}catch{process.stdout.write('')}})" || true)"
+            if [ "$got" = "$want" ]; then echo "Healthy after ${i} attempt(s), serving $got."; exit 0; fi
             sleep 5
           done
-          echo "::error::$HEALTH_URL did not return 200 within 150 seconds."
+          if [ -n "${got:-}" ]; then
+            echo "::error::$HEALTH_URL is healthy but serving '$got', not '$want'. The new container did not take over."
+          else
+            echo "::error::$HEALTH_URL did not report the expected build within 150 seconds (last body: ${body:-<none>})."
+          fi
           exit 1
 
       - name: Post-deploy state
@@ -221,6 +264,9 @@ jobs:
             console.log(JSON.stringify({
               migrations: n('schema_migrations'), users: n('users'), materials: n('materials'),
               batches: n('batches'), requests: n('material_request_headers'),
+              request_lines: n('material_request_lines'),
+              roles: n('roles'), role_permissions: n('role_permissions'), permissions: n('permissions'),
+              material_location_stock: n('material_location_stock'),
               integrity: db.pragma('integrity_check')[0].integrity_check,
             }));
           \"")"
@@ -231,15 +277,32 @@ jobs:
           node -e "
             const before = JSON.parse(process.argv[1]);
             const after = JSON.parse(process.argv[2]);
+            // Every watched table must hold still unless this release DECLARED
+            // the change. Declared deltas must match exactly: a migration meant
+            // to add one role that adds two is as wrong as one that was not
+            // meant to add any. Anything undeclared that moves is a stop.
+            let expected = {};
+            try { expected = process.argv[3] ? JSON.parse(process.argv[3]) : {}; }
+            catch (e) { console.error('::error::expected_row_delta is not valid JSON: ' + e.message); process.exit(1); }
+            const watched = ['users', 'materials', 'batches', 'requests', 'request_lines',
+                             'roles', 'role_permissions', 'permissions', 'material_location_stock'];
             const problems = [];
             if (after.integrity !== 'ok') problems.push('integrity is ' + after.integrity);
-            for (const k of ['users', 'materials', 'batches', 'requests']) {
-              if (before[k] !== after[k]) problems.push(k + ' changed from ' + before[k] + ' to ' + after[k]);
+            for (const k of Object.keys(expected)) {
+              if (!watched.includes(k)) problems.push('expected_row_delta names ' + k + ', which is not a watched table');
+            }
+            for (const k of watched) {
+              const delta = after[k] - before[k];
+              const want = expected[k] || 0;
+              if (delta !== want) {
+                problems.push(k + ' moved by ' + delta + ' (' + before[k] + ' -> ' + after[k] + '), expected ' + want);
+              }
             }
             if (after.migrations < before.migrations) problems.push('migration count went backwards');
             if (problems.length) { console.error('::error::' + problems.join('; ')); process.exit(1); }
-            console.log('Row counts unchanged, integrity ok, migrations ' + before.migrations + ' -> ' + after.migrations);
-          " '${{ steps.before.outputs.counts }}' "$counts"
+            const declared = Object.keys(expected).length ? ' (declared: ' + JSON.stringify(expected) + ')' : '';
+            console.log('Row counts as expected' + declared + ', integrity ok, migrations ' + before.migrations + ' -> ' + after.migrations);
+          " '${{ steps.before.outputs.counts }}' "$counts" '${{ inputs.expected_row_delta }}'
 
       - name: Roll back
         if: ${{ !inputs.plan_only && (steps.deploy.outcome != 'success' || steps.health.outcome != 'success' || steps.after.outcome != 'success') }}
@@ -248,10 +311,21 @@ jobs:
         run: |
           set -Eeuo pipefail
           echo "::warning::Rolling back to $CURRENT."
+          # Prefer the image tagged before the build: no network, no compiler,
+          # nothing that can fail inside an already-failing window. Fall back
+          # to a rebuild only if the tag is not there.
           ssh hostinger "set -e; cd '$REMOTE_APP_DIR'; \
             git checkout --quiet $CURRENT; \
-            docker compose build; \
-            docker compose up -d"
+            if docker image inspect wms:rollback-${{ inputs.release_ref }} >/dev/null 2>&1; then \
+              echo 'Restoring the previously serving image by tag.'; \
+              img=\$(docker compose images -q wms || true); \
+              docker image tag wms:rollback-${{ inputs.release_ref }} \"\${img:-wms-wms}\" 2>/dev/null || true; \
+              docker compose up -d --no-build; \
+            else \
+              echo 'No rollback tag found; rebuilding the previous commit.'; \
+              BUILD_SHA=$CURRENT docker compose build; \
+              BUILD_SHA=$CURRENT docker compose up -d; \
+            fi"
           for i in $(seq 1 30); do
             code="$(curl -sS -o /dev/null -w '%{http_code}' "$HEALTH_URL" || true)"
             if [ "$code" = "200" ]; then
@@ -260,7 +334,7 @@ jobs:
             fi
             sleep 5
           done
-          echo "::error::Deploy failed AND the rollback did not come back healthy. Production is down — restore from the backup taken at the start of this run (docs/WMS-PRODUCTION-RUNBOOK.md)."
+          echo "::error::Deploy failed AND the rollback did not come back healthy. Production is down — restore from backup set '${{ steps.backup.outputs.backup_manifest }}' taken at the start of this run (docs/WMS-PRODUCTION-RUNBOOK.md)."
           exit 1
 
       - name: Summary

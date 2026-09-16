@@ -50,6 +50,7 @@ requester = login('requester@example.com', 'Passw0rd!')
 manager = login('manager@example.com', 'Passw0rd!')
 erp = login('erp@example.com', 'Passw0rd!')
 supervisor = login('supervisor@example.com', 'Passw0rd!')
+whoperator = login('whoperator@example.com', 'Passw0rd!')  # holds cycle_count; the second signature
 _, m = call('GET', '/api/materials/search?q=MAT-0001', admin)
 BOLT = m['materials'][0]['id']
 
@@ -109,8 +110,13 @@ check('cycle count opened', c == 201 and r.get('count_number'), (c, r))
 ccid = r['id']
 c, r = call('POST', f'/api/cycle-count/{ccid}/count', supervisor, {'counted_quantity': before + 7, 'reason': 'found extra'})
 check('cycle count variance computed', c == 200 and abs(r.get('variance', 0) - 7) < 0.001, (c, r))
+# Posting is a second signature. The person who entered the count is refused;
+# a different cycle_count holder posts it. This is the guard for the finding
+# that a cycle count used to be a one-person stock write-off.
 c, r = call('POST', f'/api/cycle-count/{ccid}/post', supervisor)
-check('cycle count posted', c == 200, (c, r))
+check('the user who counted cannot post it (403)', c == 403 and 'different user' in r.get('error', ''), (c, r))
+c, r = call('POST', f'/api/cycle-count/{ccid}/post', whoperator)
+check('cycle count posted by a second user', c == 200, (c, r))
 _, bat2 = call('GET', '/api/master/batches?search=MAT-0001', admin)
 after = next(b['remaining_quantity'] for b in bat2['batches'] if b['id'] == batch['id'])
 check('batch stock adjusted by variance', abs(after - (before + 7)) < 0.001, (before, after))

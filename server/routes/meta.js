@@ -22,6 +22,7 @@ router.get('/', (req, res) => {
     departments: db.prepare("SELECT code, label FROM reference_data WHERE category='DEPARTMENT' AND is_active=1 ORDER BY label").all(),
     plants: db.prepare("SELECT code, label FROM reference_data WHERE category='PLANT' AND is_active=1 ORDER BY code").all(),
     costCenters: db.prepare("SELECT code, label FROM reference_data WHERE category='COST_CENTER' AND is_active=1 ORDER BY code").all(),
+    projects: db.prepare("SELECT code, label FROM reference_data WHERE category='PROJECT' AND is_active=1 ORDER BY code").all(),
   });
 });
 

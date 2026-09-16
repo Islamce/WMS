@@ -65,6 +65,7 @@ const MODULES = [
   { key: 'overview', label: 'Overview', icon: 'grid', items: [
     { route: 'dashboard', label: 'Dashboard', icon: 'grid', permission: 'dashboard' },
     { route: 'kpi', label: 'KPI Dashboard', icon: 'bar-chart', permission: 'kpi_dashboard' },
+    { route: 'project-spend', label: 'Spend by Project', icon: 'pie-chart', permission: 'kpi_dashboard' },
     { route: 'ai', label: 'AI Stock Analytics', icon: 'cpu', permission: 'ai_analytics' },
     { route: 'notifications', label: 'Notifications', icon: 'bell', permission: 'notifications' },
   ] },
@@ -177,6 +178,7 @@ const ROUTE_PAGES = {
   'home': { title: 'Home', page: 'home', permission: null }, // launchpad — any signed-in user
   'dashboard': { page: 'dashboard', permission: 'dashboard' },
   'kpi': { page: 'kpi', permission: 'kpi_dashboard' },
+  'project-spend': { page: 'projectSpend', permission: 'kpi_dashboard' },
   'ai': { page: 'ai', permission: 'ai_analytics' },
   'notifications': { page: 'notifications', permission: 'notifications' },
   'create-request': { page: 'createRequest', permission: 'create_request' },
@@ -265,6 +267,14 @@ const App = {
     return modules.includes(moduleKey);
   },
 
+  /** Whether this user may open a hash route such as '#/receiving'. */
+  canOpenRoute(hashRoute) {
+    const key = String(hashRoute || '').replace(/^#\//, '').split('/')[0];
+    const def = ROUTE_PAGES[key];
+    if (!def) return false;
+    return !def.permission || this.can(def.permission);
+  },
+
   can(permission) {
     if (!this.user) return false;
     if (Array.isArray(permission)) return permission.some((p) => this.can(p));
@@ -306,8 +316,9 @@ const App = {
 
     if (!this.user) {
       if (!hash || hash === 'landing') return Pages.landing.render();
-      if (hash === 'signup') return Pages.auth.render('signup');
-      return Pages.auth.render('login');
+      // #/signup is gone: an administrator creates accounts in Users Management.
+      // A stale bookmark lands on the login page rather than nowhere.
+      return Pages.auth.render();
     }
 
     // Force a password change (e.g. the seeded default admin) before anything else.

@@ -45,6 +45,7 @@ function tableExists(name) {
  *   profileKey: string|null,
  *   erpStaging: boolean,       false means approval routes straight to the store
  *   modules: string[]|null,    null means "unrestricted", NOT "no modules"
+ *   terminology: object,       edition label overrides, {} when none
  * }}
  */
 function getTenant() {
@@ -57,7 +58,7 @@ function getTenant() {
     : null;
 
   if (!row) {
-    cached = { configured: false, name: null, profileKey: null, erpStaging: true, modules: null };
+    cached = { configured: false, name: null, profileKey: null, erpStaging: true, modules: null, terminology: {} };
     return cached;
   }
 
@@ -68,7 +69,7 @@ function getTenant() {
     // An unrecognised profile key (a downgrade, or a hand-edited row) must not
     // take the deployment down or silently restrict it. Stay unrestricted and
     // keep the name, so the misconfiguration is visible without being fatal.
-    cached = { configured: false, name: row.tenant_name, profileKey: null, erpStaging: true, modules: null };
+    cached = { configured: false, name: row.tenant_name, profileKey: null, erpStaging: true, modules: null, terminology: {} };
     return cached;
   }
 
@@ -82,6 +83,11 @@ function getTenant() {
     // rather than by being added to a list of profile names in the frontend.
     erpStaging: usesErpStaging(profile.key),
     modules: profile.modules,
+    // The edition's label overrides ("Warehouse" -> "Site Store"). Display only;
+    // the client applies it in t(), so a label that never passes through t()
+    // is not renamed. See tenantProfile.js for the rule that it never changes
+    // behaviour.
+    terminology: profile.terminology || {},
   };
   return cached;
 }

@@ -101,6 +101,15 @@ class OfflineQueue {
     await _persist();
   }
 
+  /// Drop everything, on disk too. Called on sign-out: on a shared site phone
+  /// the queue used to survive into the next person's session and flush under
+  /// their token, so one storekeeper's offline counts were attributed to another.
+  Future<void> clear() async {
+    _pending.clear();
+    _errors.clear();
+    await _persist();
+  }
+
   /// Replays queued requests in order. Stops at the first one that still
   /// can't reach the server (still offline) so ordering is preserved; a
   /// request the server rejects outright (e.g. already superseded) is
