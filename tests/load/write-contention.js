@@ -116,7 +116,14 @@ async function main() {
   console.log(`  Writes each : ${WRITES}  (${(WORKERS * WRITES).toLocaleString()} total)`);
   console.log(`  Contention  : ${CONTENTION}\n`);
 
-  const login = await call('/api/auth/login', { method: 'POST', body: { email: EMAIL, password: PASSWORD } });
+  // The load user exists only on a tests/load/seed-scale.js database. `npm run
+  // test:load` also runs in CI against the ordinary development seed, so fall
+  // back to that seed's administrator rather than failing the gate on login.
+  let login = await call('/api/auth/login', { method: 'POST', body: { email: EMAIL, password: PASSWORD } });
+  if ((!login.body || !login.body.token) && !process.env.LOAD_EMAIL) {
+    login = await call('/api/auth/login', { method: 'POST', body: { email: 'admin@example.com', password: 'Admin@123456' } });
+    if (login.body && login.body.token) console.log('  (load user absent; using the development seed administrator)\n');
+  }
   if (!login.body || !login.body.token) {
     throw new Error(`Login failed (${login.status}). Seed a load database first with tests/load/seed-scale.js.`);
   }

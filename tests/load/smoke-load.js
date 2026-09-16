@@ -35,11 +35,17 @@ async function request(path, options = {}) {
   }
 }
 
+// Defaults are the development seed's administrator. Against a
+// tests/load/seed-scale.js dataset pass LOAD_EMAIL=load@test.local and
+// LOAD_PASSWORD=LoadTest@123456 - that database has no seeded admin.
+const EMAIL = process.env.LOAD_EMAIL || 'admin@example.com';
+const PASSWORD = process.env.LOAD_PASSWORD || 'Admin@123456';
+
 async function login() {
   const response = await fetch(`${BASE}/api/auth/login`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ email: 'admin@example.com', password: 'Admin@123456' }),
+    body: JSON.stringify({ email: EMAIL, password: PASSWORD }),
   });
   if (!response.ok) throw new Error(`Load-test login failed with ${response.status}`);
   const payload = await response.json();
@@ -63,6 +69,17 @@ async function main() {
     { path: '/api/auth/me', headers },
     { path: '/api/dashboard', headers },
     { path: '/api/kpi', headers },
+    // The seven endpoints a scale audit found slow - none of which this test
+    // touched, so it was green while /api/analytics blocked the server for
+    // 164 s at ten times production size. Run against a seed-scale.js
+    // dataset, not the ~20-row seed, or these prove nothing.
+    { path: '/api/analytics', headers },
+    { path: '/api/dashboard/bins', headers },
+    { path: '/api/locations/overview', headers },
+    { path: '/api/receiving/pending-gr', headers },
+    { path: '/api/warehouse/queue', headers },
+    { path: '/api/stock/transactions?page=1&limit=10', headers },
+    { path: '/api/master/audit?page=1&limit=25', headers },
   ];
 
   const results = [];

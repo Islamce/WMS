@@ -19,7 +19,7 @@
     "lint:fix": "eslint . --ext .js --fix",
     "test": "bash tests/run.sh",
     "test:smoke": "node tests/smoke/playwright_smoke.js && node tests/smoke/request_line_visibility_browser.js && node tests/smoke/design_foundation_browser.js && node tests/smoke/subcontractor_ownership_browser.js && node tests/smoke/first_run_guide_browser.js",
-    "test:load": "node tests/load/smoke-load.js"
+    "test:load": "node tests/load/smoke-load.js && node tests/load/write-contention.js --workers 8 --writes 20"
   },
   "engines": {
     "node": "20.x"
@@ -30,6 +30,7 @@
     "bcryptjs": "^2.4.3",
     "better-sqlite3": "11.10.0",
     "chart.js": "^4.4.4",
+    "compression": "^1.8.2",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "firebase-admin": "^13.10.0",

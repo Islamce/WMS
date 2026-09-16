@@ -821,6 +821,23 @@ const MIGRATIONS = [
       `).run();
     },
   },
+  {
+    id: '030_hot_path_indexes',
+    description: 'Two indexes the hottest screens were missing. Measured on a 10x-production synthetic dataset: warehouse queue 6,935 -> 15 ms; bins 1,277 -> 12 ms; empty locations 442 -> 1.8 ms.',
+    up(db) {
+      // The warehouse queue, pick-confirm, picker assignment and the reverse
+      // workflow all look up "the latest open picking task for this request".
+      // picking_tasks was indexed on picker and status but not on request_id,
+      // so each was a full scan of picking_tasks per queue row.
+      db.exec('CREATE INDEX IF NOT EXISTS idx_tasks_request ON picking_tasks(request_id, id)');
+      // The bin screens join batches on (warehouse_code, bin_location); with no
+      // index SQLite built an automatic one on every request. Deliberately NOT
+      // partial: a WHERE remaining_quantity > 0 variant was measured and made
+      // the bins query four times WORSE, because the planner then abandoned its
+      // automatic index and fell back to a per-bin scan.
+      db.exec('CREATE INDEX IF NOT EXISTS idx_batches_bin ON batches(warehouse_code, bin_location, remaining_quantity)');
+    },
+  },
 ];
 
 function ensureTable() {

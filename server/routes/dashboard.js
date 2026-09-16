@@ -191,9 +191,12 @@ router.get('/', (req, res) => {
       AND quality_status = 'RELEASED' AND is_blocked = 0
   `).n;
 
+  // transaction_date is stored as 'YYYY-MM-DD HH:MM:SS', so comparing the raw
+  // column against a 'YYYY-MM-DD' bound is correct and lets an index serve it.
+  // Wrapping the column in date() forced a full scan - four times per load.
   const movementSince = (type, dateExpr) => one(`
     SELECT COALESCE(SUM(quantity), 0) AS n FROM stock_transactions
-    WHERE transaction_type = ? AND date(transaction_date) >= ${dateExpr}
+    WHERE transaction_type = ? AND transaction_date >= ${dateExpr}
   `, type).n;
 
   const stockInToday = movementSince('IN', "date('now')");
@@ -255,7 +258,7 @@ router.get('/', (req, res) => {
       SUM(CASE WHEN transaction_type = 'IN' THEN quantity ELSE 0 END) AS in_qty,
       SUM(CASE WHEN transaction_type = 'OUT' THEN quantity ELSE 0 END) AS out_qty
     FROM stock_transactions
-    WHERE date(transaction_date) BETWEEN date('now', '-29 days') AND date('now')
+    WHERE transaction_date >= date('now', '-29 days') AND transaction_date < date('now', '+1 day')
     GROUP BY day ORDER BY day
   `);
   const byDay = Object.fromEntries(movementDays.map((r) => [r.day, r]));

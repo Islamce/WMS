@@ -5,6 +5,7 @@
 const path = require('path');
 const express = require('express');
 const helmet = require('helmet');
+const compression = require('compression');
 const config = require('./config');
 
 // Ensure the schema exists before handling requests (idempotent).
@@ -73,6 +74,10 @@ app.use(helmet({
 
 // The bulk CSV upload screens send up to ~2,000 rows in one JSON body, which
 // exceeds express.json()'s default 100 KB cap.
+// Nothing compressed responses before this - not Express, not the proxy. On a
+// site phone over a bad link that was the mobile bin screen at 3.5 MB where
+// 383 KB would do. Pure bytes and round trips; costs no CPU that matters.
+app.use(compression());
 app.use(express.json({ limit: '2mb' }));
 
 // Coarse global rate limit per client IP across the whole API surface
