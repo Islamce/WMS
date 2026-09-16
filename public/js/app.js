@@ -306,8 +306,9 @@ const App = {
 
     if (!this.user) {
       if (!hash || hash === 'landing') return Pages.landing.render();
-      if (hash === 'signup') return Pages.auth.render('signup');
-      return Pages.auth.render('login');
+      // #/signup is gone: an administrator creates accounts in Users Management.
+      // A stale bookmark lands on the login page rather than nowhere.
+      return Pages.auth.render();
     }
 
     // Force a password change (e.g. the seeded default admin) before anything else.

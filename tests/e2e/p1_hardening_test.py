@@ -49,14 +49,20 @@ c, r = login('admin@example.com', 'Admin@123456')
 admin = r.get('token')
 check('admin login still works (async compare)', c == 200 and admin, (c, r))
 
-# signup a fresh pending account
+# an administrator creates a fresh account. Self-registration was removed; this
+# is the only route in, so the async-hash path it exercises is this one.
 import random
 suffix = random.randint(100000, 999999)
 email = f'p1user{suffix}@example.com'
-c, r = call('POST', '/api/auth/signup', body={'name': 'P1 User', 'email': email, 'password': 'Passw0rd!'})
-check('signup creates account (async hash)', c == 201, (c, r))
-c, r = call('POST', '/api/auth/signup', body={'name': 'P1 User', 'email': email, 'password': 'Passw0rd!'})
-check('duplicate signup rejected (409)', c == 409, (c, r))
+_, roles = call('GET', '/api/users/roles', admin)
+user_role_id = next(x['id'] for x in roles['roles'] if x['name'] == 'user')
+body = {'name': 'P1 User', 'email': email, 'password': 'Passw0rd!', 'role_id': user_role_id}
+c, r = call('POST', '/api/users', admin, body)
+check('admin creates account (async hash)', c == 201, (c, r))
+c, r = call('POST', '/api/users', admin, body)
+check('duplicate email rejected (409)', c == 409, (c, r))
+c, r = call('POST', '/api/users', None, body)
+check('creating a user needs authentication (401)', c == 401, (c, r))
 
 # admin resets that user's password (async hash), then activate + verify login
 _, users = call('GET', '/api/users', admin)

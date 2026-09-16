@@ -136,11 +136,15 @@ finally:
     con.close()
 
 # ===== 4. Password policy =====
-c, r = call('POST', '/api/auth/signup', body={'name': 'X', 'email': 'weakpw1@example.com', 'password': 'short1'})
+# The policy is enforced where accounts are created, which since
+# self-registration was removed is POST /api/users.
+_, _roles = call('GET', '/api/users/roles', admin)
+_role_id = next(x['id'] for x in _roles['roles'] if x['name'] == 'user')
+c, r = call('POST', '/api/users', admin, {'name': 'X', 'email': 'weakpw1@example.com', 'password': 'short1', 'role_id': _role_id})
 check('short password rejected', c == 400, (c, r))
-c, r = call('POST', '/api/auth/signup', body={'name': 'X', 'email': 'weakpw2@example.com', 'password': 'allletters'})
+c, r = call('POST', '/api/users', admin, {'name': 'X', 'email': 'weakpw2@example.com', 'password': 'allletters', 'role_id': _role_id})
 check('letters-only password rejected', c == 400, (c, r))
-c, r = call('POST', '/api/auth/signup', body={'name': 'X', 'email': 'goodpw@example.com', 'password': 'Str0ngPass'})
+c, r = call('POST', '/api/users', admin, {'name': 'X', 'email': 'goodpw@example.com', 'password': 'Str0ngPass', 'role_id': _role_id})
 check('valid password accepted', c == 201, (c, r))
 
 # ===== 5. Global rate limiter (pure check) =====
