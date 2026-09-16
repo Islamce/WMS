@@ -165,10 +165,13 @@ function main() {
 
   console.log('\nWritten. Nothing existing was changed — there was nothing to change.');
   // This order is not advice, it is how the product works. A received batch
-  // lands on QUALITY HOLD in no bin, and allocation will not touch it until it
-  // is released AND put away. Steps 2 and 3 are the ones a new customer does
-  // not know are waiting, and skipping them looks exactly like a broken
-  // product: the request approves, then nothing can be picked.
+  // lands on QUALITY HOLD in no bin. Allocation will not touch it until it is
+  // released (step 2) - that part is a hard gate in services/allocation.js.
+  // Put-away (step 3) is not: the allocator has no bin predicate and never had
+  // one, and for a while this text said otherwise. What put-away IS for is the
+  // pick - the picker has to find the stock, and a batch-managed line must be
+  // scanned where it sits. Skip step 2 and the request approves, then nothing
+  // can be picked; skip step 3 and the picker is sent to "no bin".
   console.log('\nNext, in this order:');
   console.log('  1. Goods Receipt      — receive something into SITE-01.');
   console.log('  2. Quality Inspection — release the batch. It arrives on hold.');

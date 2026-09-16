@@ -1,5 +1,13 @@
 # Deploying WMS on Hostinger
 
+> **Superseded on 2026-09-06.** Production moved to a Hostinger VPS under Docker Compose
+> (`/opt/apps/wms`, service `wms`, database bind-mounted at `/opt/apps/wms/data/wms.db`,
+> behind the central Caddy proxy). The Passenger / shared-hosting / PM2 layout this
+> document describes no longer exists: `~/domains/...`, `/opt/alt/alt-nodejs20/...`,
+> `tmp/restart.txt` and `pm2` commands will fail or act on the wrong path. Kept as
+> history. Current procedure: `docs/HOSTINGER-VPS-MIGRATION-2026-09-06.md`,
+> `docs/DEPLOY-PROMPT-VPS.md`, and the production section of `CLAUDE.md`.
+
 WMS is a **Node.js** app (Express + SQLite), not a PHP site, so it needs a
 plan that can run Node.js. Two paths are supported — pick the one that matches
 your Hostinger plan:

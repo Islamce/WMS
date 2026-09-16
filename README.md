@@ -190,7 +190,7 @@ push to `main` and on every pull request, plus ESLint (with
 See **[DEPLOY-HOSTINGER.md](DEPLOY-HOSTINGER.md)** for step-by-step instructions
 covering a Hostinger VPS (Docker via `docker-compose.yml`; the PM2 and shared-hosting
 layouts it also describes were retired on 2026-09-06) and, historically, the hPanel Node.js app (the root
-`app.js` is the Passenger startup file). The app honours `PORT`/`NODE_ENV`/
+`app.js` was the Passenger startup file). The app honours `PORT`/`NODE_ENV`/
 `JWT_SECRET`/`DB_PATH` from the environment and sets `trust proxy` so it runs
 correctly behind Hostinger's reverse proxy.
 
