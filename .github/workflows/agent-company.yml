@@ -3,8 +3,11 @@ name: WMS Agent Company
 on:
   workflow_dispatch:
   schedule:
-    # 08:00 Asia/Riyadh (UTC+3)
+    # Primary daily company pulse: 08:00 Asia/Riyadh (UTC+3).
     - cron: '0 5 * * *'
+    # Independent continuation windows for pending reasoning checkpoints.
+    # These runs are deliberately short/bounded; KAAF and deterministic gates still run first.
+    - cron: '0 1,9,13,17,21 * * *'
   push:
     branches:
       - chore/agent-operating-company
@@ -24,7 +27,7 @@ concurrency:
 jobs:
   company:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -40,13 +43,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Restore prior same-SHA company checkpoint
+      - name: Restore prior branch company checkpoint
         uses: actions/cache@v4
         with:
           path: artifacts/agent-company
-          key: wms-agent-company-${{ github.sha }}-${{ github.run_id }}
+          key: wms-agent-company-${{ github.ref_name }}-${{ github.run_id }}
           restore-keys: |
-            wms-agent-company-${{ github.sha }}-
+            wms-agent-company-${{ github.ref_name }}-
 
       # KAAF owns architecture context. On the dedicated feature branch only,
       # refresh generated .ai artifacts rather than bypassing the freshness gate.
@@ -77,10 +80,10 @@ jobs:
             cat artifacts/agent-company/deterministic-report.md >> "$GITHUB_STEP_SUMMARY"
           fi
 
-      # Reasoning is optional and never allowed to waive deterministic/KAAF gates.
+      # Reasoning is optional/advisory and never allowed to waive deterministic/KAAF gates.
       # Claude-compatible briefs are provider-independent through the registry.
-      # Repository secrets are runtime-only inputs: never echo or persist them.
-      # Configure one or more repository/environment secrets to enable providers.
+      # Each run is intentionally bounded so quota/token/provider limits persist a checkpoint
+      # and return control instead of holding a GitHub runner until timeout.
       - name: Run reasoning specialists when a provider is configured
         if: success()
         env:
@@ -90,6 +93,11 @@ jobs:
           ANTHROPIC_MODEL: ${{ vars.ANTHROPIC_MODEL }}
           OLLAMA_BASE_URL: ${{ vars.OLLAMA_BASE_URL }}
           OLLAMA_MODEL: ${{ vars.OLLAMA_MODEL }}
+          AGENT_PROVIDER_TIMEOUT_MS: '30000'
+          AGENT_PROVIDER_MAX_ATTEMPTS: '1'
+          AGENT_PROVIDER_PACING_MS: '3000'
+          AGENT_REASONING_BATCH_SIZE: '2'
+          AGENT_STOP_BATCH_ON_PROVIDER_LIMIT: 'true'
         run: |
           set -Eeuo pipefail
           if [ -z "${GEMINI_API_KEY:-}" ] && [ -z "${ANTHROPIC_API_KEY:-}" ] && [ -z "${OLLAMA_BASE_URL:-}" ]; then
