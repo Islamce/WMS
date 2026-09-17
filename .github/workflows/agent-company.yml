@@ -43,14 +43,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Restore prior branch company checkpoint
-        uses: actions/cache@v4
-        with:
-          path: artifacts/agent-company
-          key: wms-agent-company-${{ github.ref_name }}-${{ github.run_id }}
-          restore-keys: |
-            wms-agent-company-${{ github.ref_name }}-
-
       # A GitHub rerun checks out the historical run SHA, even when the branch has
       # advanced through a KAAF-generated commit. This company workflow is a
       # branch-state pulse rather than immutable CI evidence, so normalize to the
@@ -67,10 +59,9 @@ jobs:
             git reset --hard "origin/$GITHUB_REF_NAME"
           fi
 
-      # KAAF owns architecture context. On the dedicated feature branch only,
-      # refresh generated .ai artifacts rather than bypassing the freshness gate.
-      # The generated-only commit does not retrigger this workflow because .ai/**
-      # is intentionally absent from the push path filter.
+      # KAAF owns architecture context. Run it on a clean source workspace before
+      # restoring any generated agent reports/checkpoints so advisory outputs can
+      # never become architecture inputs. Generated .ai files remain KAAF-owned.
       - name: Refresh KAAF context on agent-company branch
         if: github.ref_name == 'chore/agent-operating-company'
         run: |
@@ -95,6 +86,20 @@ jobs:
           if [ -f artifacts/agent-company/deterministic-report.md ]; then
             cat artifacts/agent-company/deterministic-report.md >> "$GITHUB_STEP_SUMMARY"
           fi
+
+      # Restore only semantic reasoning state after KAAF and deterministic gates.
+      # A unique key per run attempt ensures reruns can save an updated checkpoint.
+      - name: Restore prior reasoning checkpoint
+        if: success()
+        uses: actions/cache@v4
+        with:
+          path: |
+            artifacts/agent-company/reasoning-checkpoint.json
+            artifacts/agent-company/reasoning
+          key: wms-agent-reasoning-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            wms-agent-reasoning-${{ github.ref_name }}-${{ github.run_id }}-
+            wms-agent-reasoning-${{ github.ref_name }}-
 
       # Reasoning is optional/advisory and never allowed to waive deterministic/KAAF gates.
       # Claude-compatible briefs are provider-independent through the registry.
@@ -186,7 +191,7 @@ jobs:
         continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
-          name: wms-agent-company-${{ github.run_id }}
+          name: wms-agent-company-${{ github.run_id }}-${{ github.run_attempt }}
           path: artifacts/agent-company
           if-no-files-found: warn
           retention-days: 14
