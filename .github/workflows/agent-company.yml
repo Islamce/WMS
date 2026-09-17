@@ -105,8 +105,8 @@ jobs:
       # Claude-compatible briefs are provider-independent through the registry.
       # Each run is intentionally bounded so quota/token/provider limits persist a checkpoint
       # and return control instead of holding a GitHub runner until timeout.
-      # Gemini uses stable model IDs. 5xx capacity errors and provider timeouts fall through
-      # the stable model chain; 429 quota exhaustion stops immediately and preserves state.
+      # Gemini uses stable model IDs. 5xx capacity errors, provider timeouts, and model-specific
+      # 429 limits fall through the stable model chain; checkpoint state remains authoritative.
       - name: Run reasoning specialists when a provider is configured
         if: success()
         env:
@@ -134,7 +134,7 @@ jobs:
             exit 0
           fi
 
-          models=("${GEMINI_MODEL_PRIMARY}" 'gemini-3.7-flash' 'gemini-3.6-flash' 'gemini-2.5-flash')
+          models=("${GEMINI_MODEL_PRIMARY}" 'gemini-3.7-flash' 'gemini-3.6-flash')
           tried='|'
           for model in "${models[@]}"; do
             if [[ "$tried" == *"|${model}|"* ]]; then
@@ -173,8 +173,7 @@ jobs:
                 break
                 ;;
               quota)
-                echo "Gemini quota exhausted on ${model}; stopping model fallback and preserving checkpoint."
-                break
+                echo "Gemini quota exhausted on ${model}; trying next stable model while preserving checkpoint state."
                 ;;
               transient)
                 echo "Gemini model ${model} is temporarily unavailable; trying next stable fallback."
