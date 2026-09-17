@@ -1,12 +1,12 @@
 {
   "_meta": {
     "artifact": "modules/wms-runtime-entry.json",
-    "bodyDigest": "03145a09ab5524f34b7e2c87de8f326f23c64627ee6e68f6325d23a019184042",
+    "bodyDigest": "6ab5deeb8546ab31ea82eeb406f11af22687aaf1a1ea5972ccdc4b71b090e8bc",
     "confidence": "verified",
     "doNotEdit": true,
     "generator": "kaaf",
     "generatorVersion": "0.7.0",
-    "inputDigest": "f6f016e527f55b7f815c0c7d090aaa1a51d041c4d5ba06268fa059fe91dc6ba9",
+    "inputDigest": "2ffd55cb099571d2183a6e791ba554e10a840a183f88811b01092bfbd5189740",
     "provenanceNote": "Generated from the declared kaaf.repo.json and kaaf.module.json manifests. No wall-clock time or commit SHA is embedded: both would break byte-identical regeneration. Use git history for when and from which commit.",
     "schemaVersion": "1.0.0"
   },
@@ -69,6 +69,9 @@
       "HOSTINGER-NATIVE-RECOVERY.md",
       "README.md",
       "app.js",
+      "artifacts/agent-company/deterministic-report.json",
+      "artifacts/agent-company/deterministic-report.md",
+      "artifacts/agent-company/reasoning-checkpoint.json",
       "design-preview/UAT-FUNCTIONAL-SLICE-CONTRACT.md",
       "design-preview/UAT-FUNCTIONAL-SLICE-TEST-EVIDENCE.md",
       "design-preview/render-preview.js",
