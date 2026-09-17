@@ -79,6 +79,7 @@ jobs:
 
       # Reasoning is optional and never allowed to waive deterministic/KAAF gates.
       # Claude-compatible briefs are provider-independent through the registry.
+      # Repository secrets are runtime-only inputs: never echo or persist them.
       # Configure one or more repository/environment secrets to enable providers.
       - name: Run reasoning specialists when a provider is configured
         if: success()
