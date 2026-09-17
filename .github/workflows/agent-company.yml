@@ -89,6 +89,9 @@ jobs:
 
       # Restore only semantic reasoning state after KAAF and deterministic gates.
       # A unique key per run attempt ensures reruns can save an updated checkpoint.
+      # The pinned recovery prefix preserves the pre-orchestration checkpoint; the
+      # compatibility gate below accepts it only when every intervening path is
+      # agent/KAAF infrastructure and no WMS product path changed.
       - name: Restore prior reasoning checkpoint
         if: success()
         uses: actions/cache@v4
@@ -99,7 +102,48 @@ jobs:
           key: wms-agent-reasoning-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
             wms-agent-reasoning-${{ github.ref_name }}-${{ github.run_id }}-
+            wms-agent-reasoning-${{ github.ref_name }}-35260003274-
             wms-agent-reasoning-${{ github.ref_name }}-
+
+      - name: Carry forward compatible reasoning checkpoint
+        if: success()
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const { spawnSync } = require('child_process');
+          const checkpointPath = 'artifacts/agent-company/reasoning-checkpoint.json';
+          const deterministicPath = 'artifacts/agent-company/deterministic-report.json';
+          if (!fs.existsSync(checkpointPath) || !fs.existsSync(deterministicPath)) process.exit(0);
+
+          const checkpoint = JSON.parse(fs.readFileSync(checkpointPath, 'utf8'));
+          const deterministic = JSON.parse(fs.readFileSync(deterministicPath, 'utf8'));
+          if (!checkpoint.sha || checkpoint.sha === deterministic.sha) process.exit(0);
+
+          const diff = spawnSync('git', ['diff', '--name-only', checkpoint.sha, deterministic.sha], { encoding: 'utf8' });
+          if (diff.status !== 0) {
+            console.log(`Checkpoint carry-forward refused: cannot compare ${checkpoint.sha}..${deterministic.sha}.`);
+            process.exit(0);
+          }
+          const changed = diff.stdout.split(/\r?\n/).map((p) => p.trim()).filter(Boolean);
+          const allowed = (p) =>
+            p === '.github/workflows/agent-company.yml' ||
+            p.startsWith('scripts/agent-company/') ||
+            p.startsWith('.agent-company/') ||
+            p.startsWith('.claude/agents/') ||
+            p.startsWith('.ai/');
+          const unsafe = changed.filter((p) => !allowed(p));
+          if (unsafe.length) {
+            console.log(`Checkpoint carry-forward refused; product/non-agent paths changed: ${unsafe.join(', ')}`);
+            process.exit(0);
+          }
+
+          const priorSha = checkpoint.sha;
+          checkpoint.carriedForwardFrom = Array.from(new Set([...(checkpoint.carriedForwardFrom || []), priorSha]));
+          checkpoint.sha = deterministic.sha;
+          checkpoint.updatedAt = new Date().toISOString();
+          fs.writeFileSync(checkpointPath, `${JSON.stringify(checkpoint, null, 2)}\n`);
+          console.log(`Checkpoint carried forward ${priorSha} -> ${deterministic.sha}; ${changed.length} infrastructure-only path(s) changed.`);
+          NODE
 
       # Reasoning is optional/advisory and never allowed to waive deterministic/KAAF gates.
       # Claude-compatible briefs are provider-independent through the registry.
