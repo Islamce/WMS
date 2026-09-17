@@ -105,8 +105,8 @@ jobs:
       # Claude-compatible briefs are provider-independent through the registry.
       # Each run is intentionally bounded so quota/token/provider limits persist a checkpoint
       # and return control instead of holding a GitHub runner until timeout.
-      # Gemini uses stable model IDs. 5xx capacity errors fall through the stable model chain;
-      # 429 quota exhaustion stops immediately and preserves the checkpoint for a later window.
+      # Gemini uses stable model IDs. 5xx capacity errors and provider timeouts fall through
+      # the stable model chain; 429 quota exhaustion stops immediately and preserves state.
       - name: Run reasoning specialists when a provider is configured
         if: success()
         env:
@@ -162,7 +162,7 @@ jobs:
             .find((item) => item.provider === 'gemini');
           const message = String(failure?.message || '');
           if (/Gemini HTTP 429\b/.test(message)) console.log('quota');
-          else if (/Gemini HTTP (500|502|503|504)\b/.test(message)) console.log('transient');
+          else if (/Gemini HTTP (500|502|503|504)\b/.test(message) || failure?.providerLimited === true) console.log('transient');
           else console.log('stop');
           NODE
             )"
