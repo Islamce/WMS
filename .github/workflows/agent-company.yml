@@ -100,11 +100,13 @@ jobs:
       # Claude-compatible briefs are provider-independent through the registry.
       # Each run is intentionally bounded so quota/token/provider limits persist a checkpoint
       # and return control instead of holding a GitHub runner until timeout.
+      # Gemini uses stable model IDs. 5xx capacity errors fall through the stable model chain;
+      # 429 quota exhaustion stops immediately and preserves the checkpoint for a later window.
       - name: Run reasoning specialists when a provider is configured
         if: success()
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-3.8-flash' }}
+          GEMINI_MODEL_PRIMARY: ${{ vars.GEMINI_MODEL || 'gemini-3.8-flash' }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           ANTHROPIC_MODEL: ${{ vars.ANTHROPIC_MODEL }}
           OLLAMA_BASE_URL: ${{ vars.OLLAMA_BASE_URL }}
@@ -120,7 +122,64 @@ jobs:
             echo 'No reasoning provider configured. Deterministic company completed; semantic queue remains pending.'
             exit 0
           fi
-          node scripts/agent-company/run-reasoning.js
+
+          # If Gemini is not configured, retain provider-independent Anthropic/Ollama execution.
+          if [ -z "${GEMINI_API_KEY:-}" ]; then
+            node scripts/agent-company/run-reasoning.js
+            exit 0
+          fi
+
+          models=("${GEMINI_MODEL_PRIMARY}" 'gemini-3.7-flash' 'gemini-3.6-flash' 'gemini-2.5-flash')
+          tried='|'
+          for model in "${models[@]}"; do
+            if [[ "$tried" == *"|${model}|"* ]]; then
+              continue
+            fi
+            tried="${tried}${model}|"
+            export GEMINI_MODEL="$model"
+            echo "Reasoning batch: trying Gemini model ${model}."
+            node scripts/agent-company/run-reasoning.js
+
+            decision="$(node <<'NODE'
+          const fs = require('fs');
+          const p = 'artifacts/agent-company/reasoning-checkpoint.json';
+          if (!fs.existsSync(p)) {
+            console.log('stop');
+            process.exit(0);
+          }
+          const checkpoint = JSON.parse(fs.readFileSync(p, 'utf8'));
+          if (Number(checkpoint.lastBatch?.completed || 0) > 0) {
+            console.log('success');
+            process.exit(0);
+          }
+          const failure = [...(checkpoint.providerFailures || [])]
+            .reverse()
+            .find((item) => item.provider === 'gemini');
+          const message = String(failure?.message || '');
+          if (/Gemini HTTP 429\b/.test(message)) console.log('quota');
+          else if (/Gemini HTTP (500|502|503|504)\b/.test(message)) console.log('transient');
+          else console.log('stop');
+          NODE
+            )"
+
+            case "$decision" in
+              success)
+                echo "Gemini model ${model} completed reasoning work; preserving bounded batch semantics."
+                break
+                ;;
+              quota)
+                echo "Gemini quota exhausted on ${model}; stopping model fallback and preserving checkpoint."
+                break
+                ;;
+              transient)
+                echo "Gemini model ${model} is temporarily unavailable; trying next stable fallback."
+                ;;
+              *)
+                echo "No model-level fallback condition detected; preserving checkpoint."
+                break
+                ;;
+            esac
+          done
 
       - name: Upload company reports and checkpoints
         if: always()
