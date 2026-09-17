@@ -51,12 +51,28 @@ jobs:
           restore-keys: |
             wms-agent-company-${{ github.ref_name }}-
 
+      # A GitHub rerun checks out the historical run SHA, even when the branch has
+      # advanced through a KAAF-generated commit. This company workflow is a
+      # branch-state pulse rather than immutable CI evidence, so normalize to the
+      # current branch tip before refreshing KAAF or running company checks.
+      - name: Sync current agent-company branch tip
+        if: github.ref_name == 'chore/agent-operating-company'
+        run: |
+          set -Eeuo pipefail
+          git fetch origin "$GITHUB_REF_NAME"
+          current_sha="$(git rev-parse HEAD)"
+          remote_sha="$(git rev-parse "origin/$GITHUB_REF_NAME")"
+          if [ "$current_sha" != "$remote_sha" ]; then
+            echo "Historical workflow snapshot $current_sha; advancing to current branch tip $remote_sha."
+            git reset --hard "origin/$GITHUB_REF_NAME"
+          fi
+
       # KAAF owns architecture context. On the dedicated feature branch only,
       # refresh generated .ai artifacts rather than bypassing the freshness gate.
       # The generated-only commit does not retrigger this workflow because .ai/**
       # is intentionally absent from the push path filter.
       - name: Refresh KAAF context on agent-company branch
-        if: github.event_name == 'push' && github.ref_name == 'chore/agent-operating-company'
+        if: github.ref_name == 'chore/agent-operating-company'
         run: |
           set -Eeuo pipefail
           python3 scripts/architecture/generate.py
@@ -65,7 +81,7 @@ jobs:
             git config user.email 'actions@users.noreply.github.com'
             git add .ai
             git commit -m 'Refresh KAAF context for agent company'
-            git push
+            git push origin HEAD:"$GITHUB_REF_NAME"
           fi
 
       - name: Run deterministic company
