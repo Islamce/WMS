@@ -11,10 +11,12 @@ const OUT_DIR = path.join(ROOT, 'artifacts', 'agent-company');
 const RESULTS_DIR = path.join(OUT_DIR, 'reasoning');
 const CHECKPOINT_PATH = path.join(OUT_DIR, 'reasoning-checkpoint.json');
 const DETERMINISTIC_PATH = path.join(OUT_DIR, 'deterministic-report.json');
-const REQUEST_TIMEOUT_MS = Number(process.env.AGENT_PROVIDER_TIMEOUT_MS || 45_000);
-const MAX_PROVIDER_ATTEMPTS = Math.max(1, Number(process.env.AGENT_PROVIDER_MAX_ATTEMPTS || 3));
+const REQUEST_TIMEOUT_MS = Number(process.env.AGENT_PROVIDER_TIMEOUT_MS || 30_000);
+const MAX_PROVIDER_ATTEMPTS = Math.max(1, Number(process.env.AGENT_PROVIDER_MAX_ATTEMPTS || 1));
 const RETRY_BASE_MS = Math.max(500, Number(process.env.AGENT_PROVIDER_RETRY_BASE_MS || 3_000));
-const AGENT_PACING_MS = Math.max(0, Number(process.env.AGENT_PROVIDER_PACING_MS || 4_000));
+const AGENT_PACING_MS = Math.max(0, Number(process.env.AGENT_PROVIDER_PACING_MS || 3_000));
+const BATCH_SIZE = Math.max(1, Number(process.env.AGENT_REASONING_BATCH_SIZE || 2));
+const STOP_BATCH_ON_PROVIDER_LIMIT = String(process.env.AGENT_STOP_BATCH_ON_PROVIDER_LIMIT || 'true').toLowerCase() !== 'false';
 
 function argValue(name) {
   const prefix = `--${name}=`;
@@ -44,6 +46,7 @@ async function fetchWithTimeout(url, options = {}) {
     if (error?.name === 'AbortError') {
       const timeoutError = new Error(`Provider request timed out after ${REQUEST_TIMEOUT_MS}ms`);
       timeoutError.retryable = true;
+      timeoutError.providerLimited = true;
       throw timeoutError;
     }
     throw error;
@@ -64,13 +67,15 @@ function loadCheckpoint(sha, selected) {
     try {
       const prior = JSON.parse(fs.readFileSync(CHECKPOINT_PATH, 'utf8'));
       if (prior.sha === sha) {
-        const pending = selected.filter((id) => !prior.completed.includes(id));
-        return { ...prior, pending };
+        const completed = Array.isArray(prior.completed) ? prior.completed : [];
+        const pending = selected.filter((id) => !completed.includes(id));
+        return { ...prior, completed, pending };
       }
+      console.log(`Ignoring checkpoint for stale SHA ${prior.sha}; current SHA is ${sha}.`);
     } catch { /* start fresh */ }
   }
   return {
-    schemaVersion: '1.1.0',
+    schemaVersion: '1.2.0',
     sha,
     startedAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -78,6 +83,7 @@ function loadCheckpoint(sha, selected) {
     pending: [...selected],
     providerFailures: [],
     results: {},
+    lastBatch: null,
   };
 }
 
@@ -87,7 +93,11 @@ function saveCheckpoint(checkpoint) {
   fs.writeFileSync(CHECKPOINT_PATH, `${JSON.stringify(checkpoint, null, 2)}\n`);
 }
 
-function annotateRetry(error, body) {
+function annotateRetry(error, body, response) {
+  const retryHeader = response?.headers?.get?.('retry-after');
+  if (retryHeader && /^\d+(\.\d+)?$/.test(retryHeader)) {
+    error.retryAfterMs = Math.ceil(Number(retryHeader) * 1000);
+  }
   const retryMatch = String(body || '').match(/Please retry in\s+([0-9.]+)s/i);
   if (retryMatch) error.retryAfterMs = Math.ceil(Number(retryMatch[1]) * 1000);
   return error;
@@ -109,8 +119,11 @@ async function callGemini(systemPrompt, taskPrompt) {
   });
   if (!response.ok) {
     const body = await response.text();
-    const error = annotateRetry(new Error(`Gemini HTTP ${response.status}: ${body.slice(0, 1000)}`), body);
-    if ([429, 500, 502, 503, 504].includes(response.status)) error.retryable = true;
+    const error = annotateRetry(new Error(`Gemini HTTP ${response.status}: ${body.slice(0, 1000)}`), body, response);
+    if ([429, 500, 502, 503, 504].includes(response.status)) {
+      error.retryable = true;
+      error.providerLimited = true;
+    }
     throw error;
   }
   const data = await response.json();
@@ -144,8 +157,11 @@ async function callAnthropic(systemPrompt, taskPrompt) {
   });
   if (!response.ok) {
     const body = await response.text();
-    const error = annotateRetry(new Error(`Anthropic HTTP ${response.status}: ${body.slice(0, 1000)}`), body);
-    if ([429, 500, 502, 503, 504, 529].includes(response.status)) error.retryable = true;
+    const error = annotateRetry(new Error(`Anthropic HTTP ${response.status}: ${body.slice(0, 1000)}`), body, response);
+    if ([429, 500, 502, 503, 504, 529].includes(response.status)) {
+      error.retryable = true;
+      error.providerLimited = true;
+    }
     throw error;
   }
   const data = await response.json();
@@ -173,8 +189,11 @@ async function callOllama(systemPrompt, taskPrompt) {
   });
   if (!response.ok) {
     const body = await response.text();
-    const error = annotateRetry(new Error(`Ollama HTTP ${response.status}: ${body.slice(0, 1000)}`), body);
-    if ([429, 500, 502, 503, 504].includes(response.status)) error.retryable = true;
+    const error = annotateRetry(new Error(`Ollama HTTP ${response.status}: ${body.slice(0, 1000)}`), body, response);
+    if ([429, 500, 502, 503, 504].includes(response.status)) {
+      error.retryable = true;
+      error.providerLimited = true;
+    }
     throw error;
   }
   const data = await response.json();
@@ -231,20 +250,26 @@ function recordFailure(checkpoint, agentId, providerName, attempt, error) {
     attempt,
     at: new Date().toISOString(),
     retryAfterMs: error.retryAfterMs || null,
+    providerLimited: Boolean(error.providerLimited),
     message: String(error.message || error).slice(0, 1200),
   });
   saveCheckpoint(checkpoint);
 }
 
 async function tryProvider(agentId, providerName, provider, systemPrompt, taskPrompt, checkpoint) {
+  let providerLimited = false;
+  let retryAfterMs = null;
   for (let attempt = 1; attempt <= MAX_PROVIDER_ATTEMPTS; attempt += 1) {
     try {
       console.log(`${agentId}: ${providerName} attempt ${attempt}/${MAX_PROVIDER_ATTEMPTS}`);
-      return await provider(systemPrompt, taskPrompt);
+      const text = await provider(systemPrompt, taskPrompt);
+      return { text, providerLimited: false, retryAfterMs: null };
     } catch (error) {
+      providerLimited = providerLimited || Boolean(error.providerLimited);
+      retryAfterMs = Math.max(Number(retryAfterMs || 0), Number(error.retryAfterMs || 0)) || null;
       recordFailure(checkpoint, agentId, providerName, attempt, error);
-      if (error.unavailable) return null;
-      if (!error.retryable || attempt === MAX_PROVIDER_ATTEMPTS) return null;
+      if (error.unavailable) return { text: null, providerLimited, retryAfterMs };
+      if (!error.retryable || attempt === MAX_PROVIDER_ATTEMPTS) return { text: null, providerLimited, retryAfterMs };
       const exponentialDelay = RETRY_BASE_MS * (2 ** (attempt - 1));
       const providerDelay = Number(error.retryAfterMs || 0);
       const delay = Math.max(exponentialDelay, providerDelay) + 1000;
@@ -252,30 +277,34 @@ async function tryProvider(agentId, providerName, provider, systemPrompt, taskPr
       await sleep(delay);
     }
   }
-  return null;
+  return { text: null, providerLimited, retryAfterMs };
 }
 
 async function runAgent(agent, context, checkpoint) {
   const systemPrompt = stripFrontmatter(read(agent.prompt));
   const taskPrompt = `${context}\n\n# Your task\nReview only the evidence relevant to your specialist brief. Do not invent access to files or tools you were not given. Re-verify historical traps before calling them current. Return concise findings with severity/evidence and explicitly say CLEAN where appropriate.`;
   const providerOrder = REGISTRY.runtime.providerOrder || [];
+  let providerLimited = false;
+  let retryAfterMs = null;
 
   for (const providerName of providerOrder) {
     const provider = providers[providerName];
     if (!provider) continue;
-    const text = await tryProvider(agent.id, providerName, provider, systemPrompt, taskPrompt, checkpoint);
-    if (!text) continue;
+    const outcome = await tryProvider(agent.id, providerName, provider, systemPrompt, taskPrompt, checkpoint);
+    providerLimited = providerLimited || outcome.providerLimited;
+    retryAfterMs = Math.max(Number(retryAfterMs || 0), Number(outcome.retryAfterMs || 0)) || null;
+    if (!outcome.text) continue;
 
     const resultPath = path.join(RESULTS_DIR, `${agent.id}.md`);
-    fs.writeFileSync(resultPath, `# ${agent.id}\n\nProvider: ${providerName}\n\n${text}\n`);
+    fs.writeFileSync(resultPath, `# ${agent.id}\n\nProvider: ${providerName}\n\n${outcome.text}\n`);
     if (!checkpoint.completed.includes(agent.id)) checkpoint.completed.push(agent.id);
     checkpoint.pending = checkpoint.pending.filter((id) => id !== agent.id);
     checkpoint.results[agent.id] = { provider: providerName, path: path.relative(ROOT, resultPath) };
     saveCheckpoint(checkpoint);
     console.log(`${agent.id}: completed with ${providerName}`);
-    return true;
+    return { completed: true, providerLimited: false, retryAfterMs: null };
   }
-  return false;
+  return { completed: false, providerLimited, retryAfterMs };
 }
 
 async function main() {
@@ -304,29 +333,58 @@ async function main() {
   const chief = selected.find((agent) => agent.id === 'wms-chief-of-staff');
   const specialists = selected.filter((agent) => agent.id !== 'wms-chief-of-staff');
   const specialistContext = buildContext(deterministic, checkpoint, false);
+  let attempted = 0;
+  let completedThisBatch = 0;
+  let stoppedOnProviderLimit = false;
+  let retryAfterMs = null;
 
   for (const agent of specialists) {
     if (!checkpoint.pending.includes(agent.id)) continue;
-    const completed = await runAgent(agent, specialistContext, checkpoint);
-    if (!completed) {
+    if (attempted >= BATCH_SIZE) break;
+    attempted += 1;
+    const outcome = await runAgent(agent, specialistContext, checkpoint);
+    if (outcome.completed) completedThisBatch += 1;
+    if (!outcome.completed) {
       console.warn(`${agent.id}: no reasoning provider completed; kept pending.`);
     }
-    if (AGENT_PACING_MS > 0) await sleep(AGENT_PACING_MS);
+    if (outcome.providerLimited && STOP_BATCH_ON_PROVIDER_LIMIT) {
+      stoppedOnProviderLimit = true;
+      retryAfterMs = outcome.retryAfterMs || null;
+      console.warn(`${agent.id}: provider limited; stopping this short batch so the checkpoint can resume in a later run.`);
+      break;
+    }
+    if (AGENT_PACING_MS > 0 && attempted < BATCH_SIZE) await sleep(AGENT_PACING_MS);
   }
 
-  if (chief && checkpoint.pending.includes(chief.id)) {
+  const remainingSpecialists = specialists.filter((agent) => checkpoint.pending.includes(agent.id));
+  if (chief && remainingSpecialists.length === 0 && checkpoint.pending.includes(chief.id)) {
     const chiefContext = buildContext(deterministic, checkpoint, true);
-    const completed = await runAgent(chief, chiefContext, checkpoint);
-    if (!completed) {
+    const outcome = await runAgent(chief, chiefContext, checkpoint);
+    if (outcome.completed) completedThisBatch += 1;
+    if (!outcome.completed) {
       console.warn(`${chief.id}: no reasoning provider completed; kept pending.`);
     }
+    if (outcome.providerLimited) {
+      stoppedOnProviderLimit = true;
+      retryAfterMs = outcome.retryAfterMs || retryAfterMs;
+    }
+  } else if (chief && checkpoint.pending.includes(chief.id)) {
+    console.log(`Chief of Staff deferred until all ${remainingSpecialists.length} pending specialist review(s) complete.`);
   }
 
+  checkpoint.lastBatch = {
+    at: new Date().toISOString(),
+    attempted,
+    completed: completedThisBatch,
+    stoppedOnProviderLimit,
+    retryAfterMs,
+    batchSize: BATCH_SIZE,
+  };
   checkpoint.finishedAt = checkpoint.pending.length ? null : new Date().toISOString();
   saveCheckpoint(checkpoint);
-  console.log(`Reasoning completed: ${checkpoint.completed.length}; pending: ${checkpoint.pending.length}`);
+  console.log(`Reasoning completed total: ${checkpoint.completed.length}; pending: ${checkpoint.pending.length}; attempted this batch: ${attempted}.`);
   if (checkpoint.pending.length) {
-    console.log('Deterministic company work remains valid; pending semantic reviews can resume from checkpoint when any provider is available.');
+    console.log('Deterministic company work remains valid; pending semantic reviews will resume from checkpoint on a later run/provider.');
   }
   process.exitCode = 0;
 }
