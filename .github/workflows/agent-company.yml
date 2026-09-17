@@ -164,7 +164,7 @@ jobs:
           AGENT_PROVIDER_MAX_ATTEMPTS: '1'
           AGENT_PROVIDER_PACING_MS: '3000'
           AGENT_REASONING_BATCH_SIZE: '2'
-          AGENT_STOP_BATCH_ON_PROVIDER_LIMIT: 'true'
+          AGENT_STOP_BATCH_ON_PROVIDER_LIMIT: 'false'
         run: |
           set -Eeuo pipefail
           if [ -z "${GEMINI_API_KEY:-}" ] && [ -z "${ANTHROPIC_API_KEY:-}" ] && [ -z "${OLLAMA_BASE_URL:-}" ]; then
