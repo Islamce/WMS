@@ -14,6 +14,7 @@ const DETERMINISTIC_PATH = path.join(OUT_DIR, 'deterministic-report.json');
 const REQUEST_TIMEOUT_MS = Number(process.env.AGENT_PROVIDER_TIMEOUT_MS || 45_000);
 const MAX_PROVIDER_ATTEMPTS = Math.max(1, Number(process.env.AGENT_PROVIDER_MAX_ATTEMPTS || 3));
 const RETRY_BASE_MS = Math.max(500, Number(process.env.AGENT_PROVIDER_RETRY_BASE_MS || 3_000));
+const AGENT_PACING_MS = Math.max(0, Number(process.env.AGENT_PROVIDER_PACING_MS || 4_000));
 
 function argValue(name) {
   const prefix = `--${name}=`;
@@ -86,6 +87,12 @@ function saveCheckpoint(checkpoint) {
   fs.writeFileSync(CHECKPOINT_PATH, `${JSON.stringify(checkpoint, null, 2)}\n`);
 }
 
+function annotateRetry(error, body) {
+  const retryMatch = String(body || '').match(/Please retry in\s+([0-9.]+)s/i);
+  if (retryMatch) error.retryAfterMs = Math.ceil(Number(retryMatch[1]) * 1000);
+  return error;
+}
+
 async function callGemini(systemPrompt, taskPrompt) {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw Object.assign(new Error('GEMINI_API_KEY not configured'), { unavailable: true });
@@ -102,7 +109,7 @@ async function callGemini(systemPrompt, taskPrompt) {
   });
   if (!response.ok) {
     const body = await response.text();
-    const error = new Error(`Gemini HTTP ${response.status}: ${body.slice(0, 1000)}`);
+    const error = annotateRetry(new Error(`Gemini HTTP ${response.status}: ${body.slice(0, 1000)}`), body);
     if ([429, 500, 502, 503, 504].includes(response.status)) error.retryable = true;
     throw error;
   }
@@ -137,7 +144,7 @@ async function callAnthropic(systemPrompt, taskPrompt) {
   });
   if (!response.ok) {
     const body = await response.text();
-    const error = new Error(`Anthropic HTTP ${response.status}: ${body.slice(0, 1000)}`);
+    const error = annotateRetry(new Error(`Anthropic HTTP ${response.status}: ${body.slice(0, 1000)}`), body);
     if ([429, 500, 502, 503, 504, 529].includes(response.status)) error.retryable = true;
     throw error;
   }
@@ -166,7 +173,7 @@ async function callOllama(systemPrompt, taskPrompt) {
   });
   if (!response.ok) {
     const body = await response.text();
-    const error = new Error(`Ollama HTTP ${response.status}: ${body.slice(0, 1000)}`);
+    const error = annotateRetry(new Error(`Ollama HTTP ${response.status}: ${body.slice(0, 1000)}`), body);
     if ([429, 500, 502, 503, 504].includes(response.status)) error.retryable = true;
     throw error;
   }
@@ -223,6 +230,7 @@ function recordFailure(checkpoint, agentId, providerName, attempt, error) {
     provider: providerName,
     attempt,
     at: new Date().toISOString(),
+    retryAfterMs: error.retryAfterMs || null,
     message: String(error.message || error).slice(0, 1200),
   });
   saveCheckpoint(checkpoint);
@@ -237,7 +245,9 @@ async function tryProvider(agentId, providerName, provider, systemPrompt, taskPr
       recordFailure(checkpoint, agentId, providerName, attempt, error);
       if (error.unavailable) return null;
       if (!error.retryable || attempt === MAX_PROVIDER_ATTEMPTS) return null;
-      const delay = RETRY_BASE_MS * (2 ** (attempt - 1));
+      const exponentialDelay = RETRY_BASE_MS * (2 ** (attempt - 1));
+      const providerDelay = Number(error.retryAfterMs || 0);
+      const delay = Math.max(exponentialDelay, providerDelay) + 1000;
       console.warn(`${agentId}: ${providerName} temporary failure; retrying after ${delay}ms.`);
       await sleep(delay);
     }
@@ -301,6 +311,7 @@ async function main() {
     if (!completed) {
       console.warn(`${agent.id}: no reasoning provider completed; kept pending.`);
     }
+    if (AGENT_PACING_MS > 0) await sleep(AGENT_PACING_MS);
   }
 
   if (chief && checkpoint.pending.includes(chief.id)) {
