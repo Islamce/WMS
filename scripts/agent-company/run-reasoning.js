@@ -11,6 +11,9 @@ const OUT_DIR = path.join(ROOT, 'artifacts', 'agent-company');
 const RESULTS_DIR = path.join(OUT_DIR, 'reasoning');
 const CHECKPOINT_PATH = path.join(OUT_DIR, 'reasoning-checkpoint.json');
 const DETERMINISTIC_PATH = path.join(OUT_DIR, 'deterministic-report.json');
+const REQUEST_TIMEOUT_MS = Number(process.env.AGENT_PROVIDER_TIMEOUT_MS || 45_000);
+const MAX_PROVIDER_ATTEMPTS = Math.max(1, Number(process.env.AGENT_PROVIDER_MAX_ATTEMPTS || 3));
+const RETRY_BASE_MS = Math.max(500, Number(process.env.AGENT_PROVIDER_RETRY_BASE_MS || 3_000));
 
 function argValue(name) {
   const prefix = `--${name}=`;
@@ -25,6 +28,27 @@ function run(command, args) {
 
 function read(relativePath) {
   return fs.readFileSync(path.join(ROOT, relativePath), 'utf8');
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchWithTimeout(url, options = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      const timeoutError = new Error(`Provider request timed out after ${REQUEST_TIMEOUT_MS}ms`);
+      timeoutError.retryable = true;
+      throw timeoutError;
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function stripFrontmatter(markdown) {
@@ -45,7 +69,7 @@ function loadCheckpoint(sha, selected) {
     } catch { /* start fresh */ }
   }
   return {
-    schemaVersion: '1.0.0',
+    schemaVersion: '1.1.0',
     sha,
     startedAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -67,7 +91,7 @@ async function callGemini(systemPrompt, taskPrompt) {
   if (!key) throw Object.assign(new Error('GEMINI_API_KEY not configured'), { unavailable: true });
   const model = process.env.GEMINI_MODEL || 'gemini-flash-latest';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
-  const response = await fetch(url, {
+  const response = await fetchWithTimeout(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-goog-api-key': key },
     body: JSON.stringify({
@@ -79,7 +103,7 @@ async function callGemini(systemPrompt, taskPrompt) {
   if (!response.ok) {
     const body = await response.text();
     const error = new Error(`Gemini HTTP ${response.status}: ${body.slice(0, 1000)}`);
-    if ([429, 503].includes(response.status)) error.rateLimited = true;
+    if ([429, 500, 502, 503, 504].includes(response.status)) error.retryable = true;
     throw error;
   }
   const data = await response.json();
@@ -96,7 +120,7 @@ async function callAnthropic(systemPrompt, taskPrompt) {
   const key = process.env.ANTHROPIC_API_KEY;
   const model = process.env.ANTHROPIC_MODEL;
   if (!key || !model) throw Object.assign(new Error('ANTHROPIC_API_KEY/ANTHROPIC_MODEL not configured'), { unavailable: true });
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
+  const response = await fetchWithTimeout('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -114,7 +138,7 @@ async function callAnthropic(systemPrompt, taskPrompt) {
   if (!response.ok) {
     const body = await response.text();
     const error = new Error(`Anthropic HTTP ${response.status}: ${body.slice(0, 1000)}`);
-    if ([429, 529].includes(response.status)) error.rateLimited = true;
+    if ([429, 500, 502, 503, 504, 529].includes(response.status)) error.retryable = true;
     throw error;
   }
   const data = await response.json();
@@ -127,7 +151,7 @@ async function callOllama(systemPrompt, taskPrompt) {
   const base = process.env.OLLAMA_BASE_URL;
   const model = process.env.OLLAMA_MODEL;
   if (!base || !model) throw Object.assign(new Error('OLLAMA_BASE_URL/OLLAMA_MODEL not configured'), { unavailable: true });
-  const response = await fetch(`${base.replace(/\/$/, '')}/api/chat`, {
+  const response = await fetchWithTimeout(`${base.replace(/\/$/, '')}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -143,7 +167,7 @@ async function callOllama(systemPrompt, taskPrompt) {
   if (!response.ok) {
     const body = await response.text();
     const error = new Error(`Ollama HTTP ${response.status}: ${body.slice(0, 1000)}`);
-    if ([429, 503].includes(response.status)) error.rateLimited = true;
+    if ([429, 500, 502, 503, 504].includes(response.status)) error.retryable = true;
     throw error;
   }
   const data = await response.json();
@@ -158,14 +182,25 @@ const providers = {
   ollama: callOllama,
 };
 
-function buildContext(deterministic) {
+function completedReasoningContext(checkpoint) {
+  const sections = [];
+  for (const [agentId, result] of Object.entries(checkpoint.results || {})) {
+    if (agentId === 'wms-chief-of-staff') continue;
+    const absolute = path.join(ROOT, result.path || '');
+    if (!result.path || !fs.existsSync(absolute)) continue;
+    sections.push(fs.readFileSync(absolute, 'utf8').slice(0, 8_000));
+  }
+  return sections.length ? sections.join('\n\n---\n\n') : '(No specialist reasoning reports completed yet.)';
+}
+
+function buildContext(deterministic, checkpoint, includeSpecialists = false) {
   const gitLog = run('git', ['log', '--oneline', '-8']).stdout;
   const changed = run('git', ['diff', '--name-status', 'HEAD~1..HEAD']).stdout;
   const kaafSummary = fs.existsSync(path.join(ROOT, '.ai', 'summary.md')) ? read('.ai/summary.md').slice(0, 25_000) : 'KAAF summary unavailable';
   const deterministicMd = fs.existsSync(path.join(OUT_DIR, 'deterministic-report.md'))
     ? fs.readFileSync(path.join(OUT_DIR, 'deterministic-report.md'), 'utf8').slice(0, 30_000)
     : JSON.stringify(deterministic, null, 2).slice(0, 30_000);
-  return [
+  const parts = [
     '# KAAF architecture summary',
     kaafSummary,
     '# Deterministic company report',
@@ -174,7 +209,40 @@ function buildContext(deterministic) {
     gitLog,
     '# Last-commit changed paths',
     changed || '(none)',
-  ].join('\n\n');
+  ];
+  if (includeSpecialists) {
+    parts.push('# Completed specialist reports', completedReasoningContext(checkpoint));
+    parts.push('# Still-pending specialist roles', checkpoint.pending.filter((id) => id !== 'wms-chief-of-staff').join(', ') || '(none)');
+  }
+  return parts.join('\n\n');
+}
+
+function recordFailure(checkpoint, agentId, providerName, attempt, error) {
+  checkpoint.providerFailures.push({
+    agent: agentId,
+    provider: providerName,
+    attempt,
+    at: new Date().toISOString(),
+    message: String(error.message || error).slice(0, 1200),
+  });
+  saveCheckpoint(checkpoint);
+}
+
+async function tryProvider(agentId, providerName, provider, systemPrompt, taskPrompt, checkpoint) {
+  for (let attempt = 1; attempt <= MAX_PROVIDER_ATTEMPTS; attempt += 1) {
+    try {
+      console.log(`${agentId}: ${providerName} attempt ${attempt}/${MAX_PROVIDER_ATTEMPTS}`);
+      return await provider(systemPrompt, taskPrompt);
+    } catch (error) {
+      recordFailure(checkpoint, agentId, providerName, attempt, error);
+      if (error.unavailable) return null;
+      if (!error.retryable || attempt === MAX_PROVIDER_ATTEMPTS) return null;
+      const delay = RETRY_BASE_MS * (2 ** (attempt - 1));
+      console.warn(`${agentId}: ${providerName} temporary failure; retrying after ${delay}ms.`);
+      await sleep(delay);
+    }
+  }
+  return null;
 }
 
 async function runAgent(agent, context, checkpoint) {
@@ -185,21 +253,17 @@ async function runAgent(agent, context, checkpoint) {
   for (const providerName of providerOrder) {
     const provider = providers[providerName];
     if (!provider) continue;
-    try {
-      const text = await provider(systemPrompt, taskPrompt);
-      const resultPath = path.join(RESULTS_DIR, `${agent.id}.md`);
-      fs.writeFileSync(resultPath, `# ${agent.id}\n\nProvider: ${providerName}\n\n${text}\n`);
-      checkpoint.completed.push(agent.id);
-      checkpoint.pending = checkpoint.pending.filter((id) => id !== agent.id);
-      checkpoint.results[agent.id] = { provider: providerName, path: path.relative(ROOT, resultPath) };
-      saveCheckpoint(checkpoint);
-      return true;
-    } catch (error) {
-      checkpoint.providerFailures.push({ agent: agent.id, provider: providerName, at: new Date().toISOString(), message: String(error.message || error).slice(0, 1200) });
-      saveCheckpoint(checkpoint);
-      if (error.unavailable || error.rateLimited) continue;
-      continue;
-    }
+    const text = await tryProvider(agent.id, providerName, provider, systemPrompt, taskPrompt, checkpoint);
+    if (!text) continue;
+
+    const resultPath = path.join(RESULTS_DIR, `${agent.id}.md`);
+    fs.writeFileSync(resultPath, `# ${agent.id}\n\nProvider: ${providerName}\n\n${text}\n`);
+    if (!checkpoint.completed.includes(agent.id)) checkpoint.completed.push(agent.id);
+    checkpoint.pending = checkpoint.pending.filter((id) => id !== agent.id);
+    checkpoint.results[agent.id] = { provider: providerName, path: path.relative(ROOT, resultPath) };
+    saveCheckpoint(checkpoint);
+    console.log(`${agent.id}: completed with ${providerName}`);
+    return true;
   }
   return false;
 }
@@ -227,12 +291,23 @@ async function main() {
   }
 
   const checkpoint = loadCheckpoint(sha, selectedIds);
-  const context = buildContext(deterministic);
-  for (const agent of selected) {
+  const chief = selected.find((agent) => agent.id === 'wms-chief-of-staff');
+  const specialists = selected.filter((agent) => agent.id !== 'wms-chief-of-staff');
+  const specialistContext = buildContext(deterministic, checkpoint, false);
+
+  for (const agent of specialists) {
     if (!checkpoint.pending.includes(agent.id)) continue;
-    const completed = await runAgent(agent, context, checkpoint);
+    const completed = await runAgent(agent, specialistContext, checkpoint);
     if (!completed) {
-      console.warn(`${agent.id}: no reasoning provider available; kept pending.`);
+      console.warn(`${agent.id}: no reasoning provider completed; kept pending.`);
+    }
+  }
+
+  if (chief && checkpoint.pending.includes(chief.id)) {
+    const chiefContext = buildContext(deterministic, checkpoint, true);
+    const completed = await runAgent(chief, chiefContext, checkpoint);
+    if (!completed) {
+      console.warn(`${chief.id}: no reasoning provider completed; kept pending.`);
     }
   }
 
