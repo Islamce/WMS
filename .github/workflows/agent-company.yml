@@ -20,6 +20,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 concurrency:
   group: wms-agent-company-${{ github.ref }}
@@ -105,6 +106,75 @@ jobs:
             wms-agent-reasoning-${{ github.ref_name }}-${{ github.run_id }}-
             wms-agent-reasoning-${{ github.ref_name }}-35260003274-
             wms-agent-reasoning-${{ github.ref_name }}-
+
+      # Recovery guard: if a newer cache was reset by an orchestration-only SHA change,
+      # prefer the last known healthy semantic snapshot. The compatibility check below
+      # still refuses recovery when any WMS product path changed.
+      - name: Download last healthy reasoning snapshot
+        if: success()
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: wms-agent-company-35260003274-12
+          path: /tmp/wms-agent-recovery
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 35260003274
+
+      - name: Prefer healthier compatible reasoning checkpoint
+        if: success()
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const path = require('path');
+          const { spawnSync } = require('child_process');
+          const currentPath = 'artifacts/agent-company/reasoning-checkpoint.json';
+          const recoveryPath = '/tmp/wms-agent-recovery/reasoning-checkpoint.json';
+          const deterministicPath = 'artifacts/agent-company/deterministic-report.json';
+          if (!fs.existsSync(recoveryPath) || !fs.existsSync(deterministicPath)) process.exit(0);
+
+          const recovery = JSON.parse(fs.readFileSync(recoveryPath, 'utf8'));
+          const deterministic = JSON.parse(fs.readFileSync(deterministicPath, 'utf8'));
+          const current = fs.existsSync(currentPath) ? JSON.parse(fs.readFileSync(currentPath, 'utf8')) : { completed: [] };
+          const recoveryCount = Array.isArray(recovery.completed) ? recovery.completed.length : 0;
+          const currentCount = Array.isArray(current.completed) ? current.completed.length : 0;
+          if (recoveryCount <= currentCount) {
+            console.log(`Healthy recovery not needed: current=${currentCount}, recovery=${recoveryCount}.`);
+            process.exit(0);
+          }
+
+          const diff = spawnSync('git', ['diff', '--name-only', recovery.sha, deterministic.sha], { encoding: 'utf8' });
+          if (diff.status !== 0) {
+            console.log(`Healthy recovery refused: cannot compare ${recovery.sha}..${deterministic.sha}.`);
+            process.exit(0);
+          }
+          const changed = diff.stdout.split(/\r?\n/).map((p) => p.trim()).filter(Boolean);
+          const allowed = (p) =>
+            p === '.github/workflows/agent-company.yml' ||
+            p.startsWith('scripts/agent-company/') ||
+            p.startsWith('.agent-company/') ||
+            p.startsWith('.claude/agents/') ||
+            p.startsWith('.ai/');
+          const unsafe = changed.filter((p) => !allowed(p));
+          if (unsafe.length) {
+            console.log(`Healthy recovery refused; product/non-agent paths changed: ${unsafe.join(', ')}`);
+            process.exit(0);
+          }
+
+          const priorSha = recovery.sha;
+          recovery.carriedForwardFrom = Array.from(new Set([...(recovery.carriedForwardFrom || []), priorSha]));
+          recovery.sha = deterministic.sha;
+          recovery.updatedAt = new Date().toISOString();
+          fs.mkdirSync(path.dirname(currentPath), { recursive: true });
+          fs.writeFileSync(currentPath, `${JSON.stringify(recovery, null, 2)}\n`);
+          const sourceDir = '/tmp/wms-agent-recovery/reasoning';
+          const targetDir = 'artifacts/agent-company/reasoning';
+          if (fs.existsSync(sourceDir)) {
+            fs.rmSync(targetDir, { recursive: true, force: true });
+            fs.cpSync(sourceDir, targetDir, { recursive: true });
+          }
+          console.log(`Recovered healthy reasoning snapshot: ${recoveryCount}/16 from ${priorSha}; ${changed.length} infrastructure-only path(s) changed.`);
+          NODE
 
       - name: Carry forward compatible reasoning checkpoint
         if: success()
