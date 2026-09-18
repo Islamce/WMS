@@ -2,6 +2,7 @@ name: WMS Agent Company
 
 on:
   workflow_dispatch:
+    # Fresh-run trigger keeps checkpoint carry-forward logic on the current workflow graph.
   schedule:
     # Primary daily company pulse: 08:00 Asia/Riyadh (UTC+3).
     - cron: '0 5 * * *'
