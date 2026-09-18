@@ -1,18 +1,18 @@
 {
   "_meta": {
     "artifact": "modules/wms-ops-scripts.json",
-    "bodyDigest": "a268fbe0392674c201804288ea2b3b9dfd4fab81888b79f6288d9a7b78b5b138",
+    "bodyDigest": "d02b539f57f7e3042597039290f3264b51627edcaa3f3029698745efcdc80140",
     "confidence": "verified",
     "doNotEdit": true,
     "generator": "kaaf",
     "generatorVersion": "0.7.0",
-    "inputDigest": "7b10116ba945fda9ab6104b96cf2c168bc6454cb8933b8d7a951024efcafc7c2",
+    "inputDigest": "f6f016e527f55b7f815c0c7d090aaa1a51d041c4d5ba06268fa059fe91dc6ba9",
     "provenanceNote": "Generated from the declared kaaf.repo.json and kaaf.module.json manifests. No wall-clock time or commit SHA is embedded: both would break byte-identical regeneration. Use git history for when and from which commit.",
     "schemaVersion": "1.0.0"
   },
   "apis": [],
   "confidence": "verified",
-  "confidenceReason": "Declared and corroborated by 16 discovered code file(s).",
+  "confidenceReason": "Declared and corroborated by 18 discovered code file(s).",
   "declared": true,
   "declaredConfidence": "verified",
   "dependedOnBy": [
@@ -23,6 +23,8 @@
   ],
   "discovery": {
     "codeFiles": [
+      "scripts/agent-company/run-deterministic.js",
+      "scripts/agent-company/run-reasoning.js",
       "scripts/backup-retention.js",
       "scripts/backup-select.js",
       "scripts/backup.js",
@@ -42,6 +44,8 @@
     ],
     "discovered": true,
     "entryPoints": [
+      "scripts/agent-company/run-deterministic.js",
+      "scripts/agent-company/run-reasoning.js",
       "scripts/backup-retention.js",
       "scripts/backup-select.js",
       "scripts/backup.js",
@@ -64,6 +68,8 @@
     "parseErrors": [],
     "publicSymbols": [],
     "sourceFiles": [
+      "scripts/agent-company/run-deterministic.js",
+      "scripts/agent-company/run-reasoning.js",
       "scripts/backup-retention.js",
       "scripts/backup-select.js",
       "scripts/backup.js",

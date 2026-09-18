@@ -1,0 +1,311 @@
+name: WMS Agent Company
+
+on:
+  workflow_dispatch:
+    # Fresh-run trigger keeps checkpoint carry-forward logic on the current workflow graph.
+  schedule:
+    # Primary daily company pulse: 08:00 Asia/Riyadh (UTC+3).
+    - cron: '0 5 * * *'
+    # Independent continuation windows for pending reasoning checkpoints.
+    # These runs are deliberately short/bounded; KAAF and deterministic gates still run first.
+    - cron: '0 1,9,13,17,21 * * *'
+  push:
+    branches:
+      - chore/agent-operating-company
+    paths:
+      - '.agent-company/**'
+      - '.claude/agents/**'
+      - 'scripts/agent-company/**'
+      - '.github/workflows/agent-company.yml'
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: wms-agent-company-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  company:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # A GitHub rerun checks out the historical run SHA, even when the branch has
+      # advanced through a KAAF-generated commit. This company workflow is a
+      # branch-state pulse rather than immutable CI evidence, so normalize to the
+      # current branch tip before refreshing KAAF or running company checks.
+      - name: Sync current agent-company branch tip
+        if: github.ref_name == 'chore/agent-operating-company'
+        run: |
+          set -Eeuo pipefail
+          git fetch origin "$GITHUB_REF_NAME"
+          current_sha="$(git rev-parse HEAD)"
+          remote_sha="$(git rev-parse "origin/$GITHUB_REF_NAME")"
+          if [ "$current_sha" != "$remote_sha" ]; then
+            echo "Historical workflow snapshot $current_sha; advancing to current branch tip $remote_sha."
+            git reset --hard "origin/$GITHUB_REF_NAME"
+          fi
+
+      # KAAF owns architecture context. Run it on a clean source workspace before
+      # restoring any generated agent reports/checkpoints so advisory outputs can
+      # never become architecture inputs. Generated .ai files remain KAAF-owned.
+      - name: Refresh KAAF context on agent-company branch
+        if: github.ref_name == 'chore/agent-operating-company'
+        run: |
+          set -Eeuo pipefail
+          python3 scripts/architecture/generate.py
+          if ! git diff --quiet -- .ai; then
+            git config user.name 'kynox-kaaf-bot'
+            git config user.email 'actions@users.noreply.github.com'
+            git add .ai
+            git commit -m 'Refresh KAAF context for agent company'
+            git push origin HEAD:"$GITHUB_REF_NAME"
+          fi
+
+      - name: Run deterministic company
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/agent-company/run-deterministic.js --full
+
+      - name: Publish deterministic report to job summary
+        if: always()
+        run: |
+          if [ -f artifacts/agent-company/deterministic-report.md ]; then
+            cat artifacts/agent-company/deterministic-report.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      # Restore only semantic reasoning state after KAAF and deterministic gates.
+      # A unique key per run attempt ensures reruns can save an updated checkpoint.
+      # The pinned recovery prefix preserves the pre-orchestration checkpoint; the
+      # compatibility gate below accepts it only when every intervening path is
+      # agent/KAAF infrastructure and no WMS product path changed.
+      - name: Restore prior reasoning checkpoint
+        if: success()
+        uses: actions/cache@v4
+        with:
+          path: |
+            artifacts/agent-company/reasoning-checkpoint.json
+            artifacts/agent-company/reasoning
+          key: wms-agent-reasoning-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            wms-agent-reasoning-${{ github.ref_name }}-${{ github.run_id }}-
+            wms-agent-reasoning-${{ github.ref_name }}-35260003274-
+            wms-agent-reasoning-${{ github.ref_name }}-
+
+      # Recovery guard: if a newer cache was reset by an orchestration-only SHA change,
+      # prefer the last known healthy semantic snapshot. The compatibility check below
+      # still refuses recovery when any WMS product path changed.
+      - name: Download last healthy reasoning snapshot
+        if: success()
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: wms-agent-company-35260003274-12
+          path: /tmp/wms-agent-recovery
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 35260003274
+
+      - name: Prefer healthier compatible reasoning checkpoint
+        if: success()
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const path = require('path');
+          const { spawnSync } = require('child_process');
+          const currentPath = 'artifacts/agent-company/reasoning-checkpoint.json';
+          const recoveryPath = '/tmp/wms-agent-recovery/reasoning-checkpoint.json';
+          const deterministicPath = 'artifacts/agent-company/deterministic-report.json';
+          if (!fs.existsSync(recoveryPath) || !fs.existsSync(deterministicPath)) process.exit(0);
+
+          const recovery = JSON.parse(fs.readFileSync(recoveryPath, 'utf8'));
+          const deterministic = JSON.parse(fs.readFileSync(deterministicPath, 'utf8'));
+          const current = fs.existsSync(currentPath) ? JSON.parse(fs.readFileSync(currentPath, 'utf8')) : { completed: [] };
+          const recoveryCount = Array.isArray(recovery.completed) ? recovery.completed.length : 0;
+          const currentCount = Array.isArray(current.completed) ? current.completed.length : 0;
+          if (recoveryCount <= currentCount) {
+            console.log(`Healthy recovery not needed: current=${currentCount}, recovery=${recoveryCount}.`);
+            process.exit(0);
+          }
+
+          const diff = spawnSync('git', ['diff', '--name-only', recovery.sha, deterministic.sha], { encoding: 'utf8' });
+          if (diff.status !== 0) {
+            console.log(`Healthy recovery refused: cannot compare ${recovery.sha}..${deterministic.sha}.`);
+            process.exit(0);
+          }
+          const changed = diff.stdout.split(/\r?\n/).map((p) => p.trim()).filter(Boolean);
+          const allowed = (p) =>
+            p === '.github/workflows/agent-company.yml' ||
+            p.startsWith('scripts/agent-company/') ||
+            p.startsWith('.agent-company/') ||
+            p.startsWith('.claude/agents/') ||
+            p.startsWith('.ai/');
+          const unsafe = changed.filter((p) => !allowed(p));
+          if (unsafe.length) {
+            console.log(`Healthy recovery refused; product/non-agent paths changed: ${unsafe.join(', ')}`);
+            process.exit(0);
+          }
+
+          const priorSha = recovery.sha;
+          recovery.carriedForwardFrom = Array.from(new Set([...(recovery.carriedForwardFrom || []), priorSha]));
+          recovery.sha = deterministic.sha;
+          recovery.updatedAt = new Date().toISOString();
+          fs.mkdirSync(path.dirname(currentPath), { recursive: true });
+          fs.writeFileSync(currentPath, `${JSON.stringify(recovery, null, 2)}\n`);
+          const sourceDir = '/tmp/wms-agent-recovery/reasoning';
+          const targetDir = 'artifacts/agent-company/reasoning';
+          if (fs.existsSync(sourceDir)) {
+            fs.rmSync(targetDir, { recursive: true, force: true });
+            fs.cpSync(sourceDir, targetDir, { recursive: true });
+          }
+          console.log(`Recovered healthy reasoning snapshot: ${recoveryCount}/16 from ${priorSha}; ${changed.length} infrastructure-only path(s) changed.`);
+          NODE
+
+      - name: Carry forward compatible reasoning checkpoint
+        if: success()
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const { spawnSync } = require('child_process');
+          const checkpointPath = 'artifacts/agent-company/reasoning-checkpoint.json';
+          const deterministicPath = 'artifacts/agent-company/deterministic-report.json';
+          if (!fs.existsSync(checkpointPath) || !fs.existsSync(deterministicPath)) process.exit(0);
+
+          const checkpoint = JSON.parse(fs.readFileSync(checkpointPath, 'utf8'));
+          const deterministic = JSON.parse(fs.readFileSync(deterministicPath, 'utf8'));
+          if (!checkpoint.sha || checkpoint.sha === deterministic.sha) process.exit(0);
+
+          const diff = spawnSync('git', ['diff', '--name-only', checkpoint.sha, deterministic.sha], { encoding: 'utf8' });
+          if (diff.status !== 0) {
+            console.log(`Checkpoint carry-forward refused: cannot compare ${checkpoint.sha}..${deterministic.sha}.`);
+            process.exit(0);
+          }
+          const changed = diff.stdout.split(/\r?\n/).map((p) => p.trim()).filter(Boolean);
+          const allowed = (p) =>
+            p === '.github/workflows/agent-company.yml' ||
+            p.startsWith('scripts/agent-company/') ||
+            p.startsWith('.agent-company/') ||
+            p.startsWith('.claude/agents/') ||
+            p.startsWith('.ai/');
+          const unsafe = changed.filter((p) => !allowed(p));
+          if (unsafe.length) {
+            console.log(`Checkpoint carry-forward refused; product/non-agent paths changed: ${unsafe.join(', ')}`);
+            process.exit(0);
+          }
+
+          const priorSha = checkpoint.sha;
+          checkpoint.carriedForwardFrom = Array.from(new Set([...(checkpoint.carriedForwardFrom || []), priorSha]));
+          checkpoint.sha = deterministic.sha;
+          checkpoint.updatedAt = new Date().toISOString();
+          fs.writeFileSync(checkpointPath, `${JSON.stringify(checkpoint, null, 2)}\n`);
+          console.log(`Checkpoint carried forward ${priorSha} -> ${deterministic.sha}; ${changed.length} infrastructure-only path(s) changed.`);
+          NODE
+
+      # Reasoning is optional/advisory and never allowed to waive deterministic/KAAF gates.
+      # Claude-compatible briefs are provider-independent through the registry.
+      # Each run is intentionally bounded so quota/token/provider limits persist a checkpoint
+      # and return control instead of holding a GitHub runner until timeout.
+      # Gemini uses stable model IDs. 5xx capacity errors, provider timeouts, and model-specific
+      # 429 limits fall through the stable model chain; checkpoint state remains authoritative.
+      - name: Run reasoning specialists when a provider is configured
+        if: success()
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL_PRIMARY: ${{ vars.GEMINI_MODEL || 'gemini-3.8-flash' }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_MODEL: ${{ vars.ANTHROPIC_MODEL }}
+          OLLAMA_BASE_URL: ${{ vars.OLLAMA_BASE_URL }}
+          OLLAMA_MODEL: ${{ vars.OLLAMA_MODEL }}
+          AGENT_PROVIDER_TIMEOUT_MS: '30000'
+          AGENT_PROVIDER_MAX_ATTEMPTS: '1'
+          AGENT_PROVIDER_PACING_MS: '3000'
+          AGENT_REASONING_BATCH_SIZE: '2'
+          AGENT_STOP_BATCH_ON_PROVIDER_LIMIT: 'false'
+        run: |
+          set -Eeuo pipefail
+          if [ -z "${GEMINI_API_KEY:-}" ] && [ -z "${ANTHROPIC_API_KEY:-}" ] && [ -z "${OLLAMA_BASE_URL:-}" ]; then
+            echo 'No reasoning provider configured. Deterministic company completed; semantic queue remains pending.'
+            exit 0
+          fi
+
+          # If Gemini is not configured, retain provider-independent Anthropic/Ollama execution.
+          if [ -z "${GEMINI_API_KEY:-}" ]; then
+            node scripts/agent-company/run-reasoning.js
+            exit 0
+          fi
+
+          models=("${GEMINI_MODEL_PRIMARY}" 'gemini-3.7-flash' 'gemini-3.6-flash')
+          tried='|'
+          for model in "${models[@]}"; do
+            if [[ "$tried" == *"|${model}|"* ]]; then
+              continue
+            fi
+            tried="${tried}${model}|"
+            export GEMINI_MODEL="$model"
+            echo "Reasoning batch: trying Gemini model ${model}."
+            node scripts/agent-company/run-reasoning.js
+
+            decision="$(node <<'NODE'
+          const fs = require('fs');
+          const p = 'artifacts/agent-company/reasoning-checkpoint.json';
+          if (!fs.existsSync(p)) {
+            console.log('stop');
+            process.exit(0);
+          }
+          const checkpoint = JSON.parse(fs.readFileSync(p, 'utf8'));
+          if (Number(checkpoint.lastBatch?.completed || 0) > 0) {
+            console.log('success');
+            process.exit(0);
+          }
+          const failure = [...(checkpoint.providerFailures || [])]
+            .reverse()
+            .find((item) => item.provider === 'gemini');
+          const message = String(failure?.message || '');
+          if (/Gemini HTTP 429\b/.test(message)) console.log('quota');
+          else if (/Gemini HTTP (500|502|503|504)\b/.test(message) || failure?.providerLimited === true) console.log('transient');
+          else console.log('stop');
+          NODE
+            )"
+
+            case "$decision" in
+              success)
+                echo "Gemini model ${model} completed reasoning work; preserving bounded batch semantics."
+                break
+                ;;
+              quota)
+                echo "Gemini quota exhausted on ${model}; trying next stable model while preserving checkpoint state."
+                ;;
+              transient)
+                echo "Gemini model ${model} is temporarily unavailable; trying next stable fallback."
+                ;;
+              *)
+                echo "No model-level fallback condition detected; preserving checkpoint."
+                break
+                ;;
+            esac
+          done
+
+      - name: Upload company reports and checkpoints
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: wms-agent-company-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/agent-company
+          if-no-files-found: warn
+          retention-days: 14

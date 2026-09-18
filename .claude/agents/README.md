@@ -1,107 +1,177 @@
-# The team, checked in
+# KYNOX WMS agent company
 
-Nine agent definitions that travel with this repository — a small company's worth
-of specialists: engineering, operations, the trade itself, and the commercial
-side. Eight review; one keeps the record. Any Claude Code
-session opened here can invoke them by name; they are not a running service and
-nothing keeps them alive between sessions. What is permanent is the KNOWLEDGE in
-them, not a process.
+These project agents are the operating staff for this repository. Their value is
+the project-specific knowledge in their briefs: incidents, escaped defects,
+workflow invariants, commercial boundaries and field realities learned while
+building this WMS.
 
-| Agent | Use it | It exists because |
+## Governance first
+
+**KAAF is the architecture authority.** No reasoning agent is allowed to bypass a
+failed KAAF freshness/drift gate, deterministic CI failure, production safety
+rule or Founder decision gate.
+
+The **Founder remains the final decision authority for material product/scope
+choices**. The runtime coordinates work; a model/provider does not become an
+approver merely because it generated a review.
+
+## Runtime independence
+
+The files in `.claude/agents/` remain Claude Code compatible, but **Claude Code is
+an adapter, not the company controller**. The canonical runtime contract is
+`.agent-company/registry.json` and the controller is `agent-company-runtime`.
+The same specialist brief can be executed by any configured reasoning provider.
+
+Current provider order is defined in the registry and is intentionally
+replaceable. A provider outage, token/quota limit or missing credential must not
+stop deterministic company work. The reasoning runtime checkpoints completed and
+pending agents and continues with another available provider. If no reasoning
+provider is available, deterministic checks finish and semantic work remains
+queued for resume.
+
+Never commit provider API keys. Providers read credentials from environment/
+secret stores only.
+
+## Company structure
+
+```text
+Founder / final decisions
+        |
+Agent Company Runtime
+        |
+WMS Chief of Staff
+        |
+        +-- Product & Commercial
+        |     +-- wms-product
+        |     +-- wms-market
+        |     +-- wms-customer-success
+        |     +-- wms-first-impression
+        |
+        +-- Domain
+        |     +-- wms-supply-chain
+        |
+        +-- Engineering, Data & Risk
+        |     +-- wms-architecture
+        |     +-- wms-reviewer
+        |     +-- wms-security
+        |     +-- wms-data-truth
+        |     +-- wms-data-integration
+        |     +-- wms-performance
+        |     +-- wms-mobile
+        |     +-- wms-qa
+        |     +-- wms-ops
+        |
+        +-- Organizational memory
+              +-- wms-lessons
+```
+
+`wms-lessons` is intentionally outside the review chain. It records a lesson only
+after evidence proves the defect/incident and may write only under `docs/vault`.
+
+## Roles
+
+| Agent | Company role | Question it owns |
 |---|---|---|
-| `wms-reviewer` | Before merging or deploying any change | It was written from the defects that reached a branch: a document number that could be issued twice, and a third table naming screens |
-| `wms-security` | When routes, middleware, permissions, database scripts or workflows change | It found a line that would have misled an operator trying to get a warehouse out of read-only, and 46 committed bytecode files |
-| `wms-first-impression` | After any change to `public/js`, and before showing the product to a customer | It found nineteen screens showing the user two different names at the same moment, on a change whose author had just declared the problem solved |
-| `wms-lessons` | After a review finds something, after a defect escapes, after an incident | The reviewers find the same *class* of defect repeatedly, because nothing was written down between one session and the next. It writes to `docs/vault` |
-| `wms-data-truth` | After any change to a dashboard, KPI, report, chart or analytics query | Twelve reporting defects in one sitting — three screens answering "how much stock is there" with three different numbers, none of them labelled, and a 30-day chart with two points on it |
-| `wms-ops` | Before a deploy or a migration; any change touching the VPS or the live database | A deploy workflow sat dispatchable and pointed at a host retired weeks earlier, and an approval gate that was documented, cited, and did not exist |
-| `wms-supply-chain` | When a workflow, movement, reservation, allocation, receipt, issue or return changes | The product is sold to contractors, and the failure that costs a pilot is designing for somebody else's warehouse — racked aisles for a store that is two yard areas and three racks |
-| `wms-performance` | When a query, list screen, report or import changes, or a table will grow | One SQLite file, one writer at a time. A slow report does not just feel slow — it holds a lock while a storekeeper is posting a goods issue |
-| `wms-market` | Before a demo or a sales conversation; when a feature is proposed to win customers | The alternative a contractor is really comparing against is Excel and a paper book, and features that win the meeting are not the ones that get renewed |
-| `wms-mobile` | When the Flutter app changes, or the web product changes and the app must follow | The app carries its own screen-name table and already disagrees with the web on eight screens — drift is its normal state, not an exception |
+| `wms-chief-of-staff` | Chief of Staff | What changed, what matters now, and what is the ordered work? |
+| `wms-product` | Product Lead | Who has the problem, what outcome are we selling, and does it belong in WMS? |
+| `wms-market` | Commercial Lead | Will this win/retain the target contractor customer? |
+| `wms-customer-success` | Customer Success / Pilot Lead | Can a customer onboard, adopt and prove value without the builder present? |
+| `wms-supply-chain` | Contracting/WMS Domain Lead | Would a real site storekeeper and project engineer actually work this way? |
+| `wms-first-impression` | Customer Experience Lead | What does the user/buyer see in first minutes and daily use? |
+| `wms-architecture` | Principal Architect | Are boundaries, data authority and web/API/mobile/edition contracts coherent? |
+| `wms-reviewer` | Senior Engineering Reviewer | Is this specific change correct and complete before merge/deploy? |
+| `wms-security` | Security & Authority Reviewer | What can a user, script, stale agent or workflow reach that it should not? |
+| `wms-data-truth` | Data/BI Assurance Lead | Do customer-facing numbers mean exactly what their labels claim? |
+| `wms-data-integration` | Data & Integration Lead | Are imports, mappings, APIs, UOMs and source-system boundaries safe/replayable? |
+| `wms-performance` | Performance/Capacity Lead | Will this hold at measured workload and growth path? |
+| `wms-mobile` | Mobile/Field Operations Lead | Does Flutter match API/web semantics and survive site conditions? |
+| `wms-qa` | Quality & UAT Lead | Does the evidence actually prove the claimed customer behaviour? |
+| `wms-ops` | SRE/Release/Recovery Lead | Is it safe to migrate/deploy/backup/restore the live warehouse? |
+| `wms-lessons` | Organizational Memory | What did a paid-for failure teach and where should that knowledge live? |
 
-## How they divide the work
+## Two operating tracks
 
-Each owns one question nobody else asks:
+### Track A — deterministic company (no LLM)
 
-| | |
+`scripts/agent-company/run-deterministic.js` is the non-LLM operating layer. It
+validates the agent registry, enforces KAAF freshness/drift, scans tracked text
+for high-confidence secret patterns, runs objective quality gates, checks known
+policy regressions and produces Markdown/JSON reports.
+
+Deterministic facts outrank model opinion. A reasoning agent cannot turn a failed
+KAAF/test/security gate into a pass.
+
+### Track B — reasoning company (provider independent)
+
+`scripts/agent-company/run-reasoning.js` loads these same specialist briefs and
+runs them through configured providers. It writes a checkpoint after each agent.
+Provider limits/errors trigger fallback to the next provider; unfinished agents
+stay pending and resume later rather than restarting completed work.
+
+Reasoning agents report. They do not mutate production or silently become code
+authors. Implementation remains a separate role/session/process.
+
+## Dispatch: do not run the whole company on every change
+
+| Change/question | Minimum specialist set |
 |---|---|
-| `wms-reviewer` | Is the change correct? |
-| `wms-data-truth` | Do the numbers mean what the labels say? |
-| `wms-security` | What can a warehouse employee, or a mistyped command, reach? |
-| `wms-performance` | Does it hold on a real day's data? |
-| `wms-ops` | Is it safe to put in front of a live warehouse? |
-| `wms-supply-chain` | Would a site storekeeper actually work this way? |
-| `wms-first-impression` | What does a user, and a buyer, see? |
-| `wms-market` | Does it win or keep a customer? |
-| `wms-lessons` | What did this teach, and where is it written down? |
+| Route/middleware/permission | `wms-reviewer` + `wms-security` |
+| Workflow/state/allocation/receipt/issue/return | `wms-supply-chain` + `wms-reviewer` + `wms-qa` |
+| Tenant profile/module/subscription | `wms-architecture` + `wms-security` + `wms-market` |
+| Dashboard/KPI/report/analytics | `wms-data-truth` + `wms-performance` |
+| Import/mapping/API/ERP sync/UOM | `wms-data-integration` + `wms-data-truth`; add architecture/security when authority changes |
+| Large query/import/list | `wms-performance` + `wms-qa` |
+| Flutter/mobile change | `wms-mobile` + `wms-qa`; add domain/security when stock/authority moves |
+| Web wording/navigation/first-run | `wms-first-impression` + `wms-product` |
+| Pilot/onboarding/customer feedback | `wms-customer-success` + `wms-product` + relevant specialist |
+| Feature/roadmap proposal | `wms-product` + `wms-market` + relevant domain/architecture reviewer |
+| Migration/deploy/backup/recovery | `wms-ops` + `wms-security` + `wms-qa` |
+| Branch declared complete | `wms-reviewer` + specialists for changed areas |
+| Several specialist reports disagree | `wms-chief-of-staff` consolidates; Founder decides material scope conflicts |
 
-Do not run all nine on every change. Run the two or three whose question the
-change actually raises — a naming fix needs `first-impression` and `reviewer`; a
-report needs `data-truth`; a deploy needs `ops` and `security`. Running the whole
-team on a small change is how a review team becomes noise that gets skipped.
+Running all agents on a small rename is review theatre. Precise evidence-backed
+reviews are better than a large pile of generic reports.
 
-## Why these are project agents rather than a general-purpose collection
+## Operating cadence
 
-Generic reviewer agents are available and were tried. The findings that mattered
-came from briefs that named THIS codebase's traps — that the edition is checked
-before the admin short-circuit, that `reservation_number` is required on every
-outbound movement, that production is an unconfigured install where every
-migration must be inert. A reviewer that does not know those looks at the same
-diff and sees nothing wrong.
+### On every material change
 
-So each definition carries a list of things that actually went wrong here. When a
-new class of defect gets through, add it to the relevant agent rather than
-remembering it; that is the whole point of them being files.
+1. KAAF/deterministic gates run first.
+2. Runtime maps changed paths/claims to the dispatch table.
+3. Relevant specialists review independently and report only.
+4. `wms-chief-of-staff` consolidates conflicts/priorities.
+5. Separate implementation role fixes verified findings.
+6. Reviewer/QA re-check the candidate.
+7. Founder accepts/rejects material product/scope decisions.
 
-## Using them
+### Daily company pulse
 
-`Agent({ subagent_type: "wms-reviewer", prompt: "..." })`, or ask Claude to
-review a branch and it will pick the right one from the descriptions.
+The daily run is read-only with respect to product/production data. It captures
+current SHA, relevant PR/CI/release evidence, KAAF status, deterministic findings,
+changed domains and queued reasoning work. It reports `NO MATERIAL CHANGE` when
+that is true.
 
-They are picked up from disk without a restart, EXCEPT the first time a
-`.claude/agents/` directory is created in a session that started without one —
-that case needs the session restarted. Editing a definition afterwards takes
-effect within seconds.
+### Weekly board
 
-Each is set to `effort: high` deliberately. The findings that mattered came from
-reading the surrounding code and testing a hypothesis, not from a skim, and a
-reviewer that skims is worse than none because its silence gets trusted.
+Rotate deeper checks across product/market/domain, architecture/security,
+data/performance/integration, mobile/QA/UX, ops/recovery and agent calibration.
+The board produces one ordered backlog, not independent departmental wish lists.
 
-## The rule that makes them worth having
+## Calibration rule
 
-**The reviewers review, they never edit.** Each of the three definitions says so.
-A reviewer that fixes what it finds stops being independent, and its next report
-becomes a description of its own work.
+Historical traps are regression checks, not permanent defects. Re-read current
+code/test evidence before repeating any concrete count, path, latency or failure.
+If a historical issue is fixed, report `REGRESSION CHECK PASSED` and calibrate the
+brief in a dedicated maintenance change.
 
-`wms-lessons` is the deliberate exception and the only one that writes. It is
-allowed to, because it writes **only** under `docs/vault` — never product code,
-tests or configuration. It records what the reviewers found; it does not act on
-it. Keeping those two jobs in separate agents is what stops the record from
-becoming an account of the recorder's own work.
+## Independence rule
 
-They are also worth most on work whose author is confident. The single most
-valuable finding so far came from asking a reviewer to check claims an author had
-written in a pull request body — three of the four were true, and the fourth had
-shipped.
+Reviewers review; they do not edit product code. `wms-lessons` is the only
+writing exception and may write only under `docs/vault`. Production mutation by
+agents is forbidden by the registry.
 
-## What they do NOT replace
+## What the company does not replace
 
-The deterministic gates in `tests/run.sh`, `npm run test:smoke`, `npx eslint` and
-the two KAAF checks in CI. Those decide pass or fail without judgement and run on
-every push. The agents are for the questions those cannot answer.
-
-Nor do they replace a person using the product for a day. No agent has ever
-noticed that a screen is annoying to use.
-
-## The second brain
-
-`docs/vault` is an Obsidian vault committed to the repository, owning one thing:
-**how work on this product actually failed, and what caught it.** It links to
-`CLAUDE.md`, the decision log and the incident log rather than restating them.
-
-Open it with Obsidian → *Open folder as vault* → `docs/vault`, and start at
-`Map/00 Start Here.md`. `wms-lessons` proposes the notes; a human decides whether
-the lesson was real. The bar is deliberately high — a lesson must have been paid
-for. A vault of forty notes gets read; a vault of four hundred is where the four
-that mattered go to be lost.
+It does not replace KAAF, deterministic tests, real-device UAT, customer pilots or
+human scope decisions. Camera behaviour, gloves, sunlight, poor network and
+customer adoption require field evidence. A model cannot certify them from prose.

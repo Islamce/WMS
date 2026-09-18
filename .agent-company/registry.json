@@ -1,0 +1,162 @@
+{
+  "schemaVersion": "1.0.0",
+  "company": "KYNOX WMS",
+  "product": "wms",
+  "governance": {
+    "architectureAuthority": "KAAF",
+    "founderFinalDecision": true,
+    "deterministicFirst": true,
+    "reasoningIsAdvisory": true,
+    "productionMutationByAgents": false,
+    "providerIndependent": true,
+    "checkpointRequired": true
+  },
+  "runtime": {
+    "controller": "agent-company-runtime",
+    "promptFormat": "claude-code-compatible-markdown",
+    "providerOrder": ["gemini", "anthropic", "ollama"],
+    "onProviderLimit": "checkpoint-and-continue",
+    "onNoReasoningProvider": "complete-deterministic-work-and-queue-reasoning"
+  },
+  "agents": [
+    {
+      "id": "wms-chief-of-staff",
+      "department": "executive",
+      "prompt": ".claude/agents/wms-chief-of-staff.md",
+      "requiresReasoning": true,
+      "writeScope": "none",
+      "escalatesTo": "founder"
+    },
+    {
+      "id": "wms-product",
+      "department": "product-commercial",
+      "prompt": ".claude/agents/wms-product.md",
+      "requiresReasoning": true,
+      "writeScope": "none",
+      "escalatesTo": "wms-chief-of-staff"
+    },
+    {
+      "id": "wms-market",
+      "department": "product-commercial",
+      "prompt": ".claude/agents/wms-market.md",
+      "requiresReasoning": true,
+      "writeScope": "none",
+      "escalatesTo": "wms-chief-of-staff"
+    },
+    {
+      "id": "wms-customer-success",
+      "department": "product-commercial",
+      "prompt": ".claude/agents/wms-customer-success.md",
+      "requiresReasoning": true,
+      "writeScope": "none",
+      "escalatesTo": "wms-product"
+    },
+    {
+      "id": "wms-supply-chain",
+      "department": "domain",
+      "prompt": ".claude/agents/wms-supply-chain.md",
+      "requiresReasoning": true,
+      "writeScope": "none",
+      "escalatesTo": "wms-chief-of-staff"
+    },
+    {
+      "id": "wms-first-impression",
+      "department": "experience",
+      "prompt": ".claude/agents/wms-first-impression.md",
+      "requiresReasoning": true,
+      "writeScope": "none",
+      "escalatesTo": "wms-product"
+    },
+    {
+      "id": "wms-architecture",
+      "department": "engineering-risk",
+      "prompt": ".claude/agents/wms-architecture.md",
+      "requiresReasoning": true,
+      "writeScope": "none",
+      "escalatesTo": "wms-chief-of-staff"
+    },
+    {
+      "id": "wms-reviewer",
+      "department": "engineering-risk",
+      "prompt": ".claude/agents/wms-reviewer.md",
+      "requiresReasoning": true,
+      "writeScope": "none",
+      "escalatesTo": "wms-chief-of-staff"
+    },
+    {
+      "id": "wms-security",
+      "department": "engineering-risk",
+      "prompt": ".claude/agents/wms-security.md",
+      "requiresReasoning": true,
+      "writeScope": "none",
+      "escalatesTo": "wms-chief-of-staff"
+    },
+    {
+      "id": "wms-data-truth",
+      "department": "data",
+      "prompt": ".claude/agents/wms-data-truth.md",
+      "requiresReasoning": true,
+      "writeScope": "none",
+      "escalatesTo": "wms-chief-of-staff"
+    },
+    {
+      "id": "wms-data-integration",
+      "department": "data",
+      "prompt": ".claude/agents/wms-data-integration.md",
+      "requiresReasoning": true,
+      "writeScope": "none",
+      "escalatesTo": "wms-architecture"
+    },
+    {
+      "id": "wms-performance",
+      "department": "engineering-risk",
+      "prompt": ".claude/agents/wms-performance.md",
+      "requiresReasoning": true,
+      "writeScope": "none",
+      "escalatesTo": "wms-chief-of-staff"
+    },
+    {
+      "id": "wms-mobile",
+      "department": "field-product",
+      "prompt": ".claude/agents/wms-mobile.md",
+      "requiresReasoning": true,
+      "writeScope": "none",
+      "escalatesTo": "wms-chief-of-staff"
+    },
+    {
+      "id": "wms-qa",
+      "department": "quality",
+      "prompt": ".claude/agents/wms-qa.md",
+      "requiresReasoning": true,
+      "writeScope": "none",
+      "escalatesTo": "wms-chief-of-staff"
+    },
+    {
+      "id": "wms-ops",
+      "department": "operations",
+      "prompt": ".claude/agents/wms-ops.md",
+      "requiresReasoning": true,
+      "writeScope": "none",
+      "escalatesTo": "wms-chief-of-staff"
+    },
+    {
+      "id": "wms-lessons",
+      "department": "organizational-memory",
+      "prompt": ".claude/agents/wms-lessons.md",
+      "requiresReasoning": true,
+      "writeScope": "docs/vault/**",
+      "escalatesTo": "wms-chief-of-staff"
+    }
+  ],
+  "deterministicChecks": [
+    "registry-integrity",
+    "kaaf-freshness",
+    "kaaf-drift",
+    "secret-pattern-scan",
+    "syntax",
+    "lint",
+    "dependency-audit",
+    "e2e-tests",
+    "known-policy-regressions"
+  ]
+}

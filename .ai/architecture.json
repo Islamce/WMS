@@ -1,12 +1,12 @@
 {
   "_meta": {
     "artifact": "architecture.json",
-    "bodyDigest": "71f8647f0080ee972047ae732020d0346e29c65647e4bcd891b0bf7bd2805bd0",
+    "bodyDigest": "e271ee047e76f92c0bb94d48d6acb74300f3486d70e01625b29440fcb30fb5e0",
     "confidence": "verified",
     "doNotEdit": true,
     "generator": "kaaf",
     "generatorVersion": "0.7.0",
-    "inputDigest": "7b10116ba945fda9ab6104b96cf2c168bc6454cb8933b8d7a951024efcafc7c2",
+    "inputDigest": "f6f016e527f55b7f815c0c7d090aaa1a51d041c4d5ba06268fa059fe91dc6ba9",
     "provenanceNote": "Generated from the declared kaaf.repo.json and kaaf.module.json manifests. No wall-clock time or commit SHA is embedded: both would break byte-identical regeneration. Use git history for when and from which commit.",
     "schemaVersion": "1.0.0"
   },
@@ -695,7 +695,7 @@
     },
     {
       "confidence": "verified",
-      "confidenceReason": "Declared and corroborated by 16 discovered code file(s).",
+      "confidenceReason": "Declared and corroborated by 18 discovered code file(s).",
       "declared": true,
       "declaredConfidence": "verified",
       "dependedOnBy": [
@@ -705,9 +705,11 @@
         "wms-api"
       ],
       "discovery": {
-        "codeFileCount": 16,
+        "codeFileCount": 18,
         "discovered": true,
         "entryPoints": [
+          "scripts/agent-company/run-deterministic.js",
+          "scripts/agent-company/run-reasoning.js",
           "scripts/backup-retention.js",
           "scripts/backup-select.js",
           "scripts/backup.js",
@@ -729,7 +731,7 @@
         ],
         "parseErrors": [],
         "publicSymbols": [],
-        "sourceFileCount": 17
+        "sourceFileCount": 19
       },
       "id": "wms-ops-scripts",
       "ownedEntities": [
@@ -764,7 +766,7 @@
         ],
         "parseErrors": [],
         "publicSymbols": [],
-        "sourceFileCount": 103
+        "sourceFileCount": 111
       },
       "id": "wms-runtime-entry",
       "ownedEntities": [
