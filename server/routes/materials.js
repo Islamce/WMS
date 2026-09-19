@@ -45,9 +45,11 @@ router.get('/search', requirePermission(['materials', 'stock_in', 'stock_out', '
 
 /**
  * GET /api/materials — paginated list with search, filters and sorting.
- * Stock figures are computed live from batches (the WMS execution stock,
- * moved by GR / GI / counts / reallocation) plus the basic location stock, so
- * the master always reflects reality without any manual refresh.
+ * Stock figures are computed live from batches (the WMS execution stock, moved
+ * by GR / GI / counts / reallocation) plus any legacy location stock the
+ * batches do not already account for — see the expression below for why that
+ * qualifier is the whole point — so the master reflects reality without any
+ * manual refresh.
  * Query: search, group, type, stock=in|out|low, sort=<column>, dir=asc|desc.
  */
 const SORTABLE = {
@@ -71,25 +73,70 @@ router.get('/', requirePermission('materials'), (req, res) => {
   if ((req.query.type || '').trim()) { clauses.push('material_type = ?'); params.push(req.query.type.trim()); }
   const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
 
-  const stockExpr = `(
-    COALESCE((SELECT SUM(remaining_quantity) FROM batches WHERE material_id = m.id), 0)
-    + COALESCE((SELECT SUM(quantity) FROM material_location_stock WHERE material_id = m.id), 0))`;
+  // TWO LEDGERS, ONE STORE. `batches` is the execution ledger: goods receipt,
+  // put-away, picking, goods issue, counts and reallocation all move it.
+  // `material_location_stock` is moved only by the legacy stock-in/stock-out
+  // screens — and is ALSO written by the opening-stock importer, which writes
+  // BOTH ledgers for the same physical quantity. Adding them therefore
+  // double-counted every imported material: 2,843 of production's 9,746 on
+  // 2026-09-16, a third of the catalogue reading twice its real stock.
+  //
+  // This is a COMPENSATING EXPRESSION, not a model fix — the two ledgers still
+  // describe one store and that is the thing to fix properly one day. It counts
+  // batches in full, plus only those legacy rows whose location matches no
+  // batch bin for the same material: stock that exists in no batch, and so is
+  // not already counted. The import duplicates all match (their location IS the
+  // batch's bin), so they contribute nothing, while a material whose stock only
+  // ever came through /api/stock/in still shows it.
+  //
+  // The obvious alternative — COALESCE(batches, legacy) — was measured against
+  // production first and is narrower: it drops legacy stock held at a location
+  // with no batch whenever the material ALSO has batches. That case is 0 rows
+  // today (holds_real_legacy_stock_too=0) but any stock-in on a batch-managed
+  // material creates one, and it would then understate silently.
+  const batchExpr = 'COALESCE((SELECT SUM(remaining_quantity) FROM batches WHERE material_id = m.id), 0)';
+  const legacyExpr = `COALESCE((
+    SELECT SUM(s.quantity) FROM material_location_stock s
+    JOIN locations l ON l.id = s.location_id
+    WHERE s.material_id = m.id
+      AND NOT EXISTS (SELECT 1 FROM batches b WHERE b.material_id = m.id AND b.bin_location = l.code)
+  ), 0)`;
   const reservedExpr = 'COALESCE((SELECT SUM(reserved_quantity) FROM batches WHERE material_id = m.id), 0)';
 
-  // Stock filter runs over the computed figure (HAVING, after the subqueries).
-  const stockFilter = { in: `HAVING total_stock > 0`, out: `HAVING total_stock <= 0`, low: `HAVING total_stock > 0 AND available_stock <= 0` }[req.query.stock] || '';
+  // Each subquery runs ONCE per row: the components are computed in an inner
+  // select and the totals derived outside it. The previous shape inlined the
+  // stock and reserved expressions twice each (once for the figure, once inside
+  // available_stock), so this is three correlated subqueries per row where
+  // there were six.
+  const stockFilter = {
+    in: 'WHERE (m.batch_stock + m.legacy_stock) > 0',
+    out: 'WHERE (m.batch_stock + m.legacy_stock) <= 0',
+    low: 'WHERE (m.batch_stock + m.legacy_stock) > 0 AND (m.batch_stock + m.legacy_stock - m.reserved_stock) <= 0',
+  }[req.query.stock] || '';
 
   const orderCol = SORTABLE[req.query.sort] || 'm.item_code';
   const orderDir = req.query.dir === 'desc' ? 'DESC' : 'ASC';
 
   const base = `
-    SELECT m.*, ${stockExpr} AS total_stock, ${reservedExpr} AS reserved_stock,
-      (${stockExpr} - ${reservedExpr}) AS available_stock
-    FROM materials m ${where}
-    GROUP BY m.id ${stockFilter}`;
+    SELECT m.*, (m.batch_stock + m.legacy_stock) AS total_stock,
+      (m.batch_stock + m.legacy_stock - m.reserved_stock) AS available_stock
+    FROM (
+      SELECT m.*, ${batchExpr} AS batch_stock, ${legacyExpr} AS legacy_stock,
+        ${reservedExpr} AS reserved_stock
+      FROM materials m ${where}
+    ) m ${stockFilter}`;
   const total = db.prepare(`SELECT COUNT(*) AS n FROM (${base})`).get(...params).n;
-  const materials = db.prepare(`${base} ORDER BY ${orderCol} ${orderDir}, m.item_code LIMIT ? OFFSET ?`)
+  const rows = db.prepare(`${base} ORDER BY ${orderCol} ${orderDir}, m.item_code LIMIT ? OFFSET ?`)
     .all(...params, limit, offset);
+  // Say which ledgers the figure came from. A storekeeper who knows a material
+  // was imported and sees a number they did not expect can tell at a glance
+  // whether they are looking at execution stock, legacy stock, or both.
+  const materials = rows.map((m) => ({
+    ...m,
+    total_stock_source: m.batch_stock > 0 && m.legacy_stock > 0 ? 'batches + legacy locations'
+      : m.legacy_stock > 0 ? 'legacy locations'
+        : m.batch_stock > 0 ? 'batches' : 'none',
+  }));
 
   // Distinct filter values so the UI can build its dropdowns.
   const groups = db.prepare("SELECT DISTINCT material_group AS v FROM materials WHERE material_group != '' ORDER BY v").all().map((r) => r.v);

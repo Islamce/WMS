@@ -102,6 +102,9 @@ run_suite contracting_collapsed_chain_test.py
 run_suite first_hour_test.py
 run_suite import_examples_test.py
 run_suite analytics_truth_test.py
+# Boots its own server: the Materials master must report what is physically in
+# the store, across both ledgers, without counting the importer's mirror twice.
+run_suite materials_stock_truth_test.py
 # Every docs/** path cited in code or generated context must exist (handoff guard C5).
 node tests/e2e/documentation_paths_test.js || FAILED=1
 run_suite project_spend_test.py
