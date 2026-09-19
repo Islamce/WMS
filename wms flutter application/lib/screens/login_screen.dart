@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../main.dart';
 import '../widgets/common.dart';
+import '../widgets/server_setting.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -30,64 +31,85 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final session = SessionScope.of(context);
     return Scaffold(
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 420),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Image.asset('assets/brand/kynox_mark.png', width: 64, height: 64),
-                const SizedBox(height: 12),
-                Text('KYNOX WMS',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.headlineSmall
-                        ?.copyWith(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 4),
-                const Text('Warehouse Management System',
-                    textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
-                const SizedBox(height: 28),
-                TextField(
-                  controller: _email,
-                  keyboardType: TextInputType.emailAddress,
-                  autocorrect: false,
-                  decoration: const InputDecoration(
-                    labelText: 'Email', prefixIcon: Icon(Icons.person_outline),
-                    border: OutlineInputBorder()),
-                ),
-                const SizedBox(height: 14),
-                TextField(
-                  controller: _password,
-                  obscureText: _obscure,
-                  onSubmitted: (_) => _busy ? null : _login(),
-                  decoration: InputDecoration(
-                    labelText: 'Password',
-                    prefixIcon: const Icon(Icons.lock_outline),
-                    border: const OutlineInputBorder(),
-                    suffixIcon: IconButton(
-                      icon: Icon(_obscure ? Icons.visibility : Icons.visibility_off),
-                      onPressed: () => setState(() => _obscure = !_obscure),
+      body: Column(children: [
+        const ServerBanner(),
+        Expanded(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Image.asset('assets/brand/kynox_mark.png', width: 64, height: 64),
+                    const SizedBox(height: 12),
+                    Text('KYNOX WMS',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.headlineSmall
+                            ?.copyWith(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 4),
+                    const Text('Warehouse Management System',
+                        textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
+                    const SizedBox(height: 28),
+                    TextField(
+                      controller: _email,
+                      keyboardType: TextInputType.emailAddress,
+                      autocorrect: false,
+                      decoration: const InputDecoration(
+                        labelText: 'Email', prefixIcon: Icon(Icons.person_outline),
+                        border: OutlineInputBorder()),
                     ),
-                  ),
+                    const SizedBox(height: 14),
+                    TextField(
+                      controller: _password,
+                      obscureText: _obscure,
+                      onSubmitted: (_) => _busy ? null : _login(),
+                      decoration: InputDecoration(
+                        labelText: 'Password',
+                        prefixIcon: const Icon(Icons.lock_outline),
+                        border: const OutlineInputBorder(),
+                        suffixIcon: IconButton(
+                          icon: Icon(_obscure ? Icons.visibility : Icons.visibility_off),
+                          onPressed: () => setState(() => _obscure = !_obscure),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    FilledButton(
+                      onPressed: _busy ? null : _login,
+                      style: FilledButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16)),
+                      child: _busy
+                          ? const SizedBox(height: 20, width: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          : const Text('Sign in'),
+                    ),
+                    const SizedBox(height: 12),
+                    // Reachable from here on purpose: a wrong address cannot be
+                    // corrected from Settings, because Settings is behind the
+                    // sign-in this screen is failing to complete.
+                    TextButton.icon(
+                      icon: const Icon(Icons.dns_outlined, size: 16),
+                      label: Text('Server: ${session.serverHost}',
+                          style: const TextStyle(fontSize: 12)),
+                      onPressed: _busy
+                          ? null
+                          : () async {
+                              await showServerDialog(context, session);
+                              if (mounted) setState(() {});
+                            },
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 20),
-                FilledButton(
-                  onPressed: _busy ? null : _login,
-                  style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16)),
-                  child: _busy
-                      ? const SizedBox(height: 20, width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : const Text('Sign in'),
-                ),
-              ],
+              ),
             ),
           ),
         ),
-      ),
+      ]),
     );
   }
 }

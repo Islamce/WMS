@@ -7,6 +7,7 @@ import '../core/i18n.dart';
 import '../core/session.dart';
 import '../main.dart';
 import '../widgets/common.dart';
+import '../widgets/server_setting.dart';
 import 'dashboard_screen.dart';
 import 'requests_screen.dart';
 import 'create_request_screen.dart';
@@ -221,6 +222,7 @@ class _HomeScreenState extends State<HomeScreen> {
         drawer: _buildDrawer(session, dests),
         body: Column(
           children: [
+            const ServerBanner(),
             const OfflineBanner(),
             Expanded(child: _index == 0 ? _buildLaunchpad(session, dests) : current.builder()),
           ],

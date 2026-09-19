@@ -7,6 +7,7 @@ import '../core/i18n.dart';
 import '../core/session.dart';
 import '../main.dart';
 import '../widgets/common.dart';
+import '../widgets/server_setting.dart';
 import 'change_password_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -122,6 +123,47 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   icon: const Icon(Icons.sync),
                   label: Text(t('Sync now')),
                   onPressed: session.queue.pending.isEmpty ? null : () => session.flushQueue(),
+                ),
+              ],
+            ),
+          ),
+          SectionCard(
+            title: t('Server'),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  Icon(session.isDefaultServer ? Icons.verified_outlined : Icons.warning_amber_rounded,
+                      size: 20,
+                      color: session.isDefaultServer
+                          ? const Color(0xFF1baf7a)
+                          : const Color(0xFFe34948)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(session.isDefaultServer
+                        ? '${session.serverHost} (live warehouse)'
+                        : '${session.serverHost} — TEST SERVER'),
+                  ),
+                ]),
+                const SizedBox(height: 6),
+                Text(
+                  session.isDefaultServer
+                      ? t('Change this only to run a test against a test warehouse.')
+                      : t('This app is NOT posting to the live warehouse.'),
+                  style: const TextStyle(fontSize: 12),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.dns_outlined),
+                  label: Text(t('Change server')),
+                  onPressed: () async {
+                    // A switch signs the user out, so this screen is gone by
+                    // the time it returns — pop back to the sign-in screen
+                    // rather than leaving Settings up for a session that no
+                    // longer exists.
+                    final changed = await showServerDialog(context, session);
+                    if (changed && context.mounted) Navigator.of(context).pop();
+                  },
                 ),
               ],
             ),
