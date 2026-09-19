@@ -9,6 +9,7 @@ import 'api_client.dart';
 import 'i18n.dart';
 import 'offline_queue.dart';
 import 'push.dart';
+import 'server_url.dart';
 
 /// Holds the server URL, auth token and the signed-in user (with permissions),
 /// and exposes them app-wide via [ChangeNotifier]. Persists to
@@ -20,9 +21,12 @@ class Session extends ChangeNotifier {
   static const _kTheme = 'wms_theme';
   static const _kPushEnabled = 'wms_push_enabled';
   static const _kAppLock = 'wms_app_lock_enabled';
+  static const _kBaseUrl = 'wms_base_url';
 
-  /// The one production server this app talks to — embedded, not user-editable.
-  static const defaultBaseUrl = 'https://wms.kynox.io';
+  /// The production server this app ships pointed at. It can be changed, but
+  /// only deliberately and never invisibly — see [setBaseUrl] and
+  /// core/server_url.dart.
+  static const defaultBaseUrl = ServerUrl.defaultUrl;
 
   String baseUrl = defaultBaseUrl;
   String? token;
@@ -48,6 +52,11 @@ class Session extends ChangeNotifier {
   bool online = true;
   final OfflineQueue queue = OfflineQueue();
   StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
+
+  /// False whenever the app is pointed somewhere other than production, which
+  /// every surface that can show it should surface loudly.
+  bool get isDefaultServer => ServerUrl.isDefault(baseUrl);
+  String get serverHost => ServerUrl.hostOf(baseUrl);
 
   bool get isAuthenticated => token != null && token!.isNotEmpty && user != null;
   String get userName => (user?['name'] ?? '').toString();
@@ -93,9 +102,15 @@ class Session extends ChangeNotifier {
 
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
-    // baseUrl is always the embedded production server — earlier builds let
-    // it be changed in Settings/at login, but any value stored by those is
-    // now ignored so every install talks to the same server.
+    // A stored server is honoured only if it still passes today's rules. A
+    // build that tightens them must not leave an install pointing at an
+    // address it would now refuse to accept, and a device that stored one
+    // under a much older build (when anything was allowed) falls back to
+    // production rather than to something unreachable.
+    final storedBaseUrl = prefs.getString(_kBaseUrl);
+    baseUrl = (storedBaseUrl != null && ServerUrl.validationError(storedBaseUrl) == null)
+        ? ServerUrl.normalize(storedBaseUrl)
+        : defaultBaseUrl;
     lang = prefs.getString(_kLang) ?? 'en';
     // The product settled on English only (see public/js/i18n.js). A device that
     // stored 'ar' or 'fr' from an earlier build would otherwise flip the whole
@@ -126,6 +141,47 @@ class Session extends ChangeNotifier {
     loading = false;
     notifyListeners();
   }
+
+  /// Points the app at a different server.
+  ///
+  /// Signing out and emptying the offline queue are the POINT of this method,
+  /// not tidying up after it. A token issued by one server means nothing to
+  /// another, and a queued cycle count or goods issue recorded against one
+  /// store must never replay into a different one — that is the same defect
+  /// class as replaying one user's queue under the next user, which sign-out
+  /// already guards against.
+  ///
+  /// Throws [ArgumentError] carrying the reason when [url] is not usable, so
+  /// callers can put the message straight in front of the person typing.
+  Future<void> setBaseUrl(String url) async {
+    final problem = ServerUrl.validationError(url);
+    if (problem != null) throw ArgumentError(problem);
+    final next = ServerUrl.normalize(url);
+    if (next == baseUrl) return;
+    if (isAuthenticated) {
+      // Best effort, against the OLD server and while the old token is still
+      // valid: if it is unreachable that must not block the switch, which is
+      // frequently the very reason somebody is switching.
+      try {
+        await Push.unregister(api);
+      } catch (_) {
+        // The server we are leaving is not required to be reachable.
+      }
+    }
+    await queue.clear();
+    token = null;
+    user = null;
+    locked = false;
+    baseUrl = next;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kBaseUrl, next);
+    await prefs.remove(_kToken);
+    await prefs.remove(_kUser);
+    notifyListeners();
+  }
+
+  /// Back to the production server, with the same sign-out and queue clearing.
+  Future<void> resetBaseUrl() => setBaseUrl(defaultBaseUrl);
 
   Future<void> setAppLockEnabled(bool value) async {
     appLockEnabled = value;

@@ -4,11 +4,23 @@ Physical-device acceptance tests for the release APK (`app-arm64-v8a-release.apk
 or universal `app-release.apk`). **Run against a throwaway tenant provisioned with
 `scripts/provision-tenant.js`, never against production.** Rows A16, A18, A20 and
 A24 reverse issues, receive stock, post counts and cancel requests; on
-`https://wms.kynox.io` that is a debug-signed APK mutating live stock. **Blocker:**
-the app is hard-wired to the production URL - `lib/core/session.dart` ignores any
-stored server URL by design - so there is currently no way to point it at a test
-tenant. Until a server-URL setting exists, the mutating rows of section A must not
-be run at all; section C (push) and the read-only rows are the only ones that can.
+`https://wms.kynox.io` that is a debug-signed APK mutating live stock.
+
+**Point the app at the test tenant before anything else.** On the sign-in screen,
+tap **Server: wms.kynox.io** below the Sign in button and enter the test server's
+address. Switching signs the app out and discards anything still waiting to sync,
+because that belongs to the server being left. A red **TEST SERVER** strip then
+sits across the top of the sign-in and home screens for as long as the app is
+pointed anywhere but production - if you cannot see that strip, you are on the
+live warehouse and must not run the mutating rows. Plain `http://` is accepted
+only for a server on the same network (a laptop on the site wifi, `localhost`, a
+`192.168.x`/`10.x`/`172.16-31.x` address); anything reachable from the internet
+must be `https://`. Settings → **Server** shows the same control once signed in,
+and **Use production** puts it back.
+
+*(Before 2026-09-19 no such setting existed and the mutating rows of section A
+could not be run at all. That blocker is lifted.)*
+
 Configure that server's Firebase service account for section C. Record **Actual
 result**, **Pass/Fail**, **Evidence** (screenshot/log ref) and a **Defect ID** for
 every row.

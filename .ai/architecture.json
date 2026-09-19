@@ -1,12 +1,12 @@
 {
   "_meta": {
     "artifact": "architecture.json",
-    "bodyDigest": "f55d3beff9de6542d5bb1e9655a4a2d8e9723004a20c629788336077cd5e9a14",
+    "bodyDigest": "0d5b8ec1eee3c573ffee26fbcd1a70e6737facdc181389ef96939b51a1f9768f",
     "confidence": "verified",
     "doNotEdit": true,
     "generator": "kaaf",
     "generatorVersion": "0.7.0",
-    "inputDigest": "cda5471902d832b7634fdf5ed38ba54ad76ed90058b8ee04eb994dc6ecd1d743",
+    "inputDigest": "081c5f2ffaeaf10fe5d813984f4e08953eb0dafe2f9df6538a22c23dc5e0cd61",
     "provenanceNote": "Generated from the declared kaaf.repo.json and kaaf.module.json manifests. No wall-clock time or commit SHA is embedded: both would break byte-identical regeneration. Use git history for when and from which commit.",
     "schemaVersion": "1.0.0"
   },
@@ -653,17 +653,18 @@
     },
     {
       "confidence": "verified",
-      "confidenceReason": "Declared and corroborated by 46 discovered code file(s).",
+      "confidenceReason": "Declared and corroborated by 49 discovered code file(s).",
       "declared": true,
       "declaredConfidence": "verified",
       "dependedOnBy": [],
       "dependsOn": [],
       "discovery": {
-        "codeFileCount": 46,
+        "codeFileCount": 49,
         "discovered": true,
         "entryPoints": [
           "wms flutter application/lib/main.dart",
-          "wms flutter application/test/api_client_test.dart"
+          "wms flutter application/test/api_client_test.dart",
+          "wms flutter application/test/server_url_test.dart"
         ],
         "languages": [
           "dart",
@@ -676,7 +677,7 @@
           "SessionScope",
           "WmsApp"
         ],
-        "sourceFileCount": 54
+        "sourceFileCount": 57
       },
       "id": "wms-mobile",
       "ownedEntities": [
