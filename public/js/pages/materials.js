@@ -113,7 +113,7 @@ Pages.materials = {
                 <td>${UI.esc(m.currency)}</td>
                 <td>${UI.esc(m.material_type)}</td>
                 <td>${UI.esc(m.material_group)}</td>
-                <td class="text-right">${UI.fmtQty(m.total_stock)}</td>
+                <td class="text-right" title="Counted from: ${UI.esc(m.total_stock_source || 'batches')}">${UI.fmtQty(m.total_stock)}</td>
                 <td class="text-right">${UI.fmtQty(m.available_stock)}${Number(m.reserved_stock) > 0 ? ` <span class="muted" title="Reserved for open picks">(${UI.fmtQty(m.reserved_stock)} res.)</span>` : ''}</td>
                 <td>
                   <button class="btn secondary sm" data-edit="${m.id}">Edit</button>
